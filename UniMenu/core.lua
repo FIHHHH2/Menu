@@ -974,20 +974,21 @@ local function RemoveNotification()
   if not currentNotification then return end
   local gui = currentNotification.gui
   local frame = currentNotification.frame
+  local isCurrent = (currentNotification.gui == gui)
   if not gui or not gui.Parent then
-    currentNotification = nil
+    if isCurrent then currentNotification = nil end
     return
   end
   if not frame then
     gui:Destroy()
-    currentNotification = nil
+    if isCurrent then currentNotification = nil end
     return
   end
   TweenService:Create(frame, TweenInfo.new(0.75, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     { BackgroundTransparency = 1 }):Play()
   task.delay(0.75, function()
     if gui and gui.Parent then gui:Destroy() end
-    currentNotification = nil
+    if isCurrent then currentNotification = nil end
   end)
 end
 
@@ -1011,7 +1012,9 @@ end
 
 local function RemovePeerBillboard(plr)
   local bb = peerBillboards[plr.Name]
-  if bb then bb:Destroy(); peerBillboards[plr.Name] = nil end
+  if bb then
+    bb:Destroy(); peerBillboards[plr.Name] = nil
+  end
 end
 
 local function CreatePeerBillboard(plr)
@@ -1077,7 +1080,9 @@ local function CreatePeerBillboard(plr)
 
   local function UpdateContent()
     local attr = plr:GetAttribute("UniMenu_Peer")
-    if not attr then RemovePeerBillboard(plr); return end
+    if not attr then
+      RemovePeerBillboard(plr); return
+    end
     local data
     local ok = pcall(function() data = HttpService:JSONDecode(attr) end)
     if not ok or type(data) ~= "table" then return end
@@ -1097,7 +1102,9 @@ local function CreatePeerBillboard(plr)
 
   local conn
   conn = plr:GetAttributeChangedSignal("UniMenu_Peer"):Connect(function()
-    if not bb.Parent then conn:Disconnect(); return end
+    if not bb.Parent then
+      conn:Disconnect(); return
+    end
     UpdateContent()
   end)
 end
@@ -1174,7 +1181,9 @@ local function ToggleFullbright(state)
   S.fullbright = state
   if state and S.darkMode then
     S.darkMode = false
-    if S.nightFX then pcall(function() S.nightFX:Destroy() end); S.nightFX = nil end
+    if S.nightFX then
+      pcall(function() S.nightFX:Destroy() end); S.nightFX = nil
+    end
   end
   if state then
     Lighting.Brightness = 2
@@ -1193,7 +1202,9 @@ end
 
 local function UpdateDarkMode()
   if not S.darkMode then
-    if S.nightFX then pcall(function() S.nightFX:Destroy() end); S.nightFX = nil end
+    if S.nightFX then
+      pcall(function() S.nightFX:Destroy() end); S.nightFX = nil
+    end
     if not S.fullbright then
       Lighting.Brightness = S.origLighting.Brightness
       Lighting.ClockTime = S.origLighting.ClockTime
@@ -1258,17 +1269,25 @@ local function ToggleFPSBoost(state)
     for _, obj in ipairs(workspace:GetDescendants()) do
       if obj:IsA("SurfaceAppearance") then
         local p = obj.Parent
-        if p then S.fpsBoostData[obj] = { type = "parent", value = p }; pcall(function() obj.Parent = nil end) end
+        if p then
+          S.fpsBoostData[obj] = { type = "parent", value = p }; pcall(function() obj.Parent = nil end)
+        end
       elseif obj:IsA("Decal") or obj:IsA("Texture") then
         local ok, cur = pcall(function() return obj.Transparency end)
-        if ok and cur ~= 1 then S.fpsBoostData[obj] = { type = "transparency", value = cur }; pcall(function() obj.Transparency = 1 end) end
+        if ok and cur ~= 1 then
+          S.fpsBoostData[obj] = { type = "transparency", value = cur }; pcall(function() obj.Transparency = 1 end)
+        end
       elseif obj:IsA("SpecialMesh") then
         local ok, tid = pcall(function() return obj.TextureId end)
-        if ok and tid ~= "" then S.fpsBoostData[obj] = { type = "meshTex", value = tid }; pcall(function() obj.TextureId = "" end) end
+        if ok and tid ~= "" then
+          S.fpsBoostData[obj] = { type = "meshTex", value = tid }; pcall(function() obj.TextureId = "" end)
+        end
       elseif obj:IsA("ParticleEmitter") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles")
           or obj:IsA("Beam") or obj:IsA("Trail") then
         local ok, en = pcall(function() return obj.Enabled end)
-        if ok and en then S.fpsBoostData[obj] = { type = "enabled", value = true }; pcall(function() obj.Enabled = false end) end
+        if ok and en then
+          S.fpsBoostData[obj] = { type = "enabled", value = true }; pcall(function() obj.Enabled = false end)
+        end
       end
     end
     S.fpsBoostData["globalShadows"] = Lighting.GlobalShadows
@@ -1279,14 +1298,22 @@ local function ToggleFPSBoost(state)
     for obj, data in pairs(S.fpsBoostData) do
       pcall(function()
         if typeof(obj) == "string" then
-          if obj == "globalShadows" then Lighting.GlobalShadows = data
-          elseif obj == "fogEnd" then Lighting.FogEnd = data end
+          if obj == "globalShadows" then
+            Lighting.GlobalShadows = data
+          elseif obj == "fogEnd" then
+            Lighting.FogEnd = data
+          end
         else
-          if data.type == "parent" then obj.Parent = data.value
+          if data.type == "parent" then
+            obj.Parent = data.value
           elseif obj.Parent ~= nil then
-            if data.type == "transparency" then obj.Transparency = data.value
-            elseif data.type == "meshTex" then obj.TextureId = data.value
-            elseif data.type == "enabled" then obj.Enabled = data.value end
+            if data.type == "transparency" then
+              obj.Transparency = data.value
+            elseif data.type == "meshTex" then
+              obj.TextureId = data.value
+            elseif data.type == "enabled" then
+              obj.Enabled = data.value
+            end
           end
         end
       end)
@@ -1315,8 +1342,12 @@ local function ToggleFreecam(state)
     camera.CameraSubject = S.freecamPart
     if hum then hum.PlatformStand = true end
   else
-    if S.freecamPart then S.freecamPart:Destroy(); S.freecamPart = nil end
-    if hum then hum.PlatformStand = false; camera.CameraSubject = hum end
+    if S.freecamPart then
+      S.freecamPart:Destroy(); S.freecamPart = nil
+    end
+    if hum then
+      hum.PlatformStand = false; camera.CameraSubject = hum
+    end
   end
 end
 
@@ -1396,13 +1427,17 @@ local function ToggleAntiAFK(state)
         if not antiAFKActive then return end
         pcall(function()
           local vu = game:GetService("VirtualUser")
-          if vu then vu:CaptureController(); vu:ClickButton2(Vector2.new(0, 0)) end
+          if vu then
+            vu:CaptureController(); vu:ClickButton2(Vector2.new(0, 0))
+          end
         end)
       end)
       TrackConnection(antiAFKConn)
     end
   else
-    if antiAFKConn then pcall(function() antiAFKConn:Disconnect() end); antiAFKConn = nil end
+    if antiAFKConn then
+      pcall(function() antiAFKConn:Disconnect() end); antiAFKConn = nil
+    end
   end
 end
 
@@ -1577,17 +1612,25 @@ local function CleanupAll()
     if g:IsA("ScreenGui") and g.Name == "CheatHUD" then g:Destroy() end
   end
 
-  if S.espFolder then S.espFolder:Destroy(); S.espFolder = nil end
-  if S.chamsFolder then S.chamsFolder:Destroy(); S.chamsFolder = nil end
+  if S.espFolder then
+    S.espFolder:Destroy(); S.espFolder = nil
+  end
+  if S.chamsFolder then
+    S.chamsFolder:Destroy(); S.chamsFolder = nil
+  end
   local gunFolder = workspace:FindFirstChild("CheatMenu_GunESP")
   if gunFolder then gunFolder:Destroy() end
   local coinFolder = workspace:FindFirstChild("CheatMenu_CoinESP")
   if coinFolder then coinFolder:Destroy() end
-  if S.freecamPart then S.freecamPart:Destroy(); S.freecamPart = nil end
+  if S.freecamPart then
+    S.freecamPart:Destroy(); S.freecamPart = nil
+  end
   fpsSampleBuf = {}; fpsSampleIdx = 0
   RestoreCollision()
 
-  if S.flyBV then S.flyBV:Destroy(); S.flyBV = nil end
+  if S.flyBV then
+    S.flyBV:Destroy(); S.flyBV = nil
+  end
 
   for part, trans in pairs(S.origTransparency) do
     if part and part.Parent then part.Transparency = trans end
@@ -1748,13 +1791,19 @@ TrackConnection(RunService.Heartbeat:Connect(function(deltaTime)
           local finalDir = (slideDir * 0.6 + inputInfluence * 0.4).Unit
           root.Velocity = finalDir * gameConfig.surfSpeed + Vector3.new(0, -2, 0)
         else
-          if S.isSurfing then S.isSurfing = false; hum.PlatformStand = false end
+          if S.isSurfing then
+            S.isSurfing = false; hum.PlatformStand = false
+          end
         end
       else
-        if S.isSurfing then S.isSurfing = false; hum.PlatformStand = false end
+        if S.isSurfing then
+          S.isSurfing = false; hum.PlatformStand = false
+        end
       end
     else
-      if S.isSurfing then S.isSurfing = false; hum.PlatformStand = false end
+      if S.isSurfing then
+        S.isSurfing = false; hum.PlatformStand = false
+      end
     end
   end
 
@@ -1830,7 +1879,9 @@ TrackConnection(RunService.Heartbeat:Connect(function(deltaTime)
           local screenPos, onScreen = camera:WorldToScreenPoint(targetPart.Position)
           if onScreen then
             local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-            if dist < minDist then minDist = dist; closestPart = targetPart end
+            if dist < minDist then
+              minDist = dist; closestPart = targetPart
+            end
           end
         end
       end
@@ -1868,10 +1919,14 @@ end))
 -- ==================== PLAYER EVENTS ====================
 TrackConnection(Players.PlayerAdded:Connect(function(plr)
   UpdatePlayerList()
-  plr.CharacterAdded:Connect(function()
-    if S.esp then task.wait(0.3); if ctx.UI and ctx.UI.AddESP then ctx.UI.AddESP(plr) end end
-    if S.chams then task.wait(0.3); if ctx.UI and ctx.UI.ToggleChams then ctx.UI.ToggleChams(true) end end
-  end)
+  TrackConnection(plr.CharacterAdded:Connect(function()
+    if S.esp then
+      task.wait(0.3); if ctx.UI and ctx.UI.AddESP then ctx.UI.AddESP(plr) end
+    end
+    if S.chams then
+      task.wait(0.3); if ctx.UI and ctx.UI.ToggleChams then ctx.UI.ToggleChams(true) end
+    end
+  end))
 end))
 
 TrackConnection(Players.PlayerRemoving:Connect(function(plr)
@@ -1888,8 +1943,12 @@ end))
 for _, plr in ipairs(Players:GetPlayers()) do
   if plr ~= player then
     TrackConnection(plr.CharacterAdded:Connect(function()
-      if S.esp then task.wait(0.3); if ctx.UI and ctx.UI.AddESP then ctx.UI.AddESP(plr) end end
-      if S.chams then task.wait(0.3); if ctx.UI and ctx.UI.ToggleChams then ctx.UI.ToggleChams(true) end end
+      if S.esp then
+        task.wait(0.3); if ctx.UI and ctx.UI.AddESP then ctx.UI.AddESP(plr) end
+      end
+      if S.chams then
+        task.wait(0.3); if ctx.UI and ctx.UI.ToggleChams then ctx.UI.ToggleChams(true) end
+      end
     end))
   end
 end
@@ -1953,15 +2012,20 @@ local function Init()
 
   -- Save on disconnect
   player.AncestryChanged:Connect(function(_, parent)
-    if not parent then SaveKeybinds(); SaveSettings() end
+    if not parent then
+      SaveKeybinds(); SaveSettings()
+    end
   end)
 
   -- Teleport hook
-  pcall(function() TeleportService.TeleportInitiate:Connect(function() SaveKeybinds(); SaveSettings()
-    if typeof(queue_on_teleport) == "function" then
-      queue_on_teleport("if isfile and isfile('UniMenu_autorun.lua') then loadfile('UniMenu_autorun.lua')() end")
-    end
-  end) end)
+  pcall(function()
+    TeleportService.TeleportInitiate:Connect(function()
+      SaveKeybinds(); SaveSettings()
+      if typeof(queue_on_teleport) == "function" then
+        queue_on_teleport("if isfile and isfile('UniMenu_autorun.lua') then loadfile('UniMenu_autorun.lua')() end")
+      end
+    end)
+  end)
 
   -- Keybind listener
   TrackConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)

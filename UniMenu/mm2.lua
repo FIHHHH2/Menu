@@ -46,12 +46,14 @@ local function GetMM2Murderer()
   for _, p in ipairs(Players:GetPlayers()) do
     local char = p.Character
     local bp = p:FindFirstChild("Backpack")
+    local charTool = char and char:FindFirstChildWhichIsA("Tool")
+    local bpTool = bp and bp:FindFirstChildWhichIsA("Tool")
     local hasK = (char and (char:FindFirstChild("Knife")
-        or (char:FindFirstChildWhichIsA("Tool") and (char:FindFirstChildWhichIsA("Tool").Name:lower():find("knife")
-          or char:FindFirstChildWhichIsA("Tool"):FindFirstChild("KnifeServer")))))
+        or (charTool and (charTool.Name:lower():find("knife")
+          or charTool:FindFirstChild("KnifeServer")))))
         or (bp and (bp:FindFirstChild("Knife")
-          or (bp:FindFirstChildWhichIsA("Tool") and (bp:FindFirstChildWhichIsA("Tool").Name:lower():find("knife")
-            or bp:FindFirstChildWhichIsA("Tool"):FindFirstChild("KnifeServer")))))
+          or (bpTool and (bpTool.Name:lower():find("knife")
+            or bpTool:FindFirstChild("KnifeServer")))))
     if hasK then return p end
   end
   return nil
@@ -61,12 +63,14 @@ local function GetMM2Sheriff()
   for _, p in ipairs(Players:GetPlayers()) do
     local char = p.Character
     local bp = p:FindFirstChild("Backpack")
+    local charTool = char and char:FindFirstChildWhichIsA("Tool")
+    local bpTool = bp and bp:FindFirstChildWhichIsA("Tool")
     local hasG = (char and (char:FindFirstChild("Gun")
-        or (char:FindFirstChildWhichIsA("Tool") and (char:FindFirstChildWhichIsA("Tool").Name:lower():find("gun")
-          or char:FindFirstChildWhichIsA("Tool"):FindFirstChild("GunServer")))))
+        or (charTool and (charTool.Name:lower():find("gun")
+          or charTool:FindFirstChild("GunServer")))))
         or (bp and (bp:FindFirstChild("Gun")
-          or (bp:FindFirstChildWhichIsA("Tool") and (bp:FindFirstChildWhichIsA("Tool").Name:lower():find("gun")
-            or bp:FindFirstChildWhichIsA("Tool"):FindFirstChild("GunServer")))))
+          or (bpTool and (bpTool.Name:lower():find("gun")
+            or bpTool:FindFirstChild("GunServer")))))
     if hasG then return p end
   end
   return nil
@@ -245,7 +249,7 @@ local function StartAutoFollow()
   SetAutoFollowTarget()
   if not autoFollowTarget then return end
 
-  autoFollowConn = RunService.Heartbeat:Connect(function(dt)
+  autoFollowConn = ctx.Core.TrackConnection(RunService.Heartbeat:Connect(function(dt)
     if not MM2.autoFollow or not autoFollowTarget or not autoFollowTarget.Character then
       if autoFollowConn then autoFollowConn:Disconnect(); autoFollowConn = nil end
       return
@@ -310,7 +314,7 @@ local function StartAutoFollow()
 
     myRoot.CFrame = CFrame.new(myRoot.Position,
       Vector3.new(targetRoot.Position.X, myRoot.Position.Y, targetRoot.Position.Z))
-  end)
+  end))
 end
 
 local function StopAutoFollow()
@@ -340,7 +344,7 @@ local function StartPlatformMode()
   if not selectedPlayer or not selectedPlayer.Character then return end
   platformTarget = selectedPlayer
 
-  platformConn = RunService.Heartbeat:Connect(function()
+  platformConn = ctx.Core.TrackConnection(RunService.Heartbeat:Connect(function()
     if not MM2.platformMode or not platformTarget or not platformTarget.Character then
       if platformConn then platformConn:Disconnect(); platformConn = nil end
       return
@@ -356,7 +360,7 @@ local function StartPlatformMode()
     myRoot.Anchored = true
     myRoot.Velocity = Vector3.zero
     myRoot.RotVelocity = Vector3.zero
-  end)
+  end))
 end
 
 local function StopPlatformMode()
@@ -556,7 +560,7 @@ local function LaunchMagicProjectile(targetChar)
   local lastVelocity = Vector3.zero
   local integralError = Vector3.zero
 
-  magicProjectileConn = RunService.Heartbeat:Connect(function(dt)
+  magicProjectileConn = ctx.Core.TrackConnection(RunService.Heartbeat:Connect(function(dt)
     if not magicProjectile or not magicProjectile.Parent or not MM2.magicBullet then
       if magicProjectileConn then magicProjectileConn:Disconnect(); magicProjectileConn = nil end
       if magicProjectile then magicProjectile:Destroy() end
@@ -614,7 +618,7 @@ local function LaunchMagicProjectile(targetChar)
         magicProjectileConn:Disconnect(); magicProjectileConn = nil
       end
     end
-  end)
+  end))
 end
 
 local function ApplyMagicBulletHook()

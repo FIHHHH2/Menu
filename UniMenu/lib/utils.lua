@@ -60,7 +60,7 @@ function Utils.StartsWith(str, prefix)
 end
 
 function Utils.EndsWith(str, suffix)
-  return str:sub(-#suffix) == suffix
+  return str:sub(- #suffix) == suffix
 end
 
 -- Math utilities

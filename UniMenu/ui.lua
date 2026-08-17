@@ -23,6 +23,11 @@ local Themes = ctx.Config.Themes
 local XP = ctx.Config.XP
 local currentThemeName = ctx.Config.currentThemeName
 
+-- Theme accessor - always returns current theme
+local function GetTheme()
+  return ctx.Config.XP
+end
+
 -- GUI state (shared mutable references)
 local gui = nil
 local isOpen = false
@@ -159,6 +164,7 @@ local function UpdateESP()
 end
 
 local function UpdateESPTheme()
+  XP = ctx.Config.XP
   if not S.espFolder then return end
   for _, tag in ipairs(S.espFolder:GetChildren()) do
     if tag:IsA("BillboardGui") and tag:FindFirstChild("TagWindow") then
@@ -252,6 +258,7 @@ ctx.UI.Animate = ctx.Core.Animate
 
 -- ==================== MUSIC UI UPDATE ====================
 local function UpdateMusicUI()
+  XP = ctx.Config.XP
   if Music.hudLabel and Music.hudLabel.Parent then
     if Music.song ~= "" then
       local prefix = Music.active and "♪ " or "⏸ "
@@ -401,8 +408,12 @@ local function CreateSlider(container, configKey, minVal, maxVal, isDecimal, onC
     connEnd = UserInputService.InputEnded:Connect(function(endInput)
       if endInput.UserInputType == Enum.UserInputType.MouseButton1 then
         isDragging = false
-        if connChange then connChange:Disconnect(); connChange = nil end
-        if connEnd then connEnd:Disconnect(); connEnd = nil end
+        if connChange then
+          connChange:Disconnect(); connChange = nil
+        end
+        if connEnd then
+          connEnd:Disconnect(); connEnd = nil
+        end
       end
     end)
   end
@@ -423,6 +434,7 @@ local BuildGUI
 local BuildHUD
 
 BuildContent = function(container)
+  XP = ctx.Config.XP
   if not contentContainerRef then return end
   local contentScroll = contentContainerRef:FindFirstChildOfClass("ScrollingFrame")
   if not contentScroll then return end
@@ -669,8 +681,10 @@ BuildContent = function(container)
         local kbName = getKbName(tabName, entry.feat.name)
         if not keybindRegistry[kbName] then
           keybindRegistry[kbName] = {
-            get = entry.feat.get, toggle = entry.feat.toggle,
-            tab = tabName, featName = entry.feat.name,
+            get = entry.feat.get,
+            toggle = entry.feat.toggle,
+            tab = tabName,
+            featName = entry.feat.name,
           }
         end
       end
@@ -1002,11 +1016,15 @@ BuildContent = function(container)
             ctx.Core.selectedPlayer = plr
             dropdown.Text = plr.DisplayName .. " (@" .. plr.Name .. ")"
             dropdownOpen = false
-            if dropdownMenu then dropdownMenu:Destroy(); dropdownMenu = nil end
+            if dropdownMenu then
+              dropdownMenu:Destroy(); dropdownMenu = nil
+            end
           end)
         end
       else
-        if dropdownMenu then dropdownMenu:Destroy(); dropdownMenu = nil end
+        if dropdownMenu then
+          dropdownMenu:Destroy(); dropdownMenu = nil
+        end
       end
     end)
   end
@@ -1232,13 +1250,18 @@ local function ToggleGUI()
   if isOpen then
     BuildGUI()
   else
-    if gui then gui:Destroy(); gui = nil end
+    if gui then
+      gui:Destroy(); gui = nil
+    end
   end
 end
 ctx.UI.ToggleGUI = ToggleGUI
 
 -- ==================== BUILD MAIN GUI ====================
 BuildGUI = function()
+  -- Refresh theme reference in case it changed (dynamic themes, theme switch)
+  XP = ctx.Config.XP
+
   for _, g in ipairs(PlayerGui:GetChildren()) do
     if g:IsA("ScreenGui") and g.Name == "CheatMenu" then g:Destroy() end
   end
@@ -1574,6 +1597,7 @@ end
 
 -- ==================== BUILD HUD ====================
 BuildHUD = function()
+  XP = ctx.Config.XP
   CleanupHUD()
   for _, g in ipairs(PlayerGui:GetChildren()) do
     if g:IsA("ScreenGui") and g.Name == "CheatHUD" then g:Destroy() end
@@ -1766,7 +1790,9 @@ BuildHUD = function()
     fpsSampleBuf[fpsSampleIdx] = 1 / dt
     ctx.Core.fpsSampleIdx = fpsSampleIdx
     local sum, count = 0, 0
-    for _, v in ipairs(fpsSampleBuf) do sum = sum + v; count = count + 1 end
+    for _, v in ipairs(fpsSampleBuf) do
+      sum = sum + v; count = count + 1
+    end
     local avg = math.floor(sum / math.max(count, 1))
     local col = ctx.Core.GetFPSColor(avg)
     fpsTop.Text = tostring(avg) .. " FPS"
