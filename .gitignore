@@ -1,0 +1,19 @@
+# Lua bytecode
+*.luac
+
+# Executor temp files
+*.log
+*.txt
+
+# Roblox Studio temp
+luaIdeCache/
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
