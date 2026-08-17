@@ -849,11 +849,17 @@ local function StartLastfmPolling()
   if lastfmPollingActive then return end
   lastfmPollingActive = true
   task.spawn(function()
+    if Music.user == "" then
+      ShowNotification("Music: Please set your Last.fm username in the Music tab.")
+    else
+      -- Immediate poll on start if user exists
+      LastfmPoll()
+    end
     while isScriptRunning do
+      task.wait(10)
       if Music.user ~= "" then
         LastfmPoll()
       end
-      task.wait(4)
     end
     lastfmPollingActive = false
   end)
