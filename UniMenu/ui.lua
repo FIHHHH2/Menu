@@ -1557,8 +1557,24 @@ end
 
 ctx.UI.BuildGUI = BuildGUI
 
+-- ==================== HUD CONNECTIONS TRACKING ====================
+local HUDConnections = {}
+
+local function TrackHUDConnection(conn)
+  table.insert(HUDConnections, conn)
+  return conn
+end
+
+local function CleanupHUD()
+  for _, conn in ipairs(HUDConnections) do
+    pcall(function() conn:Disconnect() end)
+  end
+  HUDConnections = {}
+end
+
 -- ==================== BUILD HUD ====================
 BuildHUD = function()
+  CleanupHUD()
   for _, g in ipairs(PlayerGui:GetChildren()) do
     if g:IsA("ScreenGui") and g.Name == "CheatHUD" then g:Destroy() end
   end
@@ -1714,7 +1730,7 @@ BuildHUD = function()
   end
 
   local vizTime = 0
-  ctx.Core.TrackConnection(RunService.Heartbeat:Connect(function(dt)
+  TrackHUDConnection(RunService.Heartbeat:Connect(function(dt)
     if not hudGui or not hudGui.Parent then return end
     if dt <= 0 then dt = 0.016 end
     vizTime = vizTime + dt
@@ -1740,7 +1756,7 @@ BuildHUD = function()
   end))
 
   -- FPS updater
-  ctx.Core.TrackConnection(RunService.Heartbeat:Connect(function(dt)
+  TrackHUDConnection(RunService.Heartbeat:Connect(function(dt)
     if not hudGui or not hudGui.Parent then return end
     if dt <= 0 then dt = 0.016 end
     local FPS_SAMPLES = ctx.Core.FPS_SAMPLES

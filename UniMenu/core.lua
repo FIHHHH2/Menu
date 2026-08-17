@@ -667,9 +667,15 @@ local function DownloadAlbumCover(lastfmImgUrl, song, artist)
   if cacheKey == Music.lastCoverUrl and Music.coverAsset ~= "" then
     return
   end
-  Music.lastCoverUrl = cacheKey
-  Music.coverAsset = ""
-  Music.coverIsProcedural = false
+  if cacheKey == Music.lastCoverUrl then
+    -- Same song but cover not loaded yet, continue
+    Music.coverAsset = ""
+    Music.coverIsProcedural = false
+  else
+    Music.lastCoverUrl = cacheKey
+    Music.coverAsset = ""
+    Music.coverIsProcedural = false
+  end
   if ctx.UI and ctx.UI.UpdateMusicUI then ctx.UI.UpdateMusicUI() end
 
   task.spawn(function()
@@ -957,7 +963,7 @@ local function ShowNotification(message)
   TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Linear),
     { BackgroundTransparency = 0 }):Play()
 
-  task.delay(1, function()
+  task.delay(0.75, function()
     if currentNotification and currentNotification.gui == notificationGui and notificationGui.Parent then
       RemoveNotification()
     end
