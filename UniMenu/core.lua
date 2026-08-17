@@ -851,6 +851,7 @@ local function LastfmPoll()
 end
 
 local lastfmPollingActive = false
+local lastTrackData = nil
 local function StartLastfmPolling()
   if lastfmPollingActive then return end
   lastfmPollingActive = true
@@ -858,11 +859,10 @@ local function StartLastfmPolling()
     if Music.user == "" then
       ShowNotification("Music: Please set your Last.fm username in the Music tab.")
     else
-      -- Immediate poll on start if user exists
       LastfmPoll()
     end
     while isScriptRunning do
-      task.wait(10)
+      task.wait(5)
       if Music.user ~= "" then
         LastfmPoll()
       end
@@ -920,7 +920,7 @@ local function ShowNotification(message)
   frame.Size = UDim2.new(0, 200, 0, 50)
   frame.Position = UDim2.new(1, -210, 1, -60)
   frame.BackgroundColor3 = ctx.Config.XP.panel1
-  frame.BackgroundTransparency = 1
+  frame.BackgroundTransparency = 0
   frame.BorderSizePixel = 1
   frame.BorderColor3 = ctx.Config.XP.borderDark
   frame.ZIndex = 2147483647
@@ -960,12 +960,18 @@ local function ShowNotification(message)
   frame.Position = UDim2.new(1, -210, 1, -30)
   TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out),
     { Position = UDim2.new(1, -210, 1, -60) }):Play()
-  TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Linear),
-    { BackgroundTransparency = 0 }):Play()
 
   task.delay(0.75, function()
-    if currentNotification and currentNotification.gui == notificationGui and notificationGui.Parent then
-      RemoveNotification()
+    if notificationGui and notificationGui.Parent then
+      TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        { BackgroundTransparency = 1 }):Play()
+      task.wait(0.25)
+      if notificationGui and notificationGui.Parent then
+        notificationGui:Destroy()
+      end
+      if currentNotification and currentNotification.gui == notificationGui then
+        currentNotification = nil
+      end
     end
   end)
 end

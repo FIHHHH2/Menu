@@ -775,6 +775,7 @@ BuildContent = function(container)
         keyLbl.TextColor3 = Color3.fromRGB(150, 150, 150)
         ctx.Core.RebuildKeybindMap()
         ctx.Core.SaveKeybinds()
+        ctx.Core.ShowNotification("Keybind cleared: " .. entry.feat.name)
       end)
 
       setBtn.MouseButton1Click:Connect(function()
@@ -792,6 +793,7 @@ BuildContent = function(container)
             keyLbl.TextColor3 = XP.accent
             ctx.Core.RebuildKeybindMap()
             ctx.Core.SaveKeybinds()
+            ctx.Core.ShowNotification("Keybind set: " .. entry.feat.name .. " → " .. keyCodeName(input.KeyCode))
           end
           setBtn.Text = "Set"
         end)
@@ -975,7 +977,7 @@ BuildContent = function(container)
         dropdownMenu.BorderSizePixel = 1
         dropdownMenu.BorderColor3 = XP.accent
         dropdownMenu.Parent = dropCard
-        dropdownMenu.ZIndex = 30
+        dropdownMenu.ZIndex = 100
 
         local scroll = Instance.new("ScrollingFrame")
         scroll.Size = UDim2.new(1, -4, 1, -4)
@@ -984,7 +986,7 @@ BuildContent = function(container)
         scroll.ScrollBarThickness = 0
         scroll.CanvasSize = UDim2.new(0, 0, 0, #playerList * 22)
         scroll.Parent = dropdownMenu
-        scroll.ZIndex = 31
+        scroll.ZIndex = 101
 
         local scrollLayout = Instance.new("UIListLayout")
         scrollLayout.Padding = UDim.new(0, 1)
@@ -1003,7 +1005,7 @@ BuildContent = function(container)
           opt.TextSize = 9
           opt.TextXAlignment = Enum.TextXAlignment.Left
           opt.Parent = scroll
-          opt.ZIndex = 32
+          opt.ZIndex = 102
 
           opt.MouseEnter:Connect(function()
             ctx.Core.Animate(opt, { BackgroundColor3 = XP.accent, TextColor3 = Color3.fromRGB(255, 255, 255) }, 0.1)
@@ -1157,6 +1159,7 @@ BuildContent = function(container)
             tBtn.Text = newState and "ON" or "OFF"
             tBtn.BackgroundColor3 = newState and XP.green or Color3.fromRGB(150, 150, 150)
             if feat.toggle then feat.toggle(newState) end
+            ctx.Core.ShowNotification(feat.name .. " " .. (newState and "enabled" or "disabled"))
           end)
         elseif feat.isButton then
           local bBtn = Instance.new("TextButton")

@@ -403,6 +403,11 @@ local function StartBoostMode()
     myRoot.Velocity = Vector3.zero
     myRoot.RotVelocity = Vector3.zero
     targetRoot.Velocity = targetRoot.CFrame.LookVector * 80 + Vector3.new(0, 20, 0)
+    
+    if MM2.autoCoins and targetRoot then
+      local lookDir = targetRoot.CFrame.LookVector
+      targetRoot.AssemblyLinearVelocity = lookDir * 80 + Vector3.new(0, 20, 0)
+    end
   end)
 end
 
