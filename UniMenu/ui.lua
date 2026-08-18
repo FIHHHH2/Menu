@@ -567,8 +567,8 @@ BuildContent = function(container)
     npCard.BorderColor3 = Color3.fromRGB(30, 215, 96)
 
     local mCover = Instance.new("ImageLabel")
-musicCover.Size = UDim2.new(0, 64, 0, 64)
-musicCover.Position = UDim2.new(0, 2, 0, 2)
+    mCover.Size = UDim2.new(0, 64, 0, 64)
+    mCover.Position = UDim2.new(0, 2, 0, 2)
     mCover.BackgroundColor3 = Color3.fromRGB(20, 26, 38)
     mCover.BorderSizePixel = 1
     mCover.BorderColor3 = Color3.fromRGB(30, 215, 96)
@@ -893,87 +893,87 @@ musicCover.Position = UDim2.new(0, 2, 0, 2)
     -- Server Info Card
     local serverCard = Card(80, 2)
     Lbl(serverCard, "Server Information", Enum.Font.GothamBold, 12, XP.text, 10, 8)
-local playersCount = Instance.new("TextLabel")
-local players = Players:GetPlayers()
-playersCount.Size = UDim2.new(1, -8, 0, 14)
-playersCount.Position = UDim2.new(0, 4, 0, 30)
-playersCount.Text = "Players: " .. #players .. "/" .. Players.MaxPlayers
-playersCount.TextColor3 = XP.accent
-playersCount.BackgroundTransparency = 1
-playersCount.Font = Enum.Font.GothamBold
-playersCount.TextSize = 11
-playersCount.TextXAlignment = Enum.TextXAlignment.Left
-playersCount.Parent = placeFrame
+    local playersCount = Instance.new("TextLabel")
+    playersCount.Size = UDim2.new(1, -8, 0, 14)
+    playersCount.Position = UDim2.new(0, 4, 0, 30)
+    playersCount.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+    playersCount.TextColor3 = XP.accent
+    playersCount.BackgroundTransparency = 1
+    playersCount.Font = Enum.Font.GothamBold
+    playersCount.TextSize = 11
+    playersCount.TextXAlignment = Enum.TextXAlignment.Left
+    playersCount.Parent = serverCard
 
--- Update player count on changes
-local function UpdatePlayerCount()
-    playersCount.Text = "Players: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers
-end
+    -- Game Info Card
+    local gameCard = Card(100, 3)
+    Lbl(gameCard, "Game Details", Enum.Font.GothamBold, 12, XP.text, 10, 8)
+    local gameDesc = Instance.new("TextLabel")
+    gameDesc.Size = UDim2.new(1, -20, 0, 70)
+    gameDesc.Position = UDim2.new(0, 10, 0, 28)
+    gameDesc.Text = "Loading game description..."
+    gameDesc.TextColor3 = Color3.fromRGB(230, 240, 255)
+    gameDesc.BackgroundTransparency = 1
+    gameDesc.Font = Enum.Font.GothamBold
+    gameDesc.TextSize = 11
+    gameDesc.TextXAlignment = Enum.TextXAlignment.Left
+    gameDesc.TextYAlignment = Enum.TextYAlignment.Top
+    gameDesc.TextWrapped = true
+    gameDesc.ClipsDescendants = true
+    gameDesc.Parent = gameCard
 
-local connection = Players.PlayerAdded:Connect(UpdatePlayerCount)
-TrackConnection(connection)
-connection = Players.PlayerRemoving:Connect(UpdatePlayerCount)
-TrackConnection(connection)
+    -- Refresh experience info function
+    local function RefreshExperienceInfo()
+      -- Fetch place info
+      pcall(function()
+        local MarketplaceService = game:GetService("MarketplaceService")
+        local info = MarketplaceService:GetProductInfo(game.PlaceId)
+        if info then
+          expName.Text = info.Name or "Unknown"
+          expCreator.Text = "Creator: " .. (info.Creator and info.Creator.Name or "Unknown")
+          gameDesc.Text = info.Description or "No description available."
+        end
+      end)
 
--- Game Info Card
-local gameCard = Instance.new("Frame")
-Lbl(gameCard, "Game Details", Enum.Font.GothamBold, 12, XP.text, 10, 8)
-local gameDesc = Instance.new("TextLabel")
-gameDesc.Size = UDim2.new(1, -20, 0, 70)
-gameDesc.Position = UDim2.new(0, 10, 0, 28)
-gameDesc.Text = "Loading game description..."
-gameDesc.TextColor3 = Color3.fromRGB(230, 240, 255)
-gameDesc.BackgroundTransparency = 1
-gameDesc.Font = Enum.Font.GothamBold
-gameDesc.TextSize = 11
-gameDesc.TextXAlignment = Enum.TextXAlignment.Left
-gameDesc.TextYAlignment = Enum.TextYAlignment.Top
-gameDesc.TextWrapped = true
-gameDesc.ClipsDescendants = true
-gameDesc.Parent = gameCard
+      -- Fetch experience thumbnail
+      pcall(function()
+        local HttpService = game:GetService("HttpService")
+        local url = "https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" .. game.PlaceId .. "&size=512x512&format=Png&isCircular=false"
+        local response = HttpService:GetAsync(url)
+        local data = HttpService:JSONDecode(response)
+        if data and data.data and data.data[1] and data.data[1].imageUrl then
+          expCover.Image = data.data[1].imageUrl
+        end
+      end)
 
--- Refresh experience info function
-local function RefreshExperienceInfo()
-  -- Fetch place info
-  pcall(function()
-    local MarketplaceService = game:GetService("MarketplaceService")
-    local info = MarketplaceService:GetProductInfo(game.PlaceId)
-    if info then
-      placeName.Text = info.Name or "Unknown"
-      placeCreator.Text = "Creator: " .. (info.Creator and info.Creator.Name or "Unknown")
-      gameDesc.Text = info.Description or "No description available."
-    end
-  end)
-
-  -- Fetch experience thumbnail
-  pcall(function()
-    local HttpService = game:GetService("HttpService")
-    local url = "https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" .. game.PlaceId .. "&size=512x512&format=Png&isCircular=false"
-    local response = HttpService:GetAsync(url)
-    local data = HttpService:JSONDecode(response)
-    if data and data.data and data.data[1] and data.data[1].imageUrl then
-      expCover.Image = data.data[1].imageUrl
-    end
-  end)
-
-  playersCount.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
-  expJobId.Text = "Job ID: " .. tostring(game.JobId):sub(1, 36) .. "..."
-end
-
--- Store refresh function for updates
-_G.RefreshExperienceInfo = RefreshExperienceInfo
-
--- Initial refresh
-RefreshExperienceInfo()
-
--- Update loop for player count, ping, FPS
-task.spawn(function()
-  while currentTab == "Experience" and task.wait(2) do
-    if playersCount then
       playersCount.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+      expJobId.Text = "Job ID: " .. tostring(game.JobId):sub(1, 36) .. "..."
     end
-  end
-end)
+
+    -- Update player count on changes
+    local connection = Players.PlayerAdded:Connect(function()
+      if playersCount and playersCount.Parent then
+        playersCount.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+      end
+    end)
+    TrackConnection(connection)
+    connection = Players.PlayerRemoving:Connect(function()
+      if playersCount and playersCount.Parent then
+        playersCount.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+      end
+    end)
+    TrackConnection(connection)
+
+    -- Initial refresh
+    RefreshExperienceInfo()
+
+    -- Update loop for player count
+    task.spawn(function()
+      while currentTab == "Experience" and task.wait(2) do
+        if playersCount and playersCount.Parent then
+          playersCount.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+        end
+      end
+    end)
 
     return
   end
@@ -1385,6 +1385,104 @@ end)
         end
       end
     end)
+  end
+
+  -- THEMES TAB
+  if currentTab == "Themes" then
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.FillDirection = Enum.FillDirection.Vertical
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Padding = UDim.new(0, 6)
+    listLayout.Parent = contentScroll
+
+    local listPad = Instance.new("UIPadding")
+    listPad.PaddingTop = UDim.new(0, 4)
+    listPad.Parent = contentScroll
+
+    listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+      contentScroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 18)
+    end)
+
+    local function Card(h, order, bg)
+      local c = Instance.new("Frame")
+      c.Size = UDim2.new(1, 0, 0, h)
+      c.BackgroundColor3 = bg or XP.panel2
+      c.BorderSizePixel = 1
+      c.BorderColor3 = XP.borderDark
+      c.ClipsDescendants = true
+      c.LayoutOrder = order
+      c.Parent = contentScroll
+      return c
+    end
+
+    local function Lbl(parent, txt, font, size, color, x, y, w, h, trunc)
+      local l = Instance.new("TextLabel")
+      l.Size = UDim2.new(w or 1, -10, 0, h or 16)
+      l.Position = UDim2.new(0, x or 8, 0, y or 0)
+      l.Text = txt; l.Font = font; l.TextSize = size
+      l.TextColor3 = color; l.BackgroundTransparency = 1
+      l.TextXAlignment = Enum.TextXAlignment.Left
+      if trunc then l.TextTruncate = Enum.TextTruncate.AtEnd end
+      l.Parent = parent; return l
+    end
+
+    local function ActionBtn(parent, lbl, x, y, w, clr, fn)
+      local b = Instance.new("TextButton")
+      b.Size = UDim2.new(0, w, 0, 26); b.Position = UDim2.new(0, x, 0, y)
+      b.Text = lbl; b.Font = Enum.Font.GothamBold; b.TextSize = 10
+      b.TextColor3 = Color3.fromRGB(255, 255, 255); b.BackgroundColor3 = clr
+      b.BorderSizePixel = 1; b.BorderColor3 = XP.borderDark
+      b.Parent = parent
+      b.MouseEnter:Connect(function()
+        ctx.Core.Animate(b, { BackgroundColor3 = Color3.new(
+          math.min(clr.R + 0.1, 1), math.min(clr.G + 0.1, 1), math.min(clr.B + 0.1, 1)
+        )}, 0.1)
+      end)
+      b.MouseLeave:Connect(function()
+        ctx.Core.Animate(b, { BackgroundColor3 = clr }, 0.1)
+      end)
+      b.MouseButton1Click:Connect(function() task.spawn(fn) end)
+      return b
+    end
+
+    local themesCard = Card(20 + #ctx.Config.Themes * 30, 1)
+    Lbl(themesCard, "Theme Selection", Enum.Font.GothamBold, 12, XP.text, 10, 8)
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.Padding = UDim.new(0, 4)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = themesCard
+
+    local order = 0
+    for themeName, theme in pairs(ctx.Config.Themes) do
+      order = order + 1
+      local isActive = (themeName == ctx.Config.currentThemeName)
+      local btn = Instance.new("TextButton")
+      btn.Name = "Theme_" .. themeName
+      btn.Size = UDim2.new(1, -12, 0, 28)
+      btn.Position = UDim2.new(0, 6, 0, 0)
+      btn.Text = themeName .. (isActive and "  ✓" or "")
+      btn.TextColor3 = isActive and XP.accent or XP.text
+      btn.BackgroundColor3 = isActive and XP.rowBg or XP.panel1
+      btn.BackgroundTransparency = isActive and 0.2 or 0.4
+      btn.BorderSizePixel = 1
+      btn.BorderColor3 = isActive and XP.accent or XP.borderDark
+      btn.Font = Enum.Font.GothamBold
+      btn.TextSize = 10
+      btn.TextXAlignment = Enum.TextXAlignment.Left
+      btn.LayoutOrder = order
+      btn.Parent = themesCard
+
+      btn.MouseButton1Click:Connect(function()
+        if ctx.Core.SetTheme(themeName) then
+          -- Rebuild content to refresh theme list
+          BuildContent(contentContainerRef)
+        end
+      end)
+    end
+
+    return
   end
 
   -- DEFAULT: Render feature sections (for tabs without custom UI)

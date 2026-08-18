@@ -1,24 +1,20 @@
--- UniMenu Notification Queue Module
--- Robust notification system with stacking, auto-expire, and guaranteed cleanup
+-- UniMenu Notification Module
+-- Single notification, no stacking, auto-expires within 1 second
 
 local ctx = ...
 local TweenService = ctx.Services.TweenService
 
 local XP = ctx.Config.XP
 
--- Notification queue state
-local notificationQueue = {}
-local basePosition = UDim2.new(1, -220, 0, 8)
-local notificationHeight = 60
-local notificationGap = 8
-local basePositionOffset = 0
+-- Current notification reference (only ONE at a time)
+local currentNotification = nil
 
 -- ==================== HELPER: Create Notification GUI ====================
 local function CreateNotificationGui(message, notifType)
   notifType = notifType or "info"
   
   local notificationGui = Instance.new("ScreenGui")
-  notificationGui.Name = "UniMenuNotification_" .. tostring(os.time()) .. "_" .. math.random(1000, 9999)
+  notificationGui.Name = "UniMenuNotification"
   notificationGui.ResetOnSpawn = false
   notificationGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
   notificationGui.DisplayOrder = 2147483647
@@ -28,7 +24,7 @@ local function CreateNotificationGui(message, notifType)
   local frame = Instance.new("Frame")
   frame.Name = "NotificationFrame"
   frame.Size = UDim2.new(0, 200, 0, 50)
-  frame.Position = UDim2.new(1, -210, 1, -30) -- Start off-screen
+  frame.Position = UDim2.new(1, -210, 1, -30)
   frame.BackgroundColor3 = XP.panel1
   frame.BackgroundTransparency = 1
   frame.BorderSizePixel = 1
@@ -78,53 +74,51 @@ local function CreateNotificationGui(message, notifType)
   return notificationGui, frame
 end
 
--- ==================== POSITION CALCULATION ====================
-local function CalculatePosition(index)
-  local yOffset = 8 + ((basePositionOffset + index) * (notificationHeight + notificationGap))
-  return UDim2.new(1, -220, 0, yOffset)
-end
-
-local function CalculateStartPosition(index)
-  return UDim2.new(1, -180, 0, 8 + ((basePositionOffset + index) * (notificationHeight + notificationGap)))
-end
-
--- ==================== REPOSITION ALL NOTIFICATIONS ====================
-local function RepositionNotifications()
-  for i, notif in ipairs(notificationQueue) do
-    if notif.gui and notif.gui.Parent and notif.frame then
-      local targetPos = CalculatePosition(i - 1)
-      TweenService:Create(notif.frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        { Position = targetPos }):Play()
+-- ==================== REMOVE CURRENT NOTIFICATION ====================
+local function RemoveCurrentNotification()
+  if currentNotification and currentNotification.gui and currentNotification.gui.Parent then
+    local frame = currentNotification.frame
+    local gui = currentNotification.gui
+    
+    -- Fade out
+    local fadeTween = TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+      { BackgroundTransparency = 1 })
+    fadeTween:Play()
+    
+    fadeTween.Completed:Wait()
+    
+    -- Destroy GUI
+    if gui and gui.Parent then
+      pcall(function() gui:Destroy() end)
     end
   end
+  currentNotification = nil
 end
 
 -- ==================== SHOW NOTIFICATION ====================
 local function ShowNotification(message, duration, notifType)
-  duration = duration or 1.0 -- Default 1 second as requested
+  -- Enforce max 1 second
+  duration = math.min(duration or 1.0, 1.0)
   notifType = notifType or "info"
   
   XP = ctx.Config.XP -- Refresh theme
   
+  -- Remove any existing notification first (no stacking)
+  RemoveCurrentNotification()
+  
   local notificationGui, frame = CreateNotificationGui(message, notifType)
-  local index = #notificationQueue
   
-  frame.Position = CalculateStartPosition(index)
-  
-  local notif = {
+  currentNotification = {
     gui = notificationGui,
     frame = frame,
     message = message,
     type = notifType,
     createdAt = os.clock(),
     duration = duration,
-    index = index,
   }
   
-  table.insert(notificationQueue, notif)
-  
   -- Animate in
-  local targetPos = CalculatePosition(index)
+  local targetPos = UDim2.new(1, -220, 0, 8)
   TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out),
     { Position = targetPos }):Play()
   TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Linear),
@@ -132,72 +126,25 @@ local function ShowNotification(message, duration, notifType)
   
   -- Auto-expire
   task.delay(duration, function()
-    RemoveNotification(notif)
+    RemoveCurrentNotification()
   end)
   
-  return notif
-end
-
--- ==================== REMOVE NOTIFICATION ====================
-local function RemoveNotification(notif)
-  if not notif or not notif.gui or not notif.gui.Parent then
-    -- Clean up from queue
-    for i, n in ipairs(notificationQueue) do
-      if n == notif then
-        table.remove(notificationQueue, i)
-        break
-      end
-    end
-    RepositionNotifications()
-    return
-  end
-  
-  local frame = notif.frame
-  local gui = notif.gui
-  
-  -- Fade out
-  local fadeTween = TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-    { BackgroundTransparency = 1 })
-  fadeTween:Play()
-  
-  fadeTween.Completed:Wait()
-  
-  -- Destroy GUI
-  if gui and gui.Parent then
-    pcall(function() gui:Destroy() end)
-  end
-  
-  for i, n in ipairs(notificationQueue) do
-    if n == notif then
-      table.remove(notificationQueue, i)
-      break
-    end
-  end
-  RepositionNotifications()
-  
-  if #notificationQueue == 0 then
-    basePositionOffset = 0
-  end
+  return currentNotification
 end
 
 -- ==================== CLEAR ALL NOTIFICATIONS ====================
 local function ClearAllNotifications()
-  for _, notif in ipairs(notificationQueue) do
-    if notif.gui and notif.gui.Parent then
-      pcall(function() notif.gui:Destroy() end)
-    end
-  end
-  notificationQueue = {}
+  RemoveCurrentNotification()
 end
 
 -- ==================== EXPORTS ====================
 ctx.Core.ShowNotification = ShowNotification
-ctx.Core.RemoveNotification = RemoveNotification
+ctx.Core.RemoveNotification = RemoveCurrentNotification
 ctx.Core.ClearAllNotifications = ClearAllNotifications
-ctx.Core.NotificationQueue = notificationQueue
+ctx.Core.NotificationQueue = {}
 
 return {
   ShowNotification = ShowNotification,
-  RemoveNotification = RemoveNotification,
+  RemoveNotification = RemoveCurrentNotification,
   ClearAllNotifications = ClearAllNotifications,
 }

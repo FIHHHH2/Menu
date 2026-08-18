@@ -1938,6 +1938,11 @@ local function Init()
   ScanPeers()
   PersistScript()
 
+  -- Initialize player list for Trolling tab
+  UpdatePlayerList()
+  TrackConnection(Players.PlayerAdded:Connect(UpdatePlayerList))
+  TrackConnection(Players.PlayerRemoving:Connect(UpdatePlayerList))
+
   -- Save on disconnect
   player.AncestryChanged:Connect(function(_, parent)
     if not parent then
@@ -1990,5 +1995,17 @@ local function Init()
   RestoreCollision()
 end
 
+local function SetTheme(name)
+  if not name or not Themes[name] then return false end
+  ctx.Config.currentThemeName = name
+  ctx.Config.XP = Themes[name]
+  Music.usingDynamicTheme = false
+  Music.dynamicTheme = nil
+  SaveSettings()
+  if ctx.UI and ctx.UI.ApplyTheme then ctx.UI.ApplyTheme() end
+  return true
+end
+
+ctx.Core.SetTheme = SetTheme
 ctx.Core.Init = Init
 ctx.Modules.core = true
