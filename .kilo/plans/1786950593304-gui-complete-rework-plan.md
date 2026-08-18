@@ -1,46 +1,68 @@
-# HUD & Experience Tab UI Polish
+# HUD Text Polish - Remove Job ID, Improve Visibility
 
 ## Changes Required
 
-### 1. HUD - Player Count Integration
-**Location**: `ui.lua` BuildHUD function (~line 2165-2230)
+### 1. HUD placeFrame - Remove Job ID
+**Location**: `ui.lua` BuildHUD function (~line 2214-2223)
 
 **Current State**:
-- Separate `playersLabel` at LayoutOrder 2 showing "Players: --" 
-- `placeFrame` at LayoutOrder 5 with placeName, placeId, jobId, playersCount (duplicate)
+- `jobId` label at position y=28 showing "Job ID: ..."
 
 **Changes**:
-- Remove the standalone `playersLabel` (InfoLine at line 2182)
-- Move player count into `placeFrame` (the game description box)
-- Make player count text bold and accent-colored within placeFrame
-- Keep placeFrame but merge playersCount into it as a styled line
+- Remove the `jobId` TextLabel entirely
+- Reduce `placeFrame` height from 52 to 38 (or keep 52 for spacing)
+- Move `playersCount` up to y=28 (where jobId was)
 
-### 2. HUD - Larger Music Cover
-**Location**: `ui.lua` BuildHUD function (~line 2125-2133)
+### 2. HUD placeFrame - Improve Text Visibility
+**Location**: `ui.lua` BuildHUD function (~line 2191-2234)
 
 **Current State**:
-- `musicCover.Size = UDim2.new(0, 36, 0, 36)`
+- `placeName`: Font=Gotham, TextSize=9, Color=XP.text
+- `placeId`: Font=Code, TextSize=8, Color=XP.tabInactiveText
+- `playersCount`: Font=GothamBold, TextSize=9, Color=XP.accent
 
 **Changes**:
-- Increase cover size to `UDim2.new(0, 48, 0, 48)` or similar
-- Adjust `musicText` and `musicSubtext` position/size to accommodate larger cover
-- Increase `musicFrame` height accordingly
+- Increase text sizes slightly (e.g., +1 or +2)
+- Make all bold (GothamBold or GothamSemibold)
+- Use brighter colors for better visibility
+- Note: Arimo font is not available in Roblox. Available fonts: Gotham, GothamBold, GothamSemibold, SourceSans, SourceSansBold, Code, etc.
+- Recommendation: Use **GothamBold** or **GothamSemibold** for bold, or **SourceSansBold** for a cleaner look
 
-### 3. Experience Tab - Larger Experience Cover
-**Location**: `ui.lua` Experience tab content (~line 859-880)
+### 3. Experience Tab gameDesc - Improve Visibility (if desired)
+**Location**: `ui.lua` Experience tab content (~line 905-915)
 
 **Current State**:
-- `expCover.Size = UDim2.new(0, 100, 0, 100)`
+- `gameDesc`: Font=Gotham, TextSize=9, Color=XP.text
 
 **Changes**:
-- Increase to `UDim2.new(0, 140, 0, 140)` or similar
-- Adjust layout positions of text labels (`expName`, `expId`, etc.) to flow beside the larger cover
-- Increase `expCoverCard` height accordingly
+- Same improvements: larger, bold, better color
+
+---
+
+## Open Questions
+
+1. **Font Choice**: Arimo is not a Roblox built-in font. Should we use:
+   - `GothamBold` (current bold font, clean)
+   - `GothamSemibold` (medium-bold, modern)
+   - `SourceSansBold` (clean, readable)
+   - `SourceSansSemibold` (medium-bold)
+
+2. **Text Sizes**: How much larger?
+   - placeName: 9 → 11?
+   - placeId: 8 → 10?
+   - playersCount: 9 → 11?
+
+3. **placeFrame Height**: After removing Job ID:
+   - Reduce to 38 (tight)
+   - Keep 52 (more breathing room)
+
+4. **Should Experience tab gameDesc also be updated?** (same font/size changes)
 
 ---
 
 ## Implementation Tasks
 
-1. **HUD**: Remove `playersLabel` (line 2182), integrate player count into `placeFrame` with bold/accent styling
-2. **HUD**: Increase `musicCover` size from 36x36 to ~48x48, adjust adjacent text positions and frame height
-3. **Experience Tab**: Increase `expCover` size from 100x100 to ~140x140, adjust card height and text label positions
+1. Remove `jobId` label from placeFrame
+2. Move `playersCount` up to fill the gap
+3. Update placeName, placeId, playersCount fonts/sizes/colors
+4. Optionally update Experience tab gameDesc

@@ -8,10 +8,10 @@ local XP = ctx.Config.XP
 
 -- Notification queue state
 local notificationQueue = {}
-local maxConcurrent = 3
-local basePosition = UDim2.new(1, -220, 0, 8) -- Top-right anchored
+local basePosition = UDim2.new(1, -220, 0, 8)
 local notificationHeight = 60
 local notificationGap = 8
+local basePositionOffset = 0
 
 -- ==================== HELPER: Create Notification GUI ====================
 local function CreateNotificationGui(message, notifType)
@@ -80,13 +80,12 @@ end
 
 -- ==================== POSITION CALCULATION ====================
 local function CalculatePosition(index)
-  -- Stack from top down
-  local yOffset = 8 + (index * (notificationHeight + notificationGap))
+  local yOffset = 8 + ((basePositionOffset + index) * (notificationHeight + notificationGap))
   return UDim2.new(1, -220, 0, yOffset)
 end
 
 local function CalculateStartPosition(index)
-  return UDim2.new(1, -180, 0, 8 + (index * (notificationHeight + notificationGap)))
+  return UDim2.new(1, -180, 0, 8 + ((basePositionOffset + index) * (notificationHeight + notificationGap)))
 end
 
 -- ==================== REPOSITION ALL NOTIFICATIONS ====================
@@ -107,19 +106,9 @@ local function ShowNotification(message, duration, notifType)
   
   XP = ctx.Config.XP -- Refresh theme
   
-  -- Remove oldest if at max
-  if #notificationQueue >= maxConcurrent then
-    local oldest = table.remove(notificationQueue, 1)
-    if oldest and oldest.gui and oldest.gui.Parent then
-      pcall(function() oldest.gui:Destroy() end)
-    end
-  end
-  
-  -- Create new notification
   local notificationGui, frame = CreateNotificationGui(message, notifType)
   local index = #notificationQueue
   
-  -- Start position (off-screen right)
   frame.Position = CalculateStartPosition(index)
   
   local notif = {
@@ -178,16 +167,17 @@ local function RemoveNotification(notif)
     pcall(function() gui:Destroy() end)
   end
   
-  -- Remove from queue
   for i, n in ipairs(notificationQueue) do
     if n == notif then
       table.remove(notificationQueue, i)
       break
     end
   end
-  
-  -- Reposition remaining
   RepositionNotifications()
+  
+  if #notificationQueue == 0 then
+    basePositionOffset = 0
+  end
 end
 
 -- ==================== CLEAR ALL NOTIFICATIONS ====================

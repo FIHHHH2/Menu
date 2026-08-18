@@ -567,8 +567,8 @@ BuildContent = function(container)
     npCard.BorderColor3 = Color3.fromRGB(30, 215, 96)
 
     local mCover = Instance.new("ImageLabel")
-    mCover.Size = UDim2.new(0, 80, 0, 80)
-    mCover.Position = UDim2.new(0, 12, 0, 12)
+musicCover.Size = UDim2.new(0, 64, 0, 64)
+musicCover.Position = UDim2.new(0, 2, 0, 2)
     mCover.BackgroundColor3 = Color3.fromRGB(20, 26, 38)
     mCover.BorderSizePixel = 1
     mCover.BorderColor3 = Color3.fromRGB(30, 215, 96)
@@ -893,84 +893,87 @@ BuildContent = function(container)
     -- Server Info Card
     local serverCard = Card(80, 2)
     Lbl(serverCard, "Server Information", Enum.Font.GothamBold, 12, XP.text, 10, 8)
-    local serverPlayers = Lbl(serverCard, "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers, Enum.Font.GothamBold, 11, XP.accent, 10, 28, 1, 18)
-    local serverPing = Lbl(serverCard, "Ping: -- ms", Enum.Font.Code, 10, XP.tabInactiveText, 10, 48, 0.5, 16)
-    local serverFps = Lbl(serverCard, "FPS: --", Enum.Font.Code, 10, XP.tabInactiveText, 10, 64, 0.5, 16)
+local playersCount = Instance.new("TextLabel")
+local players = Players:GetPlayers()
+playersCount.Size = UDim2.new(1, -8, 0, 14)
+playersCount.Position = UDim2.new(0, 4, 0, 30)
+playersCount.Text = "Players: " .. #players .. "/" .. Players.MaxPlayers
+playersCount.TextColor3 = XP.accent
+playersCount.BackgroundTransparency = 1
+playersCount.Font = Enum.Font.GothamBold
+playersCount.TextSize = 11
+playersCount.TextXAlignment = Enum.TextXAlignment.Left
+playersCount.Parent = placeFrame
 
-    -- Game Info Card
-    local gameCard = Card(100, 3)
-    Lbl(gameCard, "Game Details", Enum.Font.GothamBold, 12, XP.text, 10, 8)
-    local gameDesc = Instance.new("TextLabel")
-    gameDesc.Size = UDim2.new(1, -20, 0, 70)
-    gameDesc.Position = UDim2.new(0, 10, 0, 28)
-    gameDesc.Text = "Loading game description..."
-    gameDesc.TextColor3 = XP.text
-    gameDesc.BackgroundTransparency = 1
-    gameDesc.Font = Enum.Font.Gotham
-    gameDesc.TextSize = 9
-    gameDesc.TextXAlignment = Enum.TextXAlignment.Left
-    gameDesc.TextYAlignment = Enum.TextYAlignment.Top
-    gameDesc.TextWrapped = true
-    gameDesc.ClipsDescendants = true
-    gameDesc.Parent = gameCard
+-- Update player count on changes
+local function UpdatePlayerCount()
+    playersCount.Text = "Players: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers
+end
 
-    -- Refresh experience info function
-    local function RefreshExperienceInfo()
-      expName.Text = "Loading..."
-      expCreator.Text = "Creator: Loading..."
-      gameDesc.Text = "Loading game description..."
+local connection = Players.PlayerAdded:Connect(UpdatePlayerCount)
+TrackConnection(connection)
+connection = Players.PlayerRemoving:Connect(UpdatePlayerCount)
+TrackConnection(connection)
 
-      -- Fetch place info
-      pcall(function()
-        local MarketplaceService = game:GetService("MarketplaceService")
-        local info = MarketplaceService:GetProductInfo(game.PlaceId)
-        if info then
-          expName.Text = info.Name or "Unknown"
-          expCreator.Text = "Creator: " .. (info.Creator and info.Creator.Name or "Unknown")
-          gameDesc.Text = info.Description or "No description available."
-        end
-      end)
+-- Game Info Card
+local gameCard = Instance.new("Frame")
+Lbl(gameCard, "Game Details", Enum.Font.GothamBold, 12, XP.text, 10, 8)
+local gameDesc = Instance.new("TextLabel")
+gameDesc.Size = UDim2.new(1, -20, 0, 70)
+gameDesc.Position = UDim2.new(0, 10, 0, 28)
+gameDesc.Text = "Loading game description..."
+gameDesc.TextColor3 = Color3.fromRGB(230, 240, 255)
+gameDesc.BackgroundTransparency = 1
+gameDesc.Font = Enum.Font.GothamBold
+gameDesc.TextSize = 11
+gameDesc.TextXAlignment = Enum.TextXAlignment.Left
+gameDesc.TextYAlignment = Enum.TextYAlignment.Top
+gameDesc.TextWrapped = true
+gameDesc.ClipsDescendants = true
+gameDesc.Parent = gameCard
 
-      -- Fetch experience thumbnail
-      pcall(function()
-        local HttpService = game:GetService("HttpService")
-        local url = "https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" .. game.PlaceId .. "&size=512x512&format=Png&isCircular=false"
-        local response = HttpService:GetAsync(url)
-        local data = HttpService:JSONDecode(response)
-        if data and data.data and data.data[1] and data.data[1].imageUrl then
-          expCover.Image = data.data[1].imageUrl
-        end
-      end)
-
-      expPlayers.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
-      expJobId.Text = "Job ID: " .. tostring(game.JobId):sub(1, 36) .. "..."
+-- Refresh experience info function
+local function RefreshExperienceInfo()
+  -- Fetch place info
+  pcall(function()
+    local MarketplaceService = game:GetService("MarketplaceService")
+    local info = MarketplaceService:GetProductInfo(game.PlaceId)
+    if info then
+      placeName.Text = info.Name or "Unknown"
+      placeCreator.Text = "Creator: " .. (info.Creator and info.Creator.Name or "Unknown")
+      gameDesc.Text = info.Description or "No description available."
     end
+  end)
 
-    -- Store refresh function for updates
-    _G.RefreshExperienceInfo = RefreshExperienceInfo
+  -- Fetch experience thumbnail
+  pcall(function()
+    local HttpService = game:GetService("HttpService")
+    local url = "https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" .. game.PlaceId .. "&size=512x512&format=Png&isCircular=false"
+    local response = HttpService:GetAsync(url)
+    local data = HttpService:JSONDecode(response)
+    if data and data.data and data.data[1] and data.data[1].imageUrl then
+      expCover.Image = data.data[1].imageUrl
+    end
+  end)
 
-    -- Initial refresh
-    RefreshExperienceInfo()
+  playersCount.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+  expJobId.Text = "Job ID: " .. tostring(game.JobId):sub(1, 36) .. "..."
+end
 
-    -- Update loop for player count, ping, FPS
-    task.spawn(function()
-      while currentTab == "Experience" and task.wait(2) do
-        if serverPlayers then
-          serverPlayers.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
-          expPlayers.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
-        end
-        if serverPing then
-          pcall(function()
-            local ping = math.floor(ctx.Services.Players.LocalPlayer:GetNetworkPing() * 1000)
-            serverPing.Text = "Ping: " .. ping .. " ms"
-          end)
-        end
-        if serverFps then
-          local fps = math.floor(1 / ctx.Services.RunService.Heartbeat:Wait() + 0.5)
-          serverFps.Text = "FPS: " .. fps
-        end
-      end
-    end)
+-- Store refresh function for updates
+_G.RefreshExperienceInfo = RefreshExperienceInfo
+
+-- Initial refresh
+RefreshExperienceInfo()
+
+-- Update loop for player count, ping, FPS
+task.spawn(function()
+  while currentTab == "Experience" and task.wait(2) do
+    if playersCount then
+      playersCount.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+    end
+  end
+end)
 
     return
   end
@@ -2180,7 +2183,7 @@ BuildHUD = function()
 
   -- Place Info
   local placeFrame = Instance.new("Frame")
-  placeFrame.Size = UDim2.new(1, 0, 0, 52)
+  placeFrame.Size = UDim2.new(1, 0, 0, 42)
   placeFrame.BackgroundColor3 = XP.panel2
   placeFrame.BackgroundTransparency = 0.3
   placeFrame.BorderSizePixel = 0
@@ -2189,47 +2192,36 @@ BuildHUD = function()
   placeFrame.Parent = content
 
   local placeName = Instance.new("TextLabel")
-  placeName.Size = UDim2.new(1, -8, 0, 14)
+  placeName.Size = UDim2.new(1, -8, 0, 16)
   placeName.Position = UDim2.new(0, 4, 0, 0)
   placeName.Text = "Place: " .. (game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Unknown")
-  placeName.TextColor3 = XP.text
+  placeName.TextColor3 = Color3.fromRGB(255, 255, 255)
   placeName.BackgroundTransparency = 1
-  placeName.Font = Enum.Font.Gotham
-  placeName.TextSize = 9
+  placeName.Font = Enum.Font.GothamBold
+  placeName.TextSize = 11
   placeName.TextXAlignment = Enum.TextXAlignment.Left
   placeName.TextTruncate = Enum.TextTruncate.AtEnd
   placeName.Parent = placeFrame
 
   local placeId = Instance.new("TextLabel")
   placeId.Size = UDim2.new(1, -8, 0, 14)
-  placeId.Position = UDim2.new(0, 4, 0, 14)
+  placeId.Position = UDim2.new(0, 4, 0, 16)
   placeId.Text = "Place ID: " .. tostring(game.PlaceId)
-  placeId.TextColor3 = XP.tabInactiveText
+  placeId.TextColor3 = Color3.fromRGB(200, 220, 245)
   placeId.BackgroundTransparency = 1
-  placeId.Font = Enum.Font.Code
-  placeId.TextSize = 8
+  placeId.Font = Enum.Font.GothamBold
+  placeId.TextSize = 10
   placeId.TextXAlignment = Enum.TextXAlignment.Left
   placeId.Parent = placeFrame
 
-  local jobId = Instance.new("TextLabel")
-  jobId.Size = UDim2.new(1, -8, 0, 14)
-  jobId.Position = UDim2.new(0, 4, 0, 28)
-  jobId.Text = "Job ID: " .. tostring(game.JobId):sub(1, 36) .. "..."
-  jobId.TextColor3 = XP.tabInactiveText
-  jobId.BackgroundTransparency = 1
-  jobId.Font = Enum.Font.Code
-  jobId.TextSize = 8
-  jobId.TextXAlignment = Enum.TextXAlignment.Left
-  jobId.Parent = placeFrame
-
   local playersCount = Instance.new("TextLabel")
   playersCount.Size = UDim2.new(1, -8, 0, 14)
-  playersCount.Position = UDim2.new(0, 4, 0, 42)
+  playersCount.Position = UDim2.new(0, 4, 0, 30)
   playersCount.Text = "Players: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers
   playersCount.TextColor3 = XP.accent
   playersCount.BackgroundTransparency = 1
   playersCount.Font = Enum.Font.GothamBold
-  playersCount.TextSize = 9
+  playersCount.TextSize = 11
   playersCount.TextXAlignment = Enum.TextXAlignment.Left
   playersCount.Parent = placeFrame
 

@@ -42,22 +42,30 @@ ctx.Game.MM2 = {}
 local MM2M = ctx.Game.MM2
 
 -- ==================== ROLE DETECTION ====================
-local function GetMM2Murderer()
-  for _, p in ipairs(Players:GetPlayers()) do
-    local char = p.Character
-    local bp = p:FindFirstChild("Backpack")
-    local charTool = char and char:FindFirstChildWhichIsA("Tool")
-    local bpTool = bp and bp:FindFirstChildWhichIsA("Tool")
-    local hasK = (char and (char:FindFirstChild("Knife")
-        or (charTool and (charTool.Name:lower():find("knife")
-          or charTool:FindFirstChild("KnifeServer")))))
-        or (bp and (bp:FindFirstChild("Knife")
-          or (bpTool and (bpTool.Name:lower():find("knife")
-            or bpTool:FindFirstChild("KnifeServer")))))
-    if hasK then return p end
+local function UpdateRoleESP()
+  if not MM2.roleESP then return end
+  for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= Players.LocalPlayer and player.Character then
+      local hasKnife = player.Character:FindFirstChild("Knife") or player.Backpack:FindFirstChild("Knife")
+      local hasGun = player.Character:FindFirstChild("Gun") or player.Backpack:FindFirstChild("Gun")
+      if hasKnife then
+        AddESP(player, "[MURDERER]")
+      elseif hasGun then
+        AddESP(player, "[SHERIFF]")
+      else
+        AddESP(player, "[INNOCENT]")
+      end
+    end
   end
-  return nil
 end
+
+task.spawn(function()
+  while task.wait(0.5) do
+    if MM2.roleESP then
+      UpdateRoleESP()
+    end
+  end
+end)
 
 local function GetMM2Sheriff()
   for _, p in ipairs(Players:GetPlayers()) do
@@ -117,23 +125,40 @@ MM2M.RemoveMagicBulletHook = function()
 end
 
 -- ==================== AUTO FARM ====================
-local function AutoFarmLoop()
-  if not S.mm2AutoFarm then return end
-  task.wait(0.5)
+local function CoinAutoFarm()
+  if not MM2.coinAutoFarm or os.clock() - MM2.lastCoinFarmTime < MM2.coinFarmDelay then return end
+  MM2.lastCoinFarmTime = os.clock()
+  
+  local coins = workspace:GetChildren()
+  local closestCoin = nil
+  local closestDistance = math.huge
   local myChar = GetCharacter()
   if not myChar then return end
   local myRoot = GetRoot(myChar)
   if not myRoot then return end
-
-  local murderer = MM2M.GetMM2Murderer()
-  local sheriff = MM2M.GetMM2Sheriff()
-  local target = murderer or sheriff
-
-  if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-    local tRoot = target.Character.HumanoidRootPart
-    myRoot.CFrame = tRoot.CFrame * CFrame.new(0, 3, 5)
+  
+  for _, coin in ipairs(coins) do
+    if coin.Name:find("Coin") and coin:IsA("Part") then
+      local distance = (coin.Position - myRoot.Position).Magnitude
+      if distance < closestDistance then
+        closestDistance = distance
+        closestCoin = coin
+      end
+    end
+  end
+  
+  if closestCoin then
+    myRoot.CFrame = closestCoin.CFrame * CFrame.new(0, 5, 0)
   end
 end
+
+task.spawn(function()
+  while task.wait(0.5) do
+    if MM2.coinAutoFarm then
+      CoinAutoFarm()
+    end
+  end
+end)
 
 -- ==================== MM2 FEATURE LIST ====================
 local SRef = S
