@@ -58,6 +58,7 @@ end
 
 -- Load modules in dependency order
 loadModule("core")
+loadModule("core/features")
 loadModule("ui")
 loadModule("mm2")
 loadModule("lib/utils")

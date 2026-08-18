@@ -117,7 +117,7 @@ local function ClearESP()
 end
 
 local function AddESP(targetPlr)
-  if targetPlr == player or (not S.esp and not ctx.State.MM2.roleESP) then return end
+  if targetPlr == player or (not S.esp and not (ctx.State.MM2 and ctx.State.MM2.roleESP)) then return end
   local char = targetPlr.Character
   if not char then return end
 
@@ -130,7 +130,7 @@ local function AddESP(targetPlr)
   local fillColor = Color3.fromRGB(255, 50, 50)
   local headerColor = XP.tagHeader
   local rolePrefix = ""
-  if ctx.State.MM2.roleESP then
+  if ctx.State.MM2 and ctx.State.MM2.roleESP then
     local bp = targetPlr:FindFirstChild("Backpack")
     local hasKnife = (char and char:FindFirstChild("Knife")) or (bp and bp:FindFirstChild("Knife"))
     local hasGun = (char and char:FindFirstChild("Gun")) or (bp and bp:FindFirstChild("Gun"))
@@ -798,6 +798,183 @@ BuildContent = function(container)
     return
   end
 
+  -- EXPERIENCE TAB
+  if currentTab == "Experience" then
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.FillDirection = Enum.FillDirection.Vertical
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Padding = UDim.new(0, 6)
+    listLayout.Parent = contentScroll
+
+    local listPad = Instance.new("UIPadding")
+    listPad.PaddingTop = UDim.new(0, 4)
+    listPad.Parent = contentScroll
+
+    listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+      contentScroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 18)
+    end)
+
+    local function Card(h, order, bg)
+      local c = Instance.new("Frame")
+      c.Size = UDim2.new(1, 0, 0, h)
+      c.BackgroundColor3 = bg or XP.panel2
+      c.BorderSizePixel = 1
+      c.BorderColor3 = XP.borderDark
+      c.ClipsDescendants = true
+      c.LayoutOrder = order
+      c.Parent = contentScroll
+      return c
+    end
+
+    local function Lbl(parent, txt, font, size, color, x, y, w, h, trunc)
+      local l = Instance.new("TextLabel")
+      l.Size = UDim2.new(w or 1, -10, 0, h or 16)
+      l.Position = UDim2.new(0, x or 8, 0, y or 0)
+      l.Text = txt; l.Font = font; l.TextSize = size
+      l.TextColor3 = color; l.BackgroundTransparency = 1
+      l.TextXAlignment = Enum.TextXAlignment.Left
+      if trunc then l.TextTruncate = Enum.TextTruncate.AtEnd end
+      l.Parent = parent; return l
+    end
+
+    local function ActionBtn(parent, lbl, x, y, w, clr, fn)
+      local b = Instance.new("TextButton")
+      b.Size = UDim2.new(0, w, 0, 26); b.Position = UDim2.new(0, x, 0, y)
+      b.Text = lbl; b.Font = Enum.Font.GothamBold; b.TextSize = 10
+      b.TextColor3 = Color3.fromRGB(255, 255, 255); b.BackgroundColor3 = clr
+      b.BorderSizePixel = 1; b.BorderColor3 = XP.borderDark
+      b.Parent = parent
+      b.MouseEnter:Connect(function()
+        ctx.Core.Animate(b, { BackgroundColor3 = Color3.new(
+          math.min(clr.R + 0.1, 1), math.min(clr.G + 0.1, 1), math.min(clr.B + 0.1, 1)
+        )}, 0.1)
+      end)
+      b.MouseLeave:Connect(function()
+        ctx.Core.Animate(b, { BackgroundColor3 = clr }, 0.1)
+      end)
+      b.MouseButton1Click:Connect(function() task.spawn(fn) end)
+      return b
+    end
+
+    -- Experience Cover Card
+    local expCoverCard = Card(140, 1, Color3.fromRGB(12, 16, 24))
+    expCoverCard.BorderColor3 = XP.accent
+
+    local expCover = Instance.new("ImageLabel")
+    expCover.Size = UDim2.new(0, 100, 0, 100)
+    expCover.Position = UDim2.new(0, 12, 0, 20)
+    expCover.BackgroundColor3 = Color3.fromRGB(20, 26, 38)
+    expCover.BorderSizePixel = 1
+    expCover.BorderColor3 = XP.accent
+    expCover.ScaleType = Enum.ScaleType.Crop
+    expCover.Image = ""
+    expCover.ClipsDescendants = true
+    expCover.Parent = expCoverCard
+
+    local expName = Lbl(expCoverCard, "Loading...", Enum.Font.GothamBold, 14, XP.text, 124, 20, 0.7, 20, true)
+    local expId = Lbl(expCoverCard, "Place ID: " .. tostring(game.PlaceId), Enum.Font.Code, 10, XP.tabInactiveText, 124, 44, 0.7, 16, true)
+    local expPlayers = Lbl(expCoverCard, "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers, Enum.Font.GothamBold, 11, XP.accent, 124, 64, 0.7, 18, true)
+    local expJobId = Lbl(expCoverCard, "Job ID: " .. tostring(game.JobId):sub(1, 36) .. "...", Enum.Font.Code, 9, XP.tabInactiveText, 124, 84, 0.7, 16, true)
+    local expCreator = Lbl(expCoverCard, "Creator: Loading...", Enum.Font.Gotham, 9, XP.tabInactiveText, 124, 104, 0.7, 16, true)
+
+    -- Action buttons
+    ActionBtn(expCoverCard, "🔄 Refresh", 10, 110, 100, XP.accent, function()
+      RefreshExperienceInfo()
+    end)
+    ActionBtn(expCoverCard, "📋 Copy Place ID", 115, 110, 120, Color3.fromRGB(30, 200, 80), function()
+      if setclipboard then setclipboard(tostring(game.PlaceId)) end
+      ctx.Core.ShowNotification("Place ID copied to clipboard")
+    end)
+    ActionBtn(expCoverCard, "📋 Copy Job ID", 240, 110, 110, Color3.fromRGB(30, 200, 80), function()
+      if setclipboard then setclipboard(tostring(game.JobId)) end
+      ctx.Core.ShowNotification("Job ID copied to clipboard")
+    end)
+
+    -- Server Info Card
+    local serverCard = Card(80, 2)
+    Lbl(serverCard, "Server Information", Enum.Font.GothamBold, 12, XP.text, 10, 8)
+    local serverPlayers = Lbl(serverCard, "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers, Enum.Font.GothamBold, 11, XP.accent, 10, 28, 1, 18)
+    local serverPing = Lbl(serverCard, "Ping: -- ms", Enum.Font.Code, 10, XP.tabInactiveText, 10, 48, 0.5, 16)
+    local serverFps = Lbl(serverCard, "FPS: --", Enum.Font.Code, 10, XP.tabInactiveText, 10, 64, 0.5, 16)
+
+    -- Game Info Card
+    local gameCard = Card(100, 3)
+    Lbl(gameCard, "Game Details", Enum.Font.GothamBold, 12, XP.text, 10, 8)
+    local gameDesc = Instance.new("TextLabel")
+    gameDesc.Size = UDim2.new(1, -20, 0, 70)
+    gameDesc.Position = UDim2.new(0, 10, 0, 28)
+    gameDesc.Text = "Loading game description..."
+    gameDesc.TextColor3 = XP.text
+    gameDesc.BackgroundTransparency = 1
+    gameDesc.Font = Enum.Font.Gotham
+    gameDesc.TextSize = 9
+    gameDesc.TextXAlignment = Enum.TextXAlignment.Left
+    gameDesc.TextYAlignment = Enum.TextYAlignment.Top
+    gameDesc.TextWrapped = true
+    gameDesc.ClipsDescendants = true
+    gameDesc.Parent = gameCard
+
+    -- Refresh experience info function
+    local function RefreshExperienceInfo()
+      expName.Text = "Loading..."
+      expCreator.Text = "Creator: Loading..."
+      gameDesc.Text = "Loading game description..."
+
+      -- Fetch place info
+      pcall(function()
+        local MarketplaceService = game:GetService("MarketplaceService")
+        local info = MarketplaceService:GetProductInfo(game.PlaceId)
+        if info then
+          expName.Text = info.Name or "Unknown"
+          expCreator.Text = "Creator: " .. (info.Creator and info.Creator.Name or "Unknown")
+          gameDesc.Text = info.Description or "No description available."
+        end
+      end)
+
+      -- Fetch experience thumbnail
+      pcall(function()
+        local HttpService = game:GetService("HttpService")
+        local url = "https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" .. game.PlaceId .. "&size=512x512&format=Png&isCircular=false"
+        local response = HttpService:GetAsync(url)
+        local data = HttpService:JSONDecode(response)
+        if data and data.data and data.data[1] and data.data[1].imageUrl then
+          expCover.Image = data.data[1].imageUrl
+        end
+      end)
+
+      expPlayers.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+      expJobId.Text = "Job ID: " .. tostring(game.JobId):sub(1, 36) .. "..."
+    end
+
+    -- Store refresh function for updates
+    _G.RefreshExperienceInfo = RefreshExperienceInfo
+
+    -- Initial refresh
+    RefreshExperienceInfo()
+
+    -- Update loop for player count, ping, FPS
+    task.spawn(function()
+      while currentTab == "Experience" and task.wait(2) do
+        if serverPlayers then
+          serverPlayers.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+          expPlayers.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+        end
+        if serverPing then
+          pcall(function()
+            local ping = math.floor(ctx.Services.Players.LocalPlayer:GetNetworkPing() * 1000)
+            serverPing.Text = "Ping: " .. ping .. " ms"
+          end)
+        end
+        if serverFps then
+          local fps = math.floor(1 / ctx.Services.RunService.Heartbeat:Wait() + 0.5)
+          serverFps.Text = "FPS: " .. fps
+        end
+      end
+    end)
+
+    return
+  end
+
   -- KEYBINDS TAB
   if currentTab == "Keybinds" then
     local features = ctx.Core.features
@@ -963,6 +1140,7 @@ BuildContent = function(container)
         keyLbl.TextColor3 = Color3.fromRGB(150, 150, 150)
         ctx.Core.RebuildKeybindMap()
         ctx.Core.SaveKeybinds()
+        if ctx.UI and ctx.UI.UpdateKeybindOverlay then ctx.UI.UpdateKeybindOverlay() end
         ctx.Core.ShowNotification("Keybind cleared: " .. entry.feat.name)
       end)
 
@@ -981,6 +1159,7 @@ BuildContent = function(container)
             keyLbl.TextColor3 = XP.accent
             ctx.Core.RebuildKeybindMap()
             ctx.Core.SaveKeybinds()
+            if ctx.UI and ctx.UI.UpdateKeybindOverlay then ctx.UI.UpdateKeybindOverlay() end
             ctx.Core.ShowNotification("Keybind set: " .. entry.feat.name .. " → " .. keyCodeName(input.KeyCode))
           end
           setBtn.Text = "Set"
@@ -1135,15 +1314,19 @@ BuildContent = function(container)
       if dropdownOpen then
         if dropdownMenu then dropdownMenu:Destroy() end
         dropdownMenu = Instance.new("Frame")
-        dropdownMenu.Size = UDim2.new(1, -12, 0, math.min(#playerList * 22 + 4, 140))
-        dropdownMenu.Position = UDim2.new(0, 6, 0, 50)
+        dropdownMenu.Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, math.min(#playerList * 22 + 4, 140))
         dropdownMenu.BackgroundColor3 = XP.panel1
         dropdownMenu.BackgroundTransparency = 0
         dropdownMenu.BorderSizePixel = 1
         dropdownMenu.BorderColor3 = XP.accent
-        dropdownMenu.ZIndex = 100
+        dropdownMenu.ZIndex = 200
         dropdownMenu.ClipsDescendants = true
-        dropdownMenu.Parent = contentScroll -- Parent to scroll instead of dropCard for clipping
+        
+        -- Position absolutely relative to the main GUI frame
+        local dropdownAbsPos = dropdown.AbsolutePosition
+        local frameAbsPos = frame.AbsolutePosition
+        dropdownMenu.Position = UDim2.new(0, dropdownAbsPos.X - frameAbsPos.X, 0, dropdownAbsPos.Y - frameAbsPos.Y + dropdown.AbsoluteSize.Y + 2)
+        dropdownMenu.Parent = frame -- Parent to main frame to avoid clipping
         table.insert(activeDropdowns, dropdownMenu)
 
         local scroll = Instance.new("ScrollingFrame")
@@ -1631,7 +1814,8 @@ BuildGUI = function()
     { tab = "Config" },
     { tab = "HUD" },
     { tab = "Keybinds" },
-    { tab = "Music" }
+    { tab = "Music" },
+    { tab = "Experience" }
   }
   local tabButtons = {}
 
@@ -1901,12 +2085,21 @@ BuildHUD = function()
   tbGrad.Rotation = 90; tbGrad.Parent = titleBar
 
   local hudTitle = Instance.new("TextLabel")
-  hudTitle.Size = UDim2.new(1, -8, 1, 0); hudTitle.Position = UDim2.new(0, 8, 0, 0)
-  hudTitle.Text = "UniPanel HUD | " .. player.DisplayName .. " (@" .. player.Name .. ")"
+  hudTitle.Size = UDim2.new(0.6, -8, 1, 0); hudTitle.Position = UDim2.new(0, 8, 0, 0)
+  hudTitle.Text = player.DisplayName .. " (@" .. player.Name .. ")"
   hudTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
   hudTitle.BackgroundTransparency = 1; hudTitle.Font = Enum.Font.GothamBold
   hudTitle.TextSize = 10; hudTitle.TextXAlignment = Enum.TextXAlignment.Left
+  hudTitle.TextTruncate = Enum.TextTruncate.AtEnd
   hudTitle.Parent = titleBar
+
+  local hudFpsPing = Instance.new("TextLabel")
+  hudFpsPing.Size = UDim2.new(0.4, -8, 1, 0); hudFpsPing.Position = UDim2.new(0.6, 0, 0, 0)
+  hudFpsPing.Text = "FPS: -- | Ping: --ms"
+  hudFpsPing.TextColor3 = Color3.fromRGB(50, 255, 140)
+  hudFpsPing.BackgroundTransparency = 1; hudFpsPing.Font = Enum.Font.Code
+  hudFpsPing.TextSize = 9; hudFpsPing.TextXAlignment = Enum.TextXAlignment.Right
+  hudFpsPing.Parent = titleBar
 
   local content = Instance.new("Frame")
   content.Size = UDim2.new(1, -8, 1, -30); content.Position = UDim2.new(0, 4, 0, 26)
@@ -1985,10 +2178,8 @@ BuildHUD = function()
     return lbl
   end
 
-  -- FPS & Ping
-  local fpsLabel = InfoLine("FPS: -- | Ping: --ms", 2)
-  local posLabel = InfoLine("Position: --", 3)
-  local playersLabel = InfoLine("Players: --", 4)
+  -- Players count (only remaining info line)
+  local playersLabel = InfoLine("Players: --", 2)
 
   -- Place Info
   local placeFrame = Instance.new("Frame")
@@ -2067,20 +2258,13 @@ BuildHUD = function()
     -- FPS
     local fps = math.floor(1 / dt + 0.5)
     local fpsColor = ctx.Core.GetFPSColor(fps)
-    fpsLabel.Text = "FPS: " .. fps
-
-    -- Ping
+    local pingText = ""
     pcall(function()
       local ping = math.floor(player:GetNetworkPing() * 1000)
-      fpsLabel.Text = fpsLabel.Text .. " | Ping: " .. ping .. "ms"
+      pingText = " | Ping: " .. ping .. "ms"
     end)
-
-    -- Position
-    local root = ctx.Core.GetRoot()
-    if root then
-      local pos = root.Position
-      posLabel.Text = string.format("Position: %.0f, %.0f, %.0f", pos.X, pos.Y, pos.Z)
-    end
+    hudFpsPing.Text = "FPS: " .. fps .. pingText
+    hudFpsPing.TextColor3 = fpsColor
 
     -- Players
     playersLabel.Text = "Players: " .. #Players:GetPlayers()
@@ -2088,6 +2272,187 @@ BuildHUD = function()
 end
 
 ctx.UI.BuildHUD = BuildHUD
+
+-- ==================== KEYBIND OVERLAY ====================
+local keybindOverlayRef = nil
+local keybindOverlayDragging = false
+local keybindOverlayDragStart = nil
+local keybindOverlayStartPos = nil
+
+local function CreateKeybindOverlay()
+  if keybindOverlayRef and keybindOverlayRef.Parent then
+    keybindOverlayRef:Destroy()
+  end
+
+  local overlayGui = Instance.new("ScreenGui")
+  overlayGui.Name = "KeybindOverlay"
+  overlayGui.ResetOnSpawn = false
+  overlayGui.DisplayOrder = 999998
+  overlayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+  overlayGui.Parent = PlayerGui
+
+  local frame = Instance.new("Frame")
+  frame.Name = "OverlayFrame"
+  frame.Size = UDim2.new(0, 250, 0, 30)
+  frame.Position = UDim2.new(1, -258, 1, -38)
+  frame.BackgroundColor3 = XP.windowBg
+  frame.BackgroundTransparency = 0.15
+  frame.BorderSizePixel = 1
+  frame.BorderColor3 = XP.accent
+  frame.ClipsDescendants = true
+  frame.Parent = overlayGui
+  frame.Active = true
+
+  local grad = Instance.new("UIGradient")
+  grad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, XP.windowBgLight),
+    ColorSequenceKeypoint.new(0.5, XP.windowBg),
+    ColorSequenceKeypoint.new(1, XP.windowBgDark)
+  })
+  grad.Rotation = 90; grad.Parent = frame
+
+  local titleBar = Instance.new("Frame")
+  titleBar.Size = UDim2.new(1, 0, 0, 22)
+  titleBar.BackgroundColor3 = XP.titleBar
+  titleBar.BackgroundTransparency = 0.2
+  titleBar.BorderSizePixel = 0
+  titleBar.Parent = frame
+
+  local tbGrad = Instance.new("UIGradient")
+  tbGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, XP.titleBarGrad1),
+    ColorSequenceKeypoint.new(1, XP.titleBarGrad3)
+  })
+  tbGrad.Rotation = 90; tbGrad.Parent = titleBar
+
+  local title = Instance.new("TextLabel")
+  title.Size = UDim2.new(1, -10, 1, 0)
+  title.Position = UDim2.new(0, 8, 0, 0)
+  title.Text = "Active Keybinds"
+  title.TextColor3 = Color3.fromRGB(255, 255, 255)
+  title.BackgroundTransparency = 1
+  title.Font = Enum.Font.GothamBold
+  title.TextSize = 9
+  title.TextXAlignment = Enum.TextXAlignment.Left
+  title.Parent = titleBar
+
+  local content = Instance.new("Frame")
+  content.Size = UDim2.new(1, -8, 1, -28)
+  content.Position = UDim2.new(0, 4, 0, 24)
+  content.BackgroundTransparency = 1
+  content.ClipsDescendants = true
+  content.Parent = frame
+
+  local layout = Instance.new("UIListLayout")
+  layout.FillDirection = Enum.FillDirection.Vertical
+  layout.SortOrder = Enum.SortOrder.LayoutOrder
+  layout.Padding = UDim.new(0, 2)
+  layout.Parent = content
+
+  local padding = Instance.new("UIPadding")
+  padding.PaddingBottom = UDim.new(0, 4)
+  padding.Parent = content
+
+  -- Draggable
+  titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+      keybindOverlayDragging = true
+      keybindOverlayDragStart = input.Position
+      keybindOverlayStartPos = frame.Position
+    end
+  end)
+
+  titleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement and keybindOverlayDragging then
+      local delta = input.Position - keybindOverlayDragStart
+      frame.Position = UDim2.new(
+        keybindOverlayStartPos.X.Scale,
+        keybindOverlayStartPos.X.Offset + delta.X,
+        keybindOverlayStartPos.Y.Scale,
+        keybindOverlayStartPos.Y.Offset + delta.Y
+      )
+    end
+  end)
+
+  titleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+      keybindOverlayDragging = false
+    end
+  end)
+
+  -- Update keybinds
+  local function UpdateKeybinds()
+    for _, child in ipairs(content:GetChildren()) do
+      if child:IsA("TextLabel") then child:Destroy() end
+    end
+
+    local keybinds = ctx.Core.keybinds
+    local keybindRegistry = ctx.Core.keybindRegistry
+    local rowOrder = 0
+
+    for kbName, reg in pairs(keybindRegistry) do
+      local keyCode = keybinds[kbName]
+      if keyCode and reg.get then
+        local isActive = reg.get()
+        local displayName = reg.featName or kbName
+        local keyName = ""
+        if typeof(keyCode) == "EnumItem" then
+          keyName = keyCode.Name
+        elseif typeof(keyCode) == "string" then
+          keyName = keyCode
+        end
+        if keyName == "" then keyName = "None" end
+
+        rowOrder = rowOrder + 1
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, 0, 0, 16)
+        lbl.Text = "[" .. keyName .. "] " .. displayName .. " - " .. (isActive and "ON" or "OFF")
+        lbl.TextColor3 = isActive and Color3.fromRGB(50, 255, 140) or XP.tabInactiveText
+        lbl.BackgroundTransparency = 1
+        lbl.Font = Enum.Font.Code
+        lbl.TextSize = 9
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.LayoutOrder = rowOrder
+        lbl.Parent = content
+      end
+    end
+
+    -- Resize frame based on content
+    frame.Size = UDim2.new(0, 250, 0, math.max(30, 28 + rowOrder * 18))
+  end
+
+  UpdateKeybinds()
+
+  -- Store update function
+  keybindOverlayRef = overlayGui
+  overlayGui.UpdateKeybinds = UpdateKeybinds
+
+  return overlayGui
+end
+
+local function ToggleKeybindOverlay(state)
+  if state then
+    CreateKeybindOverlay()
+  else
+    if keybindOverlayRef and keybindOverlayRef.Parent then
+      keybindOverlayRef:Destroy()
+      keybindOverlayRef = nil
+    end
+  end
+end
+
+ctx.UI.ToggleKeybindOverlay = ToggleKeybindOverlay
+
+-- Update keybind overlay when keybinds change
+local function UpdateKeybindOverlay()
+  if keybindOverlayRef and keybindOverlayRef.Parent then
+    if keybindOverlayRef.UpdateKeybinds then
+      keybindOverlayRef.UpdateKeybinds()
+    end
+  end
+end
+
+ctx.UI.UpdateKeybindOverlay = UpdateKeybindOverlay
 
 -- ==================== APPLY THEME (LIVE UPDATE) ====================
 local function ApplyTheme()
