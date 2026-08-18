@@ -1904,6 +1904,7 @@ end))
 
 -- ==================== INIT ====================
 local function Init()
+  isScriptRunning = true
   -- FPS Uncap
   pcall(function() setfpscap(0) end)
 

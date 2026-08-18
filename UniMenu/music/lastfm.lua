@@ -102,6 +102,13 @@ local function LastfmPoll()
       trackChanged = true
     end
     
+    -- Debug logging
+    if trackChanged then
+      print("[Last.fm] Track changed:", newSong, "-", newArtist, "| Active:", newActive, "| Prev:", lastTrackData and lastTrackData.song or "nil")
+    elseif lastTrackData then
+      print("[Last.fm] Poll: same track", newSong, "-", newArtist, "| Active:", newActive)
+    end
+    
     -- Update state
     Music.song = newSong
     Music.artist = newArtist

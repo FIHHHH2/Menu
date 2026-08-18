@@ -1171,6 +1171,44 @@ BuildContent = function(container)
     end)
   end
 
+  -- DEFAULT: Render feature sections (for tabs without custom UI)
+  -- Create left/right column containers for quadrant layout
+  local leftCol = Instance.new("Frame")
+  leftCol.Name = "LeftColumn"
+  leftCol.Size = UDim2.new(0.49, 0, 1, 0)
+  leftCol.BackgroundTransparency = 1
+  leftCol.BorderSizePixel = 0
+  leftCol.ClipsDescendants = true
+  leftCol.Parent = contentScroll
+
+  local rightCol = Instance.new("Frame")
+  rightCol.Name = "RightColumn"
+  rightCol.Size = UDim2.new(0.49, 0, 1, 0)
+  rightCol.Position = UDim2.new(0.51, 0, 0, 0)
+  rightCol.BackgroundTransparency = 1
+  rightCol.BorderSizePixel = 0
+  rightCol.ClipsDescendants = true
+  rightCol.Parent = contentScroll
+
+  local leftLayout = Instance.new("UIListLayout")
+  leftLayout.FillDirection = Enum.FillDirection.Vertical
+  leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+  leftLayout.Padding = UDim.new(0, 6)
+  leftLayout.Parent = leftCol
+
+  local rightLayout = Instance.new("UIListLayout")
+  rightLayout.FillDirection = Enum.FillDirection.Vertical
+  rightLayout.SortOrder = Enum.SortOrder.LayoutOrder
+  rightLayout.Padding = UDim.new(0, 6)
+  rightLayout.Parent = rightCol
+
+  local function UpdateCanvas()
+    local maxH = math.max(leftLayout.AbsoluteContentSize.Y, rightLayout.AbsoluteContentSize.Y)
+    contentScroll.CanvasSize = UDim2.new(0, 0, 0, maxH + 16)
+  end
+  leftLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
+  rightLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
+
   -- DEFAULT: Render feature sections
   local features = ctx.Core.features
   local tabFeatures = features[currentTab] or {}
