@@ -9,7 +9,7 @@ local XP = ctx.Config.XP
 -- Notification queue state
 local notificationQueue = {}
 local maxConcurrent = 3
-local basePosition = UDim2.new(1, -220, 1, -70)
+local basePosition = UDim2.new(1, -220, 0, 8) -- Top-right anchored
 local notificationHeight = 60
 local notificationGap = 8
 
@@ -80,14 +80,13 @@ end
 
 -- ==================== POSITION CALCULATION ====================
 local function CalculatePosition(index)
-  -- Stack from bottom up
-  local yOffset = -70 - (index * (notificationHeight + notificationGap))
-  return UDim2.new(1, -210, 1, yOffset)
+  -- Stack from top down
+  local yOffset = 8 + (index * (notificationHeight + notificationGap))
+  return UDim2.new(1, -220, 0, yOffset)
 end
 
 local function CalculateStartPosition(index)
-  local yOffset = -30 - (index * (notificationHeight + notificationGap))
-  return UDim2.new(1, -210, 1, yOffset)
+  return UDim2.new(1, -180, 0, 8 + (index * (notificationHeight + notificationGap)))
 end
 
 -- ==================== REPOSITION ALL NOTIFICATIONS ====================

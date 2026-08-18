@@ -45,9 +45,39 @@ local function RegisterKeybindUIUpdater(kbName, updateFn)
   keybindUIUpdaters[kbName] = updateFn
 end
 
+local function FindToggleButton(featName)
+  if not contentContainerRef then return nil end
+  local scroll = contentContainerRef:FindFirstChild("ContentScroll")
+  if not scroll then return nil end
+  for _, col in ipairs(scroll:GetChildren()) do
+    if col:IsA("Frame") and (col.Name == "LeftColumn" or col.Name == "RightColumn") then
+      for _, card in ipairs(col:GetChildren()) do
+        if card:IsA("Frame") then
+          for _, child in ipairs(card:GetDescendants()) do
+            if child:IsA("TextButton") and child.Name == "Toggle_" .. featName then
+              return child
+            end
+          end
+        end
+      end
+    end
+  end
+  return nil
+end
+
 local function NotifyKeybindUIUpdate(kbName, newState)
+  -- First try the callback approach (for current tab)
   if keybindUIUpdaters[kbName] then
     pcall(keybindUIUpdaters[kbName], newState)
+  end
+  -- Also search for button by name to handle tab switches
+  local tabName, featName = kbName:match("(.+)::(.+)")
+  if tabName and featName and tabName == currentTab then
+    local btn = FindToggleButton(featName)
+    if btn then
+      btn.Text = newState and "ON" or "OFF"
+      btn.BackgroundColor3 = newState and XP.green or Color3.fromRGB(150, 150, 150)
+    end
   end
 end
 
@@ -1323,6 +1353,7 @@ BuildContent = function(container)
 
         if feat.isToggle then
           local tBtn = Instance.new("TextButton")
+          tBtn.Name = "Toggle_" .. feat.name
           tBtn.Size = UDim2.new(0, 42, 0, 16)
           tBtn.Position = UDim2.new(1, -48, 0.5, -8)
           local activeState = feat.get and feat.get() or false
@@ -1871,7 +1902,7 @@ BuildHUD = function()
 
   local hudTitle = Instance.new("TextLabel")
   hudTitle.Size = UDim2.new(1, -8, 1, 0); hudTitle.Position = UDim2.new(0, 8, 0, 0)
-  hudTitle.Text = "UniPanel HUD"
+  hudTitle.Text = "UniPanel HUD | " .. player.DisplayName .. " (@" .. player.Name .. ")"
   hudTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
   hudTitle.BackgroundTransparency = 1; hudTitle.Font = Enum.Font.GothamBold
   hudTitle.TextSize = 10; hudTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -1958,6 +1989,61 @@ BuildHUD = function()
   local fpsLabel = InfoLine("FPS: -- | Ping: --ms", 2)
   local posLabel = InfoLine("Position: --", 3)
   local playersLabel = InfoLine("Players: --", 4)
+
+  -- Place Info
+  local placeFrame = Instance.new("Frame")
+  placeFrame.Size = UDim2.new(1, 0, 0, 52)
+  placeFrame.BackgroundColor3 = XP.panel2
+  placeFrame.BackgroundTransparency = 0.3
+  placeFrame.BorderSizePixel = 0
+  placeFrame.LayoutOrder = 5
+  placeFrame.ClipsDescendants = true
+  placeFrame.Parent = content
+
+  local placeName = Instance.new("TextLabel")
+  placeName.Size = UDim2.new(1, -8, 0, 14)
+  placeName.Position = UDim2.new(0, 4, 0, 0)
+  placeName.Text = "Place: " .. (game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Unknown")
+  placeName.TextColor3 = XP.text
+  placeName.BackgroundTransparency = 1
+  placeName.Font = Enum.Font.Gotham
+  placeName.TextSize = 9
+  placeName.TextXAlignment = Enum.TextXAlignment.Left
+  placeName.TextTruncate = Enum.TextTruncate.AtEnd
+  placeName.Parent = placeFrame
+
+  local placeId = Instance.new("TextLabel")
+  placeId.Size = UDim2.new(1, -8, 0, 14)
+  placeId.Position = UDim2.new(0, 4, 0, 14)
+  placeId.Text = "Place ID: " .. tostring(game.PlaceId)
+  placeId.TextColor3 = XP.tabInactiveText
+  placeId.BackgroundTransparency = 1
+  placeId.Font = Enum.Font.Code
+  placeId.TextSize = 8
+  placeId.TextXAlignment = Enum.TextXAlignment.Left
+  placeId.Parent = placeFrame
+
+  local jobId = Instance.new("TextLabel")
+  jobId.Size = UDim2.new(1, -8, 0, 14)
+  jobId.Position = UDim2.new(0, 4, 0, 28)
+  jobId.Text = "Job ID: " .. tostring(game.JobId):sub(1, 36) .. "..."
+  jobId.TextColor3 = XP.tabInactiveText
+  jobId.BackgroundTransparency = 1
+  jobId.Font = Enum.Font.Code
+  jobId.TextSize = 8
+  jobId.TextXAlignment = Enum.TextXAlignment.Left
+  jobId.Parent = placeFrame
+
+  local playersCount = Instance.new("TextLabel")
+  playersCount.Size = UDim2.new(1, -8, 0, 14)
+  playersCount.Position = UDim2.new(0, 4, 0, 42)
+  playersCount.Text = "Players: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers
+  playersCount.TextColor3 = XP.accent
+  playersCount.BackgroundTransparency = 1
+  playersCount.Font = Enum.Font.GothamBold
+  playersCount.TextSize = 9
+  playersCount.TextXAlignment = Enum.TextXAlignment.Left
+  playersCount.Parent = placeFrame
 
   -- Update music UI
   if Music.hudCover and Music.hudCover.Parent then

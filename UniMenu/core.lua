@@ -1968,7 +1968,9 @@ local function Init()
       if reg and reg.get and reg.toggle then
         reg.toggle(not reg.get())
         local state = reg.get() and "enabled" or "disabled"
-        ShowNotification(reg.featName .. " " .. state)
+        if ctx.Core.ShowNotification then
+          ctx.Core.ShowNotification(reg.featName .. " " .. state)
+        end
         -- Notify UI to update button state
         if ctx.Core.NotifyKeybindUIUpdate then
           ctx.Core.NotifyKeybindUIUpdate(kbName, reg.get())
