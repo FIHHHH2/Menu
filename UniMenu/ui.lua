@@ -857,12 +857,12 @@ BuildContent = function(container)
     end
 
     -- Experience Cover Card
-    local expCoverCard = Card(140, 1, Color3.fromRGB(12, 16, 24))
+    local expCoverCard = Card(180, 1, Color3.fromRGB(12, 16, 24))
     expCoverCard.BorderColor3 = XP.accent
 
     local expCover = Instance.new("ImageLabel")
-    expCover.Size = UDim2.new(0, 100, 0, 100)
-    expCover.Position = UDim2.new(0, 12, 0, 20)
+    expCover.Size = UDim2.new(0, 140, 0, 140)
+    expCover.Position = UDim2.new(0, 16, 0, 20)
     expCover.BackgroundColor3 = Color3.fromRGB(20, 26, 38)
     expCover.BorderSizePixel = 1
     expCover.BorderColor3 = XP.accent
@@ -871,21 +871,21 @@ BuildContent = function(container)
     expCover.ClipsDescendants = true
     expCover.Parent = expCoverCard
 
-    local expName = Lbl(expCoverCard, "Loading...", Enum.Font.GothamBold, 14, XP.text, 124, 20, 0.7, 20, true)
-    local expId = Lbl(expCoverCard, "Place ID: " .. tostring(game.PlaceId), Enum.Font.Code, 10, XP.tabInactiveText, 124, 44, 0.7, 16, true)
-    local expPlayers = Lbl(expCoverCard, "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers, Enum.Font.GothamBold, 11, XP.accent, 124, 64, 0.7, 18, true)
-    local expJobId = Lbl(expCoverCard, "Job ID: " .. tostring(game.JobId):sub(1, 36) .. "...", Enum.Font.Code, 9, XP.tabInactiveText, 124, 84, 0.7, 16, true)
-    local expCreator = Lbl(expCoverCard, "Creator: Loading...", Enum.Font.Gotham, 9, XP.tabInactiveText, 124, 104, 0.7, 16, true)
+    local expName = Lbl(expCoverCard, "Loading...", Enum.Font.GothamBold, 15, XP.text, 168, 24, 0.65, 22, true)
+    local expId = Lbl(expCoverCard, "Place ID: " .. tostring(game.PlaceId), Enum.Font.Code, 10, XP.tabInactiveText, 168, 50, 0.65, 16, true)
+    local expPlayers = Lbl(expCoverCard, "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers, Enum.Font.GothamBold, 12, XP.accent, 168, 72, 0.65, 18, true)
+    local expJobId = Lbl(expCoverCard, "Job ID: " .. tostring(game.JobId):sub(1, 36) .. "...", Enum.Font.Code, 9, XP.tabInactiveText, 168, 94, 0.65, 16, true)
+    local expCreator = Lbl(expCoverCard, "Creator: Loading...", Enum.Font.Gotham, 9, XP.tabInactiveText, 168, 116, 0.65, 16, true)
 
     -- Action buttons
-    ActionBtn(expCoverCard, "🔄 Refresh", 10, 110, 100, XP.accent, function()
+    ActionBtn(expCoverCard, "🔄 Refresh", 16, 148, 110, XP.accent, function()
       RefreshExperienceInfo()
     end)
-    ActionBtn(expCoverCard, "📋 Copy Place ID", 115, 110, 120, Color3.fromRGB(30, 200, 80), function()
+    ActionBtn(expCoverCard, "📋 Copy Place ID", 134, 148, 110, Color3.fromRGB(30, 200, 80), function()
       if setclipboard then setclipboard(tostring(game.PlaceId)) end
       ctx.Core.ShowNotification("Place ID copied to clipboard")
     end)
-    ActionBtn(expCoverCard, "📋 Copy Job ID", 240, 110, 110, Color3.fromRGB(30, 200, 80), function()
+    ActionBtn(expCoverCard, "📋 Copy Job ID", 250, 148, 110, Color3.fromRGB(30, 200, 80), function()
       if setclipboard then setclipboard(tostring(game.JobId)) end
       ctx.Core.ShowNotification("Job ID copied to clipboard")
     end)
@@ -2114,7 +2114,7 @@ BuildHUD = function()
 
   -- Music display
   local musicFrame = Instance.new("Frame")
-  musicFrame.Size = UDim2.new(1, 0, 0, 40)
+  musicFrame.Size = UDim2.new(1, 0, 0, 56)
   musicFrame.BackgroundColor3 = XP.panel2
   musicFrame.BackgroundTransparency = 0.3
   musicFrame.BorderSizePixel = 0
@@ -2123,7 +2123,7 @@ BuildHUD = function()
   musicFrame.Parent = content
 
   local musicCover = Instance.new("ImageLabel")
-  musicCover.Size = UDim2.new(0, 36, 0, 36)
+  musicCover.Size = UDim2.new(0, 52, 0, 52)
   musicCover.Position = UDim2.new(0, 2, 0, 2)
   musicCover.BackgroundColor3 = XP.panel1
   musicCover.BorderSizePixel = 0
@@ -2137,21 +2137,21 @@ BuildHUD = function()
   musicCoverCorner.Parent = musicCover
 
   local musicText = Instance.new("TextLabel")
-  musicText.Size = UDim2.new(1, -46, 0, 18)
-  musicText.Position = UDim2.new(0, 42, 0, 2)
+  musicText.Size = UDim2.new(1, -60, 0, 20)
+  musicText.Position = UDim2.new(0, 58, 0, 4)
   musicText.Text = "♪ No music playing"
   musicText.TextColor3 = Color3.fromRGB(200, 220, 245)
   musicText.BackgroundTransparency = 1
   musicText.Font = Enum.Font.GothamBold
-  musicText.TextSize = 10
+  musicText.TextSize = 11
   musicText.TextXAlignment = Enum.TextXAlignment.Left
   musicText.TextTruncate = Enum.TextTruncate.AtEnd
   musicText.Parent = musicFrame
   Music.hudLabel = musicText
 
   local musicSubtext = Instance.new("TextLabel")
-  musicSubtext.Size = UDim2.new(1, -46, 0, 16)
-  musicSubtext.Position = UDim2.new(0, 42, 0, 20)
+  musicSubtext.Size = UDim2.new(1, -60, 0, 18)
+  musicSubtext.Position = UDim2.new(0, 58, 0, 24)
   musicSubtext.Text = Music.artist ~= "" and ("by " .. Music.artist) or ""
   musicSubtext.TextColor3 = Color3.fromRGB(130, 160, 200)
   musicSubtext.BackgroundTransparency = 1
@@ -2178,16 +2178,13 @@ BuildHUD = function()
     return lbl
   end
 
-  -- Players count (only remaining info line)
-  local playersLabel = InfoLine("Players: --", 2)
-
   -- Place Info
   local placeFrame = Instance.new("Frame")
   placeFrame.Size = UDim2.new(1, 0, 0, 52)
   placeFrame.BackgroundColor3 = XP.panel2
   placeFrame.BackgroundTransparency = 0.3
   placeFrame.BorderSizePixel = 0
-  placeFrame.LayoutOrder = 5
+  placeFrame.LayoutOrder = 2
   placeFrame.ClipsDescendants = true
   placeFrame.Parent = content
 
@@ -2266,8 +2263,10 @@ BuildHUD = function()
     hudFpsPing.Text = "FPS: " .. fps .. pingText
     hudFpsPing.TextColor3 = fpsColor
 
-    -- Players
-    playersLabel.Text = "Players: " .. #Players:GetPlayers()
+    -- Players (update in placeFrame)
+    if playersCount then
+      playersCount.Text = "Players: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers
+    end
   end))
 end
 
