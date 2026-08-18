@@ -62,6 +62,10 @@ loadModule("ui")
 loadModule("mm2")
 loadModule("lib/utils")
 loadModule("lib/http")
+loadModule("lib/notifications")
+loadModule("music/covers")
+loadModule("music/lastfm")
+loadModule("music/spotify")
 
 -- Initialize everything
 if ctx.Core.Init then

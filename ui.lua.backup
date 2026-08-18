@@ -1,6 +1,5 @@
 -- UniMenu UI Module
 -- BuildGUI, BuildContent, BuildHUD, themes, notifications, keybinds UI
--- Complete rewrite with scaling fixes, clipping, keybind sync, and notifications
 
 local ctx = ...
 
@@ -37,36 +36,6 @@ local contentContainerRef = nil
 local isTransitioning = false
 local selectedPlayer = ctx.Core.selectedPlayer
 local playerList = ctx.Core.playerList
-
--- ==================== KEYBIND UI SYNC ====================
-local keybindUIUpdaters = {} -- kbName -> function(newState)
-
-local function RegisterKeybindUIUpdater(kbName, updateFn)
-  keybindUIUpdaters[kbName] = updateFn
-end
-
-local function NotifyKeybindUIUpdate(kbName, newState)
-  if keybindUIUpdaters[kbName] then
-    pcall(keybindUIUpdaters[kbName], newState)
-  end
-end
-
-ctx.Core.RegisterKeybindUIUpdater = RegisterKeybindUIUpdater
-ctx.Core.NotifyKeybindUIUpdate = NotifyKeybindUIUpdate
-
--- ==================== CLIP UTILITY ====================
-local function ClampPosition(frame, parentFrame)
-  local absPos = frame.AbsolutePosition
-  local absSize = frame.AbsoluteSize
-  local parentSize = parentFrame and parentFrame.AbsoluteSize or Vector2.new(workspace.CurrentCamera.ViewportSize.X, workspace.CurrentCamera.ViewportSize.Y)
-  
-  local clampedX = math.clamp(absPos.X, 0, parentSize.X - absSize.X)
-  local clampedY = math.clamp(absPos.Y, 0, parentSize.Y - absSize.Y)
-  
-  if absPos.X ~= clampedX or absPos.Y ~= clampedY then
-    frame.Position = UDim2.new(0, clampedX, 0, clampedY)
-  end
-end
 
 -- ==================== ESP SYSTEM ====================
 local function GetESPFolder()
@@ -286,7 +255,6 @@ ctx.UI.ToggleHUD = ToggleHUD
 ctx.UI.GetESPFolder = GetESPFolder
 ctx.UI.ClearESP = ClearESP
 ctx.UI.Animate = ctx.Core.Animate
-ctx.UI.RegisterKeybindUIUpdater = RegisterKeybindUIUpdater
 
 -- ==================== MUSIC UI UPDATE ====================
 local function UpdateMusicUI()
@@ -336,11 +304,6 @@ local function UpdateMusicUI()
       iconChild.Visible = (Music.coverAsset == "")
     end
   end
-  -- Update Spotify direct UI if present
-  if Music.menuSpotifyStatus and Music.menuSpotifyStatus.Parent then
-    Music.menuSpotifyStatus.Text = Music.spotify.connected and "Connected" or "Not Connected"
-    Music.menuSpotifyStatus.TextColor3 = Music.spotify.connected and Color3.fromRGB(30, 215, 96) or XP.tabInactiveText
-  end
 end
 
 ctx.UI.UpdateMusicUI = UpdateMusicUI
@@ -353,7 +316,6 @@ local function CreateSlider(container, configKey, minVal, maxVal, isDecimal, onC
   sliderTrack.BackgroundColor3 = Color3.fromRGB(150, 155, 165)
   sliderTrack.BorderSizePixel = 1
   sliderTrack.BorderColor3 = XP.borderDark
-  sliderTrack.ClipsDescendants = true
   sliderTrack.Parent = container
 
   local sliderFill = Instance.new("Frame")
@@ -383,42 +345,61 @@ local function CreateSlider(container, configKey, minVal, maxVal, isDecimal, onC
   local function UpdateVisual(val)
     local pct = math.clamp((val - minVal) / (maxVal - minVal), 0, 1)
     sliderFill.Size = UDim2.new(pct, 0, 1, 0)
-    knob.Position = UDim2.new(pct, -4, 0.5, -5)
+    knob.Position = UDim2.new(pct, -4, 0.5, -4)
     if isDecimal then
       valLabel.Text = string.format("%.2f", val)
     else
-      valLabel.Text = tostring(math.floor(val + 0.5))
+      valLabel.Text = tostring(math.floor(val))
     end
   end
 
-  local function GetValFromInput(input)
-    local absX = input.Position.X
-    local trackAbsPos = sliderTrack.AbsolutePosition.X
-    local trackAbsSize = sliderTrack.AbsoluteSize.X
-    local pct = math.clamp((absX - trackAbsPos) / trackAbsSize, 0, 1)
-    local raw = minVal + pct * (maxVal - minVal)
-    if isDecimal then
-      return math.floor(raw * 100 + 0.5) / 100
-    else
-      return math.floor(raw + 0.5)
+  -- Resolve configKey (could be dotted like "MM2.auraRadius")
+  local function getConfigValue()
+    if string.find(configKey, ".", 1, true) then
+      local parts = {}
+      for part in string.gmatch(configKey, "[^.]+") do table.insert(parts, part) end
+      if #parts == 2 and ctx.State[parts[1]] then
+        return ctx.State[parts[1]][parts[2]]
+      end
     end
+    return gameConfig[configKey]
+  end
+  local function setConfigValue(val)
+    if string.find(configKey, ".", 1, true) then
+      local parts = {}
+      for part in string.gmatch(configKey, "[^.]+") do table.insert(parts, part) end
+      if #parts == 2 and ctx.State[parts[1]] then
+        ctx.State[parts[1]][parts[2]] = val
+        return
+      end
+    end
+    gameConfig[configKey] = val
   end
 
-  -- Initialize with current value
-  local currentVal = gameConfig[configKey] or ((minVal + maxVal) / 2)
+  local currentVal = getConfigValue() or minVal
   UpdateVisual(currentVal)
 
+  local isDragging = false
+  local connChange, connEnd
+
+  local function ApplyInput(input)
+    local mousePos = input.Position.X
+    local trackPos = sliderTrack.AbsolutePosition.X
+    local trackWidth = sliderTrack.AbsoluteSize.X
+    if trackWidth <= 0 then return end
+    local pct = math.clamp((mousePos - trackPos) / trackWidth, 0, 1)
+    local val = minVal + (maxVal - minVal) * pct
+    if not isDecimal then val = math.floor(val + 0.5) end
+    setConfigValue(val)
+    UpdateVisual(val)
+    if onChange then onChange(val) end
+  end
+
   local function StartDrag(input)
-    local isDragging = true
-    local connChange, connEnd
-    local function ApplyInput(inp)
-      if not isDragging then return end
-      local val = GetValFromInput(inp)
-      gameConfig[configKey] = val
-      UpdateVisual(val)
-      if onChange then onChange(val) end
-    end
+    isDragging = true
     ApplyInput(input)
+    if connChange then connChange:Disconnect() end
+    if connEnd then connEnd:Disconnect() end
     connChange = UserInputService.InputChanged:Connect(function(moveInput)
       if isDragging and moveInput.UserInputType == Enum.UserInputType.MouseMovement then
         ApplyInput(moveInput)
@@ -427,8 +408,12 @@ local function CreateSlider(container, configKey, minVal, maxVal, isDecimal, onC
     connEnd = UserInputService.InputEnded:Connect(function(endInput)
       if endInput.UserInputType == Enum.UserInputType.MouseButton1 then
         isDragging = false
-        if connChange then connChange:Disconnect(); connChange = nil end
-        if connEnd then connEnd:Disconnect(); connEnd = nil end
+        if connChange then
+          connChange:Disconnect(); connChange = nil
+        end
+        if connEnd then
+          connEnd:Disconnect(); connEnd = nil
+        end
       end
     end)
   end
@@ -448,25 +433,11 @@ local BuildContent
 local BuildGUI
 local BuildHUD
 
--- Track dropdown menus for cleanup
-local activeDropdowns = {}
-
-local function CleanupDropdowns()
-  for _, dropdown in ipairs(activeDropdowns) do
-    if dropdown and dropdown.Parent then
-      dropdown:Destroy()
-    end
-  end
-  activeDropdowns = {}
-end
-
 BuildContent = function(container)
   XP = ctx.Config.XP
   if not contentContainerRef then return end
   local contentScroll = contentContainerRef:FindFirstChildOfClass("ScrollingFrame")
   if not contentScroll then return end
-
-  CleanupDropdowns()
 
   for _, child in ipairs(contentScroll:GetChildren()) do
     if child:IsA("Frame") or child:IsA("UIListLayout") or child:IsA("UIPadding") then
@@ -496,7 +467,6 @@ BuildContent = function(container)
       c.BackgroundColor3 = bg or XP.panel2
       c.BorderSizePixel = 1
       c.BorderColor3 = XP.borderDark
-      c.ClipsDescendants = true
       c.LayoutOrder = order
       c.Parent = contentScroll
       return c
@@ -513,26 +483,6 @@ BuildContent = function(container)
       l.Parent = parent; return l
     end
 
-    local function ActionBtn(parent, lbl, x, y, w, clr, fn)
-      local b = Instance.new("TextButton")
-      b.Size = UDim2.new(0, w, 0, 26); b.Position = UDim2.new(0, x, 0, y)
-      b.Text = lbl; b.Font = Enum.Font.GothamBold; b.TextSize = 10
-      b.TextColor3 = Color3.fromRGB(255, 255, 255); b.BackgroundColor3 = clr
-      b.BorderSizePixel = 1; b.BorderColor3 = XP.borderDark
-      b.Parent = parent
-      b.MouseEnter:Connect(function()
-        ctx.Core.Animate(b, { BackgroundColor3 = Color3.new(
-          math.min(clr.R + 0.1, 1), math.min(clr.G + 0.1, 1), math.min(clr.B + 0.1, 1)
-        )}, 0.1)
-      end)
-      b.MouseLeave:Connect(function()
-        ctx.Core.Animate(b, { BackgroundColor3 = clr }, 0.1)
-      end)
-      b.MouseButton1Click:Connect(function() task.spawn(fn) end)
-      return b
-    end
-
-    -- Now Playing Card
     local npCard = Card(104, 1, Color3.fromRGB(12, 16, 24))
     npCard.BorderColor3 = Color3.fromRGB(30, 215, 96)
 
@@ -544,7 +494,6 @@ BuildContent = function(container)
     mCover.BorderColor3 = Color3.fromRGB(30, 215, 96)
     mCover.ScaleType = Enum.ScaleType.Crop
     mCover.Image = Music.coverAsset
-    mCover.ClipsDescendants = true
     mCover.Parent = npCard
     Music.menuCover = mCover
 
@@ -572,117 +521,7 @@ BuildContent = function(container)
     Lbl(npCard, Music.album ~= "" and ("💿 " .. Music.album) or "",
       Enum.Font.Gotham, 9, Color3.fromRGB(130, 160, 200), TX, 78, 1, 12, true)
 
-    -- Source Toggle Card
-    local sourceCard = Card(80, 10)
-    Lbl(sourceCard, "Music Source", Enum.Font.GothamBold, 11, XP.text, 10, 8)
-    
-    local sourceToggle = Instance.new("TextButton")
-    sourceToggle.Size = UDim2.new(0, 120, 0, 24)
-    sourceToggle.Position = UDim2.new(0, 10, 0, 30)
-    sourceToggle.Text = Music.useSpotifyDirect and "Spotify Direct" or "Last.fm"
-    sourceToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-    sourceToggle.BackgroundColor3 = Music.useSpotifyDirect and Color3.fromRGB(30, 170, 50) or XP.accent
-    sourceToggle.Font = Enum.Font.GothamBold
-    sourceToggle.TextSize = 10
-    sourceToggle.BorderSizePixel = 1
-    sourceToggle.BorderColor3 = XP.borderDark
-    sourceToggle.Parent = sourceCard
-    
-    sourceToggle.MouseButton1Click:Connect(function()
-      Music.useSpotifyDirect = not Music.useSpotifyDirect
-      sourceToggle.Text = Music.useSpotifyDirect and "Spotify Direct" or "Last.fm"
-      sourceToggle.BackgroundColor3 = Music.useSpotifyDirect and Color3.fromRGB(30, 170, 50) or XP.accent
-      if Music.useSpotifyDirect then
-        if ctx.Core.Spotify then ctx.Core.Spotify.StartPolling() end
-      else
-        if ctx.Core.StartLastfmPolling then ctx.Core.StartLastfmPolling() end
-      end
-      UpdateMusicUI()
-    end)
-
-    -- Spotify Direct Card
-    if Music.useSpotifyDirect then
-      local spotifyCard = Card(140, 11, Color3.fromRGB(18, 24, 18))
-      spotifyCard.BorderColor3 = Color3.fromRGB(30, 200, 80)
-      Lbl(spotifyCard, "⚡ Spotify Direct", Enum.Font.GothamBold, 11, Color3.fromRGB(30, 200, 80), 10, 8)
-      
-      local spotifyStatus = Lbl(spotifyCard, "Status: " .. (Music.spotify.connected and "Connected" or "Not Connected"),
-        Enum.Font.Gotham, 9, Music.spotify.connected and Color3.fromRGB(30, 215, 96) or XP.tabInactiveText, 10, 24, 1, 12, true)
-      Music.menuSpotifyStatus = spotifyStatus
-      
-      -- Client ID input
-      Lbl(spotifyCard, "Client ID", Enum.Font.GothamBold, 9, XP.text, 10, 44)
-      local clientIdBox = Instance.new("TextBox")
-      clientIdBox.Size = UDim2.new(1, -20, 0, 22)
-      clientIdBox.Position = UDim2.new(0, 10, 0, 56)
-      clientIdBox.Text = Music.spotify.clientId or ""
-      clientIdBox.PlaceholderText = "Your Spotify Client ID"
-      clientIdBox.TextColor3 = XP.text
-      clientIdBox.PlaceholderColor3 = Color3.fromRGB(120, 130, 145)
-      clientIdBox.BackgroundColor3 = XP.panel1
-      clientIdBox.BorderSizePixel = 1; clientIdBox.BorderColor3 = XP.borderDark
-      clientIdBox.Font = Enum.Font.Code; clientIdBox.TextSize = 9
-      clientIdBox.TextXAlignment = Enum.TextXAlignment.Left
-      clientIdBox.ClearTextOnFocus = false
-      clientIdBox.ClipsDescendants = true
-      clientIdBox.Parent = spotifyCard
-      
-      -- Connect button
-      local connectBtn = Instance.new("TextButton")
-      connectBtn.Size = UDim2.new(0, 80, 0, 22)
-      connectBtn.Position = UDim2.new(0, 10, 0, 82)
-      connectBtn.Text = "Connect"
-      connectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-      connectBtn.BackgroundColor3 = Color3.fromRGB(30, 200, 80)
-      connectBtn.Font = Enum.Font.GothamBold
-      connectBtn.TextSize = 9
-      connectBtn.BorderSizePixel = 1
-      connectBtn.BorderColor3 = XP.borderDark
-      connectBtn.Parent = spotifyCard
-      
-      connectBtn.MouseButton1Click:Connect(function()
-        Music.spotify.clientId = clientIdBox.Text:gsub("%s+", "")
-        if Music.spotify.clientId ~= "" and ctx.Core.Spotify then
-          Music.spotify.accessToken = "" -- Force re-auth
-          Music.spotify.refreshToken = ""
-          Music.spotify.connected = false
-          Music.spotify.expiresAt = 0
-          ctx.Core.Spotify.SetConnected(true)
-          ctx.Core.ShowNotification("Spotify: Starting authentication...")
-          -- Show auth URL for manual copy
-          local authUrl = ctx.Core.Spotify.BuildAuthUrl()
-          if authUrl then
-            if setclipboard then setclipboard(authUrl) end
-            ctx.Core.ShowNotification("Auth URL copied to clipboard. Paste in browser.")
-          end
-        else
-          ctx.Core.ShowNotification("Spotify: Enter a valid Client ID")
-        end
-      end)
-      
-      -- Disconnect button
-      if Music.spotify.connected then
-        local discBtn = Instance.new("TextButton")
-        discBtn.Size = UDim2.new(0, 80, 0, 22)
-        discBtn.Position = UDim2.new(0, 100, 0, 82)
-        discBtn.Text = "Disconnect"
-        discBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        discBtn.BackgroundColor3 = XP.red
-        discBtn.Font = Enum.Font.GothamBold
-        discBtn.TextSize = 9
-        discBtn.BorderSizePixel = 1
-        discBtn.BorderColor3 = XP.borderDark
-        discBtn.Parent = spotifyCard
-        
-        discBtn.MouseButton1Click:Connect(function()
-          if ctx.Core.Spotify then ctx.Core.Spotify.Disconnect() end
-          BuildContent(container)
-        end)
-      end
-    end
-
-    -- Last.fm Setup Card
-    local setupCard = Card(100, 20)
+    local setupCard = Card(100, 2)
     Lbl(setupCard, "Last.fm Username", Enum.Font.GothamBold, 11, XP.text, 10, 8)
 
     local userBox = Instance.new("TextBox")
@@ -697,8 +536,18 @@ BuildContent = function(container)
     userBox.Font = Enum.Font.Code; userBox.TextSize = 11
     userBox.TextXAlignment = Enum.TextXAlignment.Left
     userBox.ClearTextOnFocus = false
-    userBox.ClipsDescendants = true
     userBox.Parent = setupCard
+
+    local function ActionBtn(parent, lbl, x, y, w, clr, fn)
+      local b = Instance.new("TextButton")
+      b.Size = UDim2.new(0, w, 0, 26); b.Position = UDim2.new(0, x, 0, y)
+      b.Text = lbl; b.Font = Enum.Font.GothamBold; b.TextSize = 10
+      b.TextColor3 = Color3.fromRGB(255, 255, 255); b.BackgroundColor3 = clr
+      b.BorderSizePixel = 1; b.BorderColor3 = XP.borderDark
+      b.Parent = parent
+      b.MouseButton1Click:Connect(function() task.spawn(fn) end)
+      return b
+    end
 
     ActionBtn(setupCard, "⚡ Connect & Save", 10, 66, 145, Color3.fromRGB(22, 175, 76), function()
       Music.user = userBox.Text:gsub("%s+", ""):lower()
@@ -706,15 +555,13 @@ BuildContent = function(container)
       ctx.Core.SaveSettings()
       if ctx.Core.StartLastfmPolling then ctx.Core.StartLastfmPolling() end
       if ctx.Core.LastfmPoll then ctx.Core.LastfmPoll() end
-      ctx.Core.ShowNotification("Last.fm connected: " .. Music.user)
     end)
     ActionBtn(setupCard, "↺ Refresh", 162, 66, 90, XP.accent, function()
       Music.user = userBox.Text:gsub("%s+", ""):lower()
       if ctx.Core.LastfmPoll then ctx.Core.LastfmPoll() end
     end)
 
-    -- Peer Icon Card
-    local iconCard = Card(100, 30)
+    local iconCard = Card(100, 3)
     Lbl(iconCard, "Peer Icon (rbxassetid://...)", Enum.Font.GothamBold, 11, XP.text, 10, 8)
     local iconBox = Instance.new("TextBox")
     iconBox.Size = UDim2.new(1, -20, 0, 28)
@@ -728,7 +575,6 @@ BuildContent = function(container)
     iconBox.Font = Enum.Font.Code; iconBox.TextSize = 11
     iconBox.TextXAlignment = Enum.TextXAlignment.Left
     iconBox.ClearTextOnFocus = false
-    iconBox.ClipsDescendants = true
     iconBox.Parent = iconCard
 
     ActionBtn(iconCard, "💾 Save Icon", 10, 66, 130, Color3.fromRGB(22, 175, 76), function()
@@ -746,8 +592,7 @@ BuildContent = function(container)
       ctx.Core.BroadcastPeerData()
     end)
 
-    -- Guide Card
-    local guideCard = Card(112, 40)
+    local guideCard = Card(112, 4)
     local steps = {
       { "♪ Link Spotify → Last.fm (free, 30 sec):", true },
       { "1. Create a free account at last.fm", false },
@@ -774,12 +619,12 @@ BuildContent = function(container)
     local keybinds = ctx.Core.keybinds
     local keybindRegistry = ctx.Core.keybindRegistry
 
+    -- Build dual-column layout (quad format)
     local leftCol = Instance.new("Frame")
     leftCol.Name = "LeftColumn"
     leftCol.Size = UDim2.new(0.49, 0, 1, 0)
     leftCol.BackgroundTransparency = 1
     leftCol.BorderSizePixel = 0
-    leftCol.ClipsDescendants = true
     leftCol.Parent = contentScroll
 
     local rightCol = Instance.new("Frame")
@@ -788,7 +633,6 @@ BuildContent = function(container)
     rightCol.Position = UDim2.new(0.51, 0, 0, 0)
     rightCol.BackgroundTransparency = 1
     rightCol.BorderSizePixel = 0
-    rightCol.ClipsDescendants = true
     rightCol.Parent = contentScroll
 
     local leftLayout = Instance.new("UIListLayout")
@@ -810,6 +654,7 @@ BuildContent = function(container)
     leftLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
     rightLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
 
+    -- Gather all toggle features grouped by tab/section
     local grouped = {}
     for tabName, tabFeats in pairs(features) do
       local sectionName = "General"
@@ -864,7 +709,6 @@ BuildContent = function(container)
       row.BorderSizePixel = 0
       row.LayoutOrder = layoutOrder
       layoutOrder = layoutOrder + 1
-      row.ClipsDescendants = true
       row.Parent = parentCard
 
       local nameLbl = Instance.new("TextLabel")
@@ -904,7 +748,6 @@ BuildContent = function(container)
       setBtn.BorderColor3 = XP.borderDark
       setBtn.Font = Enum.Font.GothamBold
       setBtn.TextSize = 8
-      setBtn.ClipsDescendants = true
       setBtn.Parent = row
 
       local setGrad = Instance.new("UIGradient")
@@ -924,7 +767,6 @@ BuildContent = function(container)
       clrBtn.BorderColor3 = XP.borderDark
       clrBtn.Font = Enum.Font.GothamBold
       clrBtn.TextSize = 8
-      clrBtn.ClipsDescendants = true
       clrBtn.Parent = row
 
       clrBtn.MouseButton1Click:Connect(function()
@@ -963,29 +805,19 @@ BuildContent = function(container)
           end
         end)
       end)
-
-      -- Register UI updater for this keybind
-      RegisterKeybindUIUpdater(kbName, function(newState)
-        -- This keybind row doesn't have a toggle button, but if the feature
-        -- has a UI button elsewhere, it would update via that mechanism
-      end)
     end
 
-    -- Build keybind rows
-    local colIndex = 0
-    for _, tabName in ipairs(sortedTabs) do
-      local toggles = grouped[tabName]
-      local targetCol = (colIndex % 2 == 0) and leftCol or rightCol
-      colIndex = colIndex + 1
-
+    -- Build sections as quadrant cards alternating left/right
+    for secIdx, tabName in ipairs(sortedTabs) do
+      local targetCol = (secIdx % 2 == 1) and leftCol or rightCol
       local card = Instance.new("Frame")
-      card.Name = "KbCard_" .. tabName
+      card.Name = "Quadrant_" .. secIdx
       card.Size = UDim2.new(1, 0, 0, 0)
       card.BackgroundColor3 = XP.panel2
       card.BackgroundTransparency = 0.05
       card.BorderSizePixel = 1
       card.BorderColor3 = XP.borderDark
-      card.ClipsDescendants = true
+      card.LayoutOrder = secIdx
       card.Parent = targetCol
 
       local cardLayout = Instance.new("UIListLayout")
@@ -1019,7 +851,7 @@ BuildContent = function(container)
       chLabel.TextSize = 8
       chLabel.Parent = cardHead
 
-      for _, entry in ipairs(toggles) do
+      for _, entry in ipairs(grouped[tabName]) do
         makeKeybindRow(entry, tabName, card)
       end
 
@@ -1031,7 +863,42 @@ BuildContent = function(container)
     return
   end
 
-  -- TROLLING TAB - TARGET PLAYER SELECTION
+  -- DUAL COLUMN LAYOUT
+  local leftCol = Instance.new("Frame")
+  leftCol.Name = "LeftColumn"
+  leftCol.Size = UDim2.new(0.49, 0, 1, 0)
+  leftCol.BackgroundTransparency = 1
+  leftCol.BorderSizePixel = 0
+  leftCol.Parent = contentScroll
+
+  local rightCol = Instance.new("Frame")
+  rightCol.Name = "RightColumn"
+  rightCol.Size = UDim2.new(0.49, 0, 1, 0)
+  rightCol.Position = UDim2.new(0.51, 0, 0, 0)
+  rightCol.BackgroundTransparency = 1
+  rightCol.BorderSizePixel = 0
+  rightCol.Parent = contentScroll
+
+  local leftLayout = Instance.new("UIListLayout")
+  leftLayout.FillDirection = Enum.FillDirection.Vertical
+  leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+  leftLayout.Padding = UDim.new(0, 6)
+  leftLayout.Parent = leftCol
+
+  local rightLayout = Instance.new("UIListLayout")
+  rightLayout.FillDirection = Enum.FillDirection.Vertical
+  rightLayout.SortOrder = Enum.SortOrder.LayoutOrder
+  rightLayout.Padding = UDim.new(0, 6)
+  rightLayout.Parent = rightCol
+
+  local function UpdateCanvas()
+    local maxH = math.max(leftLayout.AbsoluteContentSize.Y, rightLayout.AbsoluteContentSize.Y)
+    contentScroll.CanvasSize = UDim2.new(0, 0, 0, maxH + 16)
+  end
+  leftLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
+  rightLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
+
+  -- Trolling target dropdown
   if currentTab == "Trolling" then
     local dropCard = Instance.new("Frame")
     dropCard.Size = UDim2.new(1, 0, 0, 56)
@@ -1040,14 +907,13 @@ BuildContent = function(container)
     dropCard.BorderColor3 = XP.borderDark
     dropCard.LayoutOrder = 0
     dropCard.ZIndex = 5
-    dropCard.ClipsDescendants = true
-    dropCard.Parent = contentScroll
+    dropCard.Parent = leftCol
 
     local dropHead = Instance.new("Frame")
     dropHead.Size = UDim2.new(1, 0, 0, 20)
     dropHead.BackgroundColor3 = XP.titleBar
     dropHead.BorderSizePixel = 0
-    dropHead.ZIndex = 6
+    dropHead.ZIndex = 5
     dropHead.Parent = dropCard
 
     local dropHeadGrad = Instance.new("UIGradient")
@@ -1066,7 +932,7 @@ BuildContent = function(container)
     dropLabel.TextXAlignment = Enum.TextXAlignment.Left
     dropLabel.Font = Enum.Font.GothamBold
     dropLabel.TextSize = 8
-    dropLabel.ZIndex = 6
+    dropLabel.ZIndex = 5
     dropLabel.Parent = dropHead
 
     local dropdown = Instance.new("TextButton")
@@ -1083,7 +949,6 @@ BuildContent = function(container)
     dropdown.TextSize = 10
     dropdown.TextXAlignment = Enum.TextXAlignment.Left
     dropdown.ZIndex = 6
-    dropdown.ClipsDescendants = true
     dropdown.Parent = dropCard
 
     local arrow = Instance.new("TextLabel")
@@ -1111,10 +976,8 @@ BuildContent = function(container)
         dropdownMenu.BackgroundTransparency = 0
         dropdownMenu.BorderSizePixel = 1
         dropdownMenu.BorderColor3 = XP.accent
+        dropdownMenu.Parent = dropCard
         dropdownMenu.ZIndex = 100
-        dropdownMenu.ClipsDescendants = true
-        dropdownMenu.Parent = contentScroll -- Parent to scroll instead of dropCard for clipping
-        table.insert(activeDropdowns, dropdownMenu)
 
         local scroll = Instance.new("ScrollingFrame")
         scroll.Size = UDim2.new(1, -4, 1, -4)
@@ -1122,16 +985,15 @@ BuildContent = function(container)
         scroll.BackgroundTransparency = 1
         scroll.ScrollBarThickness = 0
         scroll.CanvasSize = UDim2.new(0, 0, 0, #playerList * 22)
-        scroll.ZIndex = 101
-        scroll.ClipsDescendants = true
         scroll.Parent = dropdownMenu
+        scroll.ZIndex = 101
 
         local scrollLayout = Instance.new("UIListLayout")
         scrollLayout.Padding = UDim.new(0, 1)
         scrollLayout.SortOrder = Enum.SortOrder.LayoutOrder
         scrollLayout.Parent = scroll
 
-        for idx, plr in ipairs(playerList) do
+        for _, plr in ipairs(playerList) do
           local opt = Instance.new("TextButton")
           opt.Size = UDim2.new(1, 0, 0, 20)
           opt.Text = plr.DisplayName .. " (@" .. plr.Name .. ")"
@@ -1142,10 +1004,8 @@ BuildContent = function(container)
           opt.Font = Enum.Font.Gotham
           opt.TextSize = 9
           opt.TextXAlignment = Enum.TextXAlignment.Left
-          opt.LayoutOrder = idx
-          opt.ZIndex = 102
-          opt.ClipsDescendants = true
           opt.Parent = scroll
+          opt.ZIndex = 102
 
           opt.MouseEnter:Connect(function()
             ctx.Core.Animate(opt, { BackgroundColor3 = XP.accent, TextColor3 = Color3.fromRGB(255, 255, 255) }, 0.1)
@@ -1171,7 +1031,7 @@ BuildContent = function(container)
     end)
   end
 
-  -- DEFAULT: Render feature sections
+  -- Render feature sections
   local features = ctx.Core.features
   local tabFeatures = features[currentTab] or {}
   local sections = {}
@@ -1201,7 +1061,6 @@ BuildContent = function(container)
     card.BorderSizePixel = 1
     card.BorderColor3 = XP.borderDark
     card.LayoutOrder = secIdx
-    card.ClipsDescendants = true
     card.Parent = targetCol
 
     local cardLayout = Instance.new("UIListLayout")
@@ -1243,7 +1102,6 @@ BuildContent = function(container)
         sRow.BackgroundTransparency = 0.4
         sRow.BorderSizePixel = 0
         sRow.LayoutOrder = itemIdx
-        sRow.ClipsDescendants = true
         sRow.Parent = card
 
         local sLbl = Instance.new("TextLabel")
@@ -1268,7 +1126,6 @@ BuildContent = function(container)
         row.BackgroundTransparency = 0.4
         row.BorderSizePixel = 0
         row.LayoutOrder = itemIdx
-        row.ClipsDescendants = true
         row.Parent = card
 
         local rLbl = Instance.new("TextLabel")
@@ -1295,7 +1152,6 @@ BuildContent = function(container)
           tBtn.BorderColor3 = XP.borderDark
           tBtn.Font = Enum.Font.GothamBold
           tBtn.TextSize = 8
-          tBtn.ClipsDescendants = true
           tBtn.Parent = row
 
           tBtn.MouseButton1Click:Connect(function()
@@ -1305,14 +1161,6 @@ BuildContent = function(container)
             if feat.toggle then feat.toggle(newState) end
             ctx.Core.ShowNotification(feat.name .. " " .. (newState and "enabled" or "disabled"))
           end)
-
-          -- Register keybind UI sync
-          local kbName = currentTab .. "::" .. feat.name
-          RegisterKeybindUIUpdater(kbName, function(newState)
-            tBtn.Text = newState and "ON" or "OFF"
-            tBtn.BackgroundColor3 = newState and XP.green or Color3.fromRGB(150, 150, 150)
-          end)
-
         elseif feat.isButton then
           local bBtn = Instance.new("TextButton")
           bBtn.Size = UDim2.new(0, 42, 0, 16)
@@ -1324,14 +1172,12 @@ BuildContent = function(container)
           bBtn.BorderColor3 = XP.borderDark
           bBtn.Font = Enum.Font.GothamBold
           bBtn.TextSize = 8
-          bBtn.ClipsDescendants = true
           bBtn.Parent = row
 
           bBtn.MouseButton1Click:Connect(function()
             if feat.condition and not feat.condition() then return end
             if feat.action then feat.action() end
           end)
-
         elseif feat.isCyclePart then
           local partOptions = { "Head", "HumanoidRootPart", "Torso", "UpperTorso" }
           local currentPart = S.aimbotTargetPart or "Head"
@@ -1347,7 +1193,6 @@ BuildContent = function(container)
           leftBtn.BorderColor3 = XP.borderDark
           leftBtn.Font = Enum.Font.GothamBold
           leftBtn.TextSize = 8
-          leftBtn.ClipsDescendants = true
           leftBtn.Parent = row
 
           local partLabel = Instance.new("TextLabel")
@@ -1371,7 +1216,6 @@ BuildContent = function(container)
           rightBtn.BorderColor3 = XP.borderDark
           rightBtn.Font = Enum.Font.GothamBold
           rightBtn.TextSize = 8
-          rightBtn.ClipsDescendants = true
           rightBtn.Parent = row
 
           local function updatePartLabel()
@@ -1409,7 +1253,6 @@ local function ToggleGUI()
   if isOpen then
     BuildGUI()
   else
-    CleanupDropdowns()
     if gui then
       gui:Destroy(); gui = nil
     end
@@ -1419,6 +1262,7 @@ ctx.UI.ToggleGUI = ToggleGUI
 
 -- ==================== BUILD MAIN GUI ====================
 BuildGUI = function()
+  -- Refresh theme reference in case it changed (dynamic themes, theme switch)
   XP = ctx.Config.XP
 
   for _, g in ipairs(PlayerGui:GetChildren()) do
@@ -1432,19 +1276,13 @@ BuildGUI = function()
   gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
   local frame = Instance.new("Frame")
-  frame.Name = "MainFrame"
   frame.Size = UDim2.new(0, 640, 0, 520)
   frame.Position = UDim2.new(0.5, -320, 0.5, -260)
   frame.BackgroundColor3 = XP.windowBg
   frame.BackgroundTransparency = 0.15
   frame.BorderSizePixel = 1
   frame.BorderColor3 = XP.borderLight
-  frame.ClipsDescendants = true
   frame.Parent = gui
-
-  local uiScale = Instance.new("UIScale")
-  uiScale.Scale = 1
-  uiScale.Parent = frame
 
   local winGrad = Instance.new("UIGradient")
   winGrad.Color = ColorSequence.new({
@@ -1464,12 +1302,10 @@ BuildGUI = function()
   innerBorder.Parent = frame
 
   local titleBar = Instance.new("Frame")
-  titleBar.Name = "TitleBar"
   titleBar.Size = UDim2.new(1, 0, 0, 32)
   titleBar.BackgroundColor3 = XP.titleBar
   titleBar.BackgroundTransparency = 0.1
   titleBar.BorderSizePixel = 0
-  titleBar.ZIndex = 10
   titleBar.Parent = frame
 
   local tbGrad = Instance.new("UIGradient")
@@ -1484,13 +1320,12 @@ BuildGUI = function()
   local title = Instance.new("TextLabel")
   title.Size = UDim2.new(0.7, 0, 1, 0)
   title.Position = UDim2.new(0, 10, 0, 0)
-  title.Text = "Universal Cheat Panel v11 • [" .. currentThemeName .. "]"
+  title.Text = "Universal Cheat Panel v10 • [" .. currentThemeName .. "]"
   title.TextColor3 = Color3.fromRGB(255, 255, 255)
   title.BackgroundTransparency = 1
   title.TextXAlignment = Enum.TextXAlignment.Left
   title.Font = Enum.Font.GothamBold
   title.TextSize = 12
-  title.ZIndex = 11
   title.Parent = titleBar
 
   local closeBtn = Instance.new("TextButton")
@@ -1504,7 +1339,6 @@ BuildGUI = function()
   closeBtn.BorderColor3 = Color3.fromRGB(160, 160, 160)
   closeBtn.Font = Enum.Font.GothamBold
   closeBtn.TextSize = 11
-  closeBtn.ZIndex = 11
   closeBtn.Parent = titleBar
 
   closeBtn.MouseEnter:Connect(function()
@@ -1514,18 +1348,15 @@ BuildGUI = function()
     ctx.Core.Animate(closeBtn, { BackgroundTransparency = 0.9, BackgroundColor3 = Color3.fromRGB(255, 255, 255) }, 0.1)
   end)
   closeBtn.MouseButton1Click:Connect(function()
-    CleanupDropdowns()
     gui:Destroy(); gui = nil; isOpen = false
   end)
 
   local sidebar = Instance.new("Frame")
-  sidebar.Name = "Sidebar"
   sidebar.Size = UDim2.new(0, 125, 1, -32)
   sidebar.Position = UDim2.new(0, 0, 0, 32)
   sidebar.BackgroundColor3 = XP.sidebar1
   sidebar.BackgroundTransparency = 0
   sidebar.BorderSizePixel = 0
-  sidebar.ClipsDescendants = true
   sidebar.Parent = frame
 
   local sideGrad = Instance.new("UIGradient")
@@ -1616,7 +1447,6 @@ BuildGUI = function()
       btn.TextSize = 10
       btn.TextXAlignment = Enum.TextXAlignment.Left
       btn.LayoutOrder = i
-      btn.ClipsDescendants = true
       btn.Parent = sidebar
       tabButtons[tabName] = btn
 
@@ -1642,7 +1472,6 @@ BuildGUI = function()
       btn.MouseButton1Click:Connect(function()
         if tabName == currentTab or isTransitioning then return end
         isTransitioning = true
-        CleanupDropdowns()
         for name, b in pairs(tabButtons) do
           local sel = (name == tabName)
           b.TextColor3 = sel and XP.tabActiveText or XP.tabInactiveText
@@ -1661,14 +1490,12 @@ BuildGUI = function()
   end
 
   local contentPanel = Instance.new("Frame")
-  contentPanel.Name = "ContentPanel"
   contentPanel.Size = UDim2.new(1, -135, 1, -40)
   contentPanel.Position = UDim2.new(0, 130, 0, 36)
   contentPanel.BackgroundColor3 = XP.panel1
   contentPanel.BackgroundTransparency = 0.2
   contentPanel.BorderSizePixel = 1
   contentPanel.BorderColor3 = XP.borderDark
-  contentPanel.ClipsDescendants = true
   contentPanel.Parent = frame
 
   local cGrad = Instance.new("UIGradient")
@@ -1684,17 +1511,13 @@ BuildGUI = function()
   contentContainerRef.Position = UDim2.new(0, 4, 0, 4)
   contentContainerRef.BackgroundTransparency = 1
   contentContainerRef.BorderSizePixel = 0
-  contentContainerRef.ClipsDescendants = true
   contentContainerRef.Parent = contentPanel
 
   local contentScroll = Instance.new("ScrollingFrame")
-  contentScroll.Name = "ContentScroll"
   contentScroll.Size = UDim2.new(1, 0, 1, 0)
   contentScroll.BackgroundTransparency = 1
-  contentScroll.ScrollBarThickness = 4
-  contentScroll.ScrollBarImageColor3 = XP.accent
+  contentScroll.ScrollBarThickness = 0
   contentScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-  contentScroll.ClipsDescendants = true
   contentScroll.Parent = contentContainerRef
 
   local layout = Instance.new("UIListLayout")
@@ -1704,7 +1527,7 @@ BuildGUI = function()
 
   BuildContent(contentContainerRef)
 
-  -- DRAG with bounds checking
+  -- Drag
   local dragging, dragStart, startPos
   titleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -1719,18 +1542,12 @@ BuildGUI = function()
   titleBar.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
       local delta = input.Position - dragStart
-      local newX = startPos.X.Offset + delta.X
-      local newY = startPos.Y.Offset + delta.Y
-      -- Clamp to viewport
-      local viewportSize = workspace.CurrentCamera.ViewportSize
-      local frameSize = frame.AbsoluteSize
-      newX = math.clamp(newX, -startPos.X.Scale * viewportSize.X, viewportSize.X - frameSize.X + (1 - startPos.X.Scale) * viewportSize.X)
-      newY = math.clamp(newY, -startPos.Y.Scale * viewportSize.Y + 32, viewportSize.Y - frameSize.Y + (1 - startPos.Y.Scale) * viewportSize.Y)
-      frame.Position = UDim2.new(startPos.X.Scale, newX, startPos.Y.Scale, newY)
+      frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+        startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
   end)
 
-  -- RESIZE handle
+  -- Resize
   local resizeHandle = Instance.new("TextButton")
   resizeHandle.Name = "ResizeHandle"
   resizeHandle.Size = UDim2.new(0, 18, 0, 18)
@@ -1804,7 +1621,6 @@ BuildHUD = function()
   frame.BackgroundColor3 = XP.windowBg
   frame.BackgroundTransparency = 0.12
   frame.BorderSizePixel = 0
-  frame.ClipsDescendants = true
   frame.Parent = hudGui
 
   local grad = Instance.new("UIGradient")
@@ -1821,166 +1637,190 @@ BuildHUD = function()
 
   local titleBar = Instance.new("Frame")
   titleBar.Size = UDim2.new(1, 0, 0, 24); titleBar.BackgroundColor3 = XP.titleBar
-  titleBar.BackgroundTransparency = 0.2; titleBar.BorderSizePixel = 0
-  titleBar.Parent = frame
+  titleBar.BackgroundTransparency = 0.1; titleBar.BorderSizePixel = 0; titleBar.Parent = frame
 
   local tbGrad = Instance.new("UIGradient")
   tbGrad.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, XP.titleBarGrad1),
+    ColorSequenceKeypoint.new(0.5, XP.titleBarGrad2),
     ColorSequenceKeypoint.new(1, XP.titleBarGrad3)
   })
-  tbGrad.Rotation = 90; tbGrad.Parent = titleBar
+  tbGrad.Rotation = 0; tbGrad.Parent = titleBar
 
-  local hudTitle = Instance.new("TextLabel")
-  hudTitle.Size = UDim2.new(1, -8, 1, 0); hudTitle.Position = UDim2.new(0, 8, 0, 0)
-  hudTitle.Text = "UniPanel HUD"
-  hudTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-  hudTitle.BackgroundTransparency = 1; hudTitle.Font = Enum.Font.GothamBold
-  hudTitle.TextSize = 10; hudTitle.TextXAlignment = Enum.TextXAlignment.Left
-  hudTitle.Parent = titleBar
+  local dispLbl = Instance.new("TextLabel")
+  dispLbl.Size = UDim2.new(1, -90, 1, 0); dispLbl.Position = UDim2.new(0, 10, 0, 0)
+  dispLbl.Text = player.DisplayName
+  dispLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+  dispLbl.BackgroundTransparency = 1; dispLbl.Font = Enum.Font.GothamBold
+  dispLbl.TextSize = 13; dispLbl.TextXAlignment = Enum.TextXAlignment.Left
+  dispLbl.TextTruncate = Enum.TextTruncate.AtEnd; dispLbl.Parent = titleBar
 
-  local content = Instance.new("Frame")
-  content.Size = UDim2.new(1, -8, 1, -30); content.Position = UDim2.new(0, 4, 0, 26)
-  content.BackgroundTransparency = 1; content.ClipsDescendants = true
-  content.Parent = frame
+  local fpsTop = Instance.new("TextLabel")
+  fpsTop.Name = "HUD_FPS_Top"
+  fpsTop.Size = UDim2.new(0, 76, 1, 0)
+  fpsTop.Position = UDim2.new(1, -82, 0, 0)
+  fpsTop.Text = "-- FPS"
+  fpsTop.TextColor3 = Color3.fromRGB(50, 220, 100)
+  fpsTop.BackgroundTransparency = 1
+  fpsTop.Font = Enum.Font.GothamBold
+  fpsTop.TextSize = 11
+  fpsTop.TextXAlignment = Enum.TextXAlignment.Right
+  fpsTop.Parent = titleBar
 
-  local contentLayout = Instance.new("UIListLayout")
-  contentLayout.FillDirection = Enum.FillDirection.Vertical
-  contentLayout.Padding = UDim.new(0, 3)
-  contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
-  contentLayout.Parent = content
+  local hudCover = Instance.new("ImageLabel")
+  hudCover.Name = "HUD_Cover"
+  hudCover.Size = UDim2.new(0, 100, 0, 100)
+  hudCover.Position = UDim2.new(0, 8, 0, 34)
+  hudCover.BackgroundColor3 = Color3.fromRGB(20, 25, 35)
+  hudCover.BorderSizePixel = 0
+  hudCover.ScaleType = Enum.ScaleType.Crop
+  hudCover.Visible = (Music.coverAsset ~= "")
+  if Music.coverAsset ~= "" then hudCover.Image = Music.coverAsset end
+  hudCover.Parent = frame
+  local coverStroke = Instance.new("UIStroke")
+  coverStroke.Color = XP.accent
+  coverStroke.Thickness = 2
+  coverStroke.Parent = hudCover
+  Music.hudCover = hudCover
 
-  -- Music display
-  local musicFrame = Instance.new("Frame")
-  musicFrame.Size = UDim2.new(1, 0, 0, 40)
-  musicFrame.BackgroundColor3 = XP.panel2
-  musicFrame.BackgroundTransparency = 0.3
-  musicFrame.BorderSizePixel = 0
-  musicFrame.ClipsDescendants = true
-  musicFrame.LayoutOrder = 1
-  musicFrame.Parent = content
+  local userLbl = Instance.new("TextLabel")
+  userLbl.Size = UDim2.new(1, -130, 0, 16); userLbl.Position = UDim2.new(0, 128, 0, 30)
+  userLbl.Text = "@" .. player.Name
+  userLbl.TextColor3 = Color3.fromRGB(225, 238, 255)
+  userLbl.BackgroundTransparency = 1; userLbl.Font = Enum.Font.GothamBold
+  userLbl.TextSize = 12; userLbl.TextXAlignment = Enum.TextXAlignment.Left
+  userLbl.TextTruncate = Enum.TextTruncate.AtEnd; userLbl.Parent = frame
 
-  local musicCover = Instance.new("ImageLabel")
-  musicCover.Size = UDim2.new(0, 36, 0, 36)
-  musicCover.Position = UDim2.new(0, 2, 0, 2)
-  musicCover.BackgroundColor3 = XP.panel1
-  musicCover.BorderSizePixel = 0
-  musicCover.ScaleType = Enum.ScaleType.Crop
-  musicCover.ClipsDescendants = true
-  musicCover.Parent = musicFrame
-  Music.hudCover = musicCover
+  local gameLbl = Instance.new("TextLabel")
+  gameLbl.Name = "HUD_GameName"
+  gameLbl.Size = UDim2.new(1, -130, 0, 18); gameLbl.Position = UDim2.new(0, 128, 0, 50)
+  gameLbl.Text = "▶ " .. game.Name
+  gameLbl.TextColor3 = Color3.fromRGB(80, 215, 255)
+  gameLbl.BackgroundTransparency = 1; gameLbl.Font = Enum.Font.GothamBold
+  gameLbl.TextSize = 13; gameLbl.TextXAlignment = Enum.TextXAlignment.Left
+  gameLbl.TextTruncate = Enum.TextTruncate.AtEnd; gameLbl.Parent = frame
 
-  local musicCoverCorner = Instance.new("UICorner")
-  musicCoverCorner.CornerRadius = UDim.new(0, 4)
-  musicCoverCorner.Parent = musicCover
+  local pidLbl = Instance.new("TextLabel")
+  pidLbl.Size = UDim2.new(1, -130, 0, 16); pidLbl.Position = UDim2.new(0, 128, 0, 70)
+  pidLbl.Text = "Place: " .. tostring(game.PlaceId)
+  pidLbl.TextColor3 = Color3.fromRGB(210, 225, 245)
+  pidLbl.BackgroundTransparency = 1; pidLbl.Font = Enum.Font.Code
+  pidLbl.TextSize = 12; pidLbl.TextXAlignment = Enum.TextXAlignment.Left; pidLbl.Parent = frame
 
-  local musicText = Instance.new("TextLabel")
-  musicText.Size = UDim2.new(1, -46, 0, 18)
-  musicText.Position = UDim2.new(0, 42, 0, 2)
-  musicText.Text = "♪ No music playing"
-  musicText.TextColor3 = Color3.fromRGB(200, 220, 245)
-  musicText.BackgroundTransparency = 1
-  musicText.Font = Enum.Font.GothamBold
-  musicText.TextSize = 10
-  musicText.TextXAlignment = Enum.TextXAlignment.Left
-  musicText.TextTruncate = Enum.TextTruncate.AtEnd
-  musicText.Parent = musicFrame
-  Music.hudLabel = musicText
+  local musicLbl = Instance.new("TextLabel")
+  musicLbl.Name = "HUD_Music"
+  musicLbl.Size = UDim2.new(1, -130, 0, 16); musicLbl.Position = UDim2.new(0, 128, 0, 88)
+  musicLbl.Text = Music.song ~= "" and ("♪ " .. Music.song .. (Music.artist ~= "" and " - " .. Music.artist or "")) or
+      "♪ No music playing"
+  musicLbl.TextColor3 = Music.active and Color3.fromRGB(50, 255, 140) or Color3.fromRGB(240, 248, 255)
+  musicLbl.BackgroundTransparency = 1; musicLbl.Font = Enum.Font.GothamBold
+  musicLbl.TextSize = 12; musicLbl.TextXAlignment = Enum.TextXAlignment.Left
+  musicLbl.TextTruncate = Enum.TextTruncate.AtEnd; musicLbl.Parent = frame
+  Music.hudLabel = musicLbl
 
-  local musicSubtext = Instance.new("TextLabel")
-  musicSubtext.Size = UDim2.new(1, -46, 0, 16)
-  musicSubtext.Position = UDim2.new(0, 42, 0, 20)
-  musicSubtext.Text = Music.artist ~= "" and ("by " .. Music.artist) or ""
-  musicSubtext.TextColor3 = Color3.fromRGB(130, 160, 200)
-  musicSubtext.BackgroundTransparency = 1
-  musicSubtext.Font = Enum.Font.Gotham
-  musicSubtext.TextSize = 9
-  musicSubtext.TextXAlignment = Enum.TextXAlignment.Left
-  musicSubtext.TextTruncate = Enum.TextTruncate.AtEnd
-  musicSubtext.Parent = musicFrame
-  Music.hudArtistLabel = musicSubtext
+  -- Visualizer
+  local NUM_BARS = 19
+  local VIZ_HEIGHT = 22
+  local vizContainer = Instance.new("Frame")
+  vizContainer.Name = "HUD_Visualizer"
+  vizContainer.Size = UDim2.new(1, -130, 0, VIZ_HEIGHT)
+  vizContainer.Position = UDim2.new(0, 128, 0, 106)
+  vizContainer.BackgroundTransparency = 1
+  vizContainer.BorderSizePixel = 0
+  vizContainer.ClipsDescendants = true
+  vizContainer.Parent = frame
 
-  -- Info lines
-  local function InfoLine(text, order)
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, -4, 0, 14)
-    lbl.Text = text
-    lbl.TextColor3 = XP.tabInactiveText
-    lbl.BackgroundTransparency = 1
-    lbl.Font = Enum.Font.Code
-    lbl.TextSize = 9
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.LayoutOrder = order
-    lbl.ClipsDescendants = true
-    lbl.Parent = content
-    return lbl
+  local vizBars = {}
+  local vizTargets = {}
+  local barWidth = 12
+  local barGap = 3
+  for i = 1, NUM_BARS do
+    local bar = Instance.new("Frame")
+    bar.Name = "VizBar" .. i
+    bar.AnchorPoint = Vector2.new(0, 1)
+    bar.Size = UDim2.new(0, barWidth, 0, 2)
+    bar.Position = UDim2.new(0, (i - 1) * (barWidth + barGap), 1, 0)
+    bar.BackgroundColor3 = XP.accent
+    bar.BackgroundTransparency = 0.05
+    bar.BorderSizePixel = 0
+    bar.Parent = vizContainer
+    local barGrad = Instance.new("UIGradient")
+    barGrad.Rotation = 90
+    barGrad.Color = ColorSequence.new({
+      ColorSequenceKeypoint.new(0, XP.accent),
+      ColorSequenceKeypoint.new(0.5, XP.green or Color3.fromRGB(50, 220, 100)),
+      ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 180, 80))
+    })
+    barGrad.Parent = bar
+    vizBars[i] = bar
+    vizTargets[i] = 2
   end
 
-  -- FPS & Ping
-  local fpsLabel = InfoLine("FPS: -- | Ping: --ms", 2)
-  local posLabel = InfoLine("Position: --", 3)
-  local playersLabel = InfoLine("Players: --", 4)
-
-  -- Update music UI
-  if Music.hudCover and Music.hudCover.Parent then
-    if Music.coverAsset ~= "" and not Music.coverIsProcedural then
-      Music.hudCover.Image = Music.coverAsset
-    end
-  end
-  if Music.song ~= "" then
-    local prefix = Music.active and "♪ " or "⏸ "
-    Music.hudLabel.Text = prefix .. Music.song .. (Music.artist ~= "" and (" - " .. Music.artist) or "")
-    Music.hudLabel.TextColor3 = Music.active and Color3.fromRGB(50, 255, 140) or Color3.fromRGB(240, 248, 255)
-  end
-
-  -- HUD update loop
-  local lastUpdate = 0
+  local vizTime = 0
   TrackHUDConnection(RunService.Heartbeat:Connect(function(dt)
-    lastUpdate = lastUpdate + dt
-    if lastUpdate < 0.25 then return end
-    lastUpdate = 0
-
-    -- FPS
-    local fps = math.floor(1 / dt + 0.5)
-    local fpsColor = ctx.Core.GetFPSColor(fps)
-    fpsLabel.Text = "FPS: " .. fps
-
-    -- Ping
-    pcall(function()
-      local ping = math.floor(player:GetNetworkPing() * 1000)
-      fpsLabel.Text = fpsLabel.Text .. " | Ping: " .. ping .. "ms"
-    end)
-
-    -- Position
-    local root = ctx.Core.GetRoot()
-    if root then
-      local pos = root.Position
-      posLabel.Text = string.format("Position: %.0f, %.0f, %.0f", pos.X, pos.Y, pos.Z)
+    if not hudGui or not hudGui.Parent then return end
+    if dt <= 0 then dt = 0.016 end
+    vizTime = vizTime + dt
+    local musicActive = Music.active and Music.song ~= ""
+    for i = 1, NUM_BARS do
+      local freq = 3.0 + (i / NUM_BARS) * 7
+      local wave1 = math.sin(vizTime * freq + i * 0.6) * 0.5 + 0.5
+      local wave2 = math.sin(vizTime * (freq * 0.5) + i * 1.3) * 0.5 + 0.5
+      local wave3 = math.sin(vizTime * (freq * 1.5) + i * 0.2) * 0.5 + 0.5
+      local amp = (wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2)
+      local center = (NUM_BARS + 1) / 2
+      local distFromCenter = math.abs(i - center) / center
+      local envelope = 1 - distFromCenter * 0.4
+      if musicActive then
+        amp = amp * envelope * (0.5 + wave2 * 0.5)
+      else
+        amp = amp * envelope * 0.15
+      end
+      local targetHeight = math.clamp(2 + amp * (VIZ_HEIGHT - 4), 2, VIZ_HEIGHT)
+      vizTargets[i] = vizTargets[i] + (targetHeight - vizTargets[i]) * math.min(dt * 14, 1)
+      vizBars[i].Size = UDim2.new(0, barWidth, 0, vizTargets[i])
     end
-
-    -- Players
-    playersLabel.Text = "Players: " .. #Players:GetPlayers()
   end))
+
+  -- FPS updater
+  TrackHUDConnection(RunService.Heartbeat:Connect(function(dt)
+    if not hudGui or not hudGui.Parent then return end
+    if dt <= 0 then dt = 0.016 end
+    local FPS_SAMPLES = ctx.Core.FPS_SAMPLES
+    local fpsSampleBuf = ctx.Core.fpsSampleBuf
+    local fpsSampleIdx = ctx.Core.fpsSampleIdx
+    fpsSampleIdx = ((fpsSampleIdx or 0) % FPS_SAMPLES) + 1
+    fpsSampleBuf[fpsSampleIdx] = 1 / dt
+    ctx.Core.fpsSampleIdx = fpsSampleIdx
+    local sum, count = 0, 0
+    for _, v in ipairs(fpsSampleBuf) do
+      sum = sum + v; count = count + 1
+    end
+    local avg = math.floor(sum / math.max(count, 1))
+    local col = ctx.Core.GetFPSColor(avg)
+    fpsTop.Text = tostring(avg) .. " FPS"
+    fpsTop.TextColor3 = col
+  end))
+
+  -- Game name async
+  task.spawn(function()
+    local ok, info = pcall(function()
+      return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+    end)
+    if ok and info and info.Name and gameLbl and gameLbl.Parent then
+      gameLbl.Text = "▶ " .. info.Name
+    end
+  end)
+
+  UpdateMusicUI()
 end
 
 ctx.UI.BuildHUD = BuildHUD
 
--- ==================== APPLY THEME (LIVE UPDATE) ====================
-local function ApplyTheme()
-  XP = ctx.Config.XP
-  -- Rebuild GUI if open to apply theme changes
-  if isOpen and gui and gui.Parent then
-    BuildGUI()
-  end
-  -- Rebuild HUD
-  BuildHUD()
-  -- Update ESP
-  if ctx.UI.UpdateESPTheme then ctx.UI.UpdateESPTheme() end
-end
+-- Sync references back to core
+ctx.Core.gui = gui
+ctx.Core.contentContainerRef = contentContainerRef
+ctx.Core.isOpen = isOpen
+ctx.Core.isTransitioning = isTransitioning
 
-ctx.UI.ApplyTheme = ApplyTheme
-
--- ==================== ANIMATE ====================
-ctx.UI.Animate = ctx.Core.Animate
-
-return ctx.UI
+ctx.Modules.ui = true

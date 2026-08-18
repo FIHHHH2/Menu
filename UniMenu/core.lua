@@ -397,16 +397,34 @@ local Music = {
   coverIsProcedural = false,
   lastCoverUrl = "",
   dynamicColorEnabled = true,
+  useSpotifyDirect = false,
   usingDynamicTheme = false,
   dynamicTheme = nil,
   statusText = "Enter Last.fm username to connect",
   hudLabel = nil,
   hudCover = nil,
+  hudArtistLabel = nil,
   menuSongLbl = nil,
   menuArtLbl = nil,
   menuStatusLbl = nil,
   menuCover = nil,
-  peerIcon = "rbxassetid://6274377121"
+  menuSpotifyStatus = nil,
+  peerIcon = "rbxassetid://6274377121",
+  spotify = {
+    clientId = "",
+    clientSecret = "",
+    accessToken = "",
+    refreshToken = "",
+    expiresAt = 0,
+    deviceId = "",
+    connected = false,
+    song = "",
+    artist = "",
+    album = "",
+    isPlaying = false,
+    progressMs = 0,
+    durationMs = 0,
+  },
 }
 ctx.State.Music = Music
 
@@ -493,7 +511,9 @@ local function SaveSettings()
   local data = {
     lastfmUser = Music.user or "",
     peerIcon = Music.peerIcon or "rbxassetid://6274377121",
-    currentTheme = ctx.Config.currentThemeName or "Windows XP Luna"
+    currentTheme = ctx.Config.currentThemeName or "Windows XP Luna",
+    useSpotifyDirect = Music.useSpotifyDirect or false,
+    spotifyClientId = Music.spotify.clientId or "",
   }
   local json = HttpService:JSONEncode(data)
   writefile(SETTINGS_FILE, json)
@@ -515,6 +535,12 @@ local function LoadSettings()
   if type(data.currentTheme) == "string" and Themes[data.currentTheme] then
     ctx.Config.currentThemeName = data.currentTheme
     ctx.Config.XP = Themes[data.currentTheme]
+  end
+  if type(data.useSpotifyDirect) == "boolean" then
+    Music.useSpotifyDirect = data.useSpotifyDirect
+  end
+  if type(data.spotifyClientId) == "string" then
+    Music.spotify.clientId = data.spotifyClientId
   end
 end
 
@@ -871,6 +897,10 @@ ctx.Core.MusicHTTP = MusicHTTP
 ctx.Core.ApplyDynamicTheme = ApplyDynamicTheme
 ctx.Core.RevertToDefaultTheme = RevertToDefaultTheme
 
+-- ==================== LOAD MUSIC MODULES ====================
+-- These will be loaded by the loader
+ctx.Core.MusicModulesLoaded = false
+
 -- ==================== FEATURE REGISTRY ====================
 local features = {}
 local heartbeatCallbacks = {}
@@ -891,103 +921,6 @@ ctx.Core.features = features
 ctx.Core.RegisterFeatures = RegisterFeatures
 ctx.Core.RegisterHeartbeat = RegisterHeartbeat
 ctx.Core.RegisterConnection = RegisterConnection
-
--- ==================== NOTIFICATIONS ====================
-local currentNotification = nil
-
-local function ShowNotification(message)
-  if currentNotification and currentNotification.gui and currentNotification.gui.Parent then
-    currentNotification.gui:Destroy()
-    currentNotification = nil
-  end
-
-  local notificationGui = Instance.new("ScreenGui")
-  notificationGui.Name = "UniMenuNotification"
-  notificationGui.ResetOnSpawn = false
-  notificationGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-  notificationGui.DisplayOrder = 2147483647
-  notificationGui.IgnoreGuiInset = true
-  notificationGui.Parent = game:GetService("CoreGui")
-
-  local frame = Instance.new("Frame")
-  frame.Name = "NotificationFrame"
-  frame.Size = UDim2.new(0, 200, 0, 50)
-  frame.Position = UDim2.new(1, -210, 1, -60)
-  frame.BackgroundColor3 = ctx.Config.XP.panel1
-  frame.BackgroundTransparency = 1
-  frame.BorderSizePixel = 1
-  frame.BorderColor3 = ctx.Config.XP.borderDark
-  frame.ZIndex = 2147483647
-  frame.Parent = notificationGui
-
-  local titleBar = Instance.new("Frame")
-  titleBar.Size = UDim2.new(1, 0, 0, 20)
-  titleBar.BackgroundColor3 = ctx.Config.XP.accent
-  titleBar.BorderSizePixel = 0
-  titleBar.Parent = frame
-
-  local title = Instance.new("TextLabel")
-  title.Size = UDim2.new(1, -40, 1, 0)
-  title.Position = UDim2.new(0, 8, 0, 0)
-  title.Text = "Notification"
-  title.TextColor3 = Color3.fromRGB(255, 255, 255)
-  title.BackgroundTransparency = 1
-  title.TextXAlignment = Enum.TextXAlignment.Left
-  title.Font = Enum.Font.GothamBold
-  title.TextSize = 11
-  title.Parent = titleBar
-
-  local messageLabel = Instance.new("TextLabel")
-  messageLabel.Size = UDim2.new(1, -16, 1, -28)
-  messageLabel.Position = UDim2.new(0, 8, 0, 24)
-  messageLabel.Text = message
-  messageLabel.TextColor3 = ctx.Config.XP.text
-  messageLabel.BackgroundTransparency = 1
-  messageLabel.TextXAlignment = Enum.TextXAlignment.Center
-  messageLabel.Font = Enum.Font.Gotham
-  messageLabel.TextSize = 10
-  messageLabel.TextWrapped = true
-  messageLabel.Parent = frame
-
-  currentNotification = { gui = notificationGui, frame = frame, message = message }
-
-  frame.Position = UDim2.new(1, -210, 1, -30)
-  TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out),
-    { Position = UDim2.new(1, -210, 1, -60) }):Play()
-  TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Linear),
-    { BackgroundTransparency = 0 }):Play()
-
-  task.delay(0.75, function()
-    if currentNotification and currentNotification.gui == notificationGui and notificationGui.Parent then
-      RemoveNotification()
-    end
-  end)
-end
-
-local function RemoveNotification()
-  if not currentNotification then return end
-  local gui = currentNotification.gui
-  local frame = currentNotification.frame
-  local isCurrent = (currentNotification.gui == gui)
-  if not gui or not gui.Parent then
-    if isCurrent then currentNotification = nil end
-    return
-  end
-  if not frame then
-    gui:Destroy()
-    if isCurrent then currentNotification = nil end
-    return
-  end
-  TweenService:Create(frame, TweenInfo.new(0.75, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-    { BackgroundTransparency = 1 }):Play()
-  task.delay(0.75, function()
-    if gui and gui.Parent then gui:Destroy() end
-    if isCurrent then currentNotification = nil end
-  end)
-end
-
-ctx.Core.ShowNotification = ShowNotification
-ctx.Core.RemoveNotification = RemoveNotification
 
 -- ==================== PEER DETECTION ====================
 local peerBillboards = {}
@@ -2035,12 +1968,21 @@ local function Init()
         reg.toggle(not reg.get())
         local state = reg.get() and "enabled" or "disabled"
         ShowNotification(reg.featName .. " " .. state)
+        -- Notify UI to update button state
+        if ctx.Core.NotifyKeybindUIUpdate then
+          ctx.Core.NotifyKeybindUIUpdate(kbName, reg.get())
+        end
       end
     end
   end))
 
   -- Build HUD
   if ctx.UI and ctx.UI.BuildHUD then ctx.UI.BuildHUD() end
+
+  -- Initialize Spotify
+  if ctx.Core.Spotify and ctx.Core.Spotify.Init then
+    ctx.Core.Spotify.Init()
+  end
 
   RestoreCollision()
 end
