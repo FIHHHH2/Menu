@@ -1,67 +1,62 @@
-# UniMenu MM2 & UI Enhancement Plan
+# UniMenu Git Push & Implementation Plan - FINAL
 
-## 1. Notification System - No Limit with Cascade
-**File:** `lib/notifications.lua`
+## Current Git Status
+```
+On branch main
+Your branch is up to date with 'origin/main'.
 
-**Changes:**
-- Remove `maxConcurrent = 3` limit
-- When notification expires, shift all notifications above it down by 1 position
-- Track `basePositionOffset` (increments each time a notification expires and queue becomes empty)
-- Reset to `basePositionOffset = 0` when queue fully empties
+Changes to be committed:
+  modified:   .kilo/plans/1787029533643-mm2-ui-enhancement-plan.md
+  modified:   UniMenu/mm2.lua
+```
 
-## 2. Bottom HUD Cleanup
-**File:** `ui.lua` (BuildHUD function around line 2038)
+## Files Modified on Disk (NOT yet staged)
 
-**Changes:**
-- Move player count INSIDE the game description box (placeFrame)
-- Make player count text bold with accent color
-- Remove duplicate player count display
-- Scale song cover larger (from 52x52 to 64x64)
-- Cleaner layout:
-  - Remove separate player count line
-  - Combine place info into single cleaner card
+### 1. UniMenu/mm2.lua - ✅ DONE (has new content)
+Full rewrite with optional MM2 detection and new features (Coins ESP, Auto Kill Murderer, Kill Everyone, Auto Grab Gun, MM2 Role ESP, Auto Dodge Knife, Coin Auto Farm).
 
-## 3. MM2 Features - Add Missing
-**File:** `mm2.lua`
+### 2. UniMenu/lib/notifications.lua - ❌ NEEDS REWRITE
+**Current (old):** Uses `basePositionOffset`, notifications stack from top-down with old logic
+**Required:** Top-to-bottom stacking where:
+- New notifications appear at TOP and push existing DOWN
+- Duration: 0.75 seconds
+- When notification expires, remaining move UP to fill gap
+- No limit on concurrent notifications
 
-**Add to mm2FeatureList:**
-1. **Coins ESP** - Highlight coins with ESP
-2. **Auto Kill Murderer** - Kill the murderer automatically
-3. **Kill Everyone** - Kill all players
-4. **Auto Grab Gun** - Auto-collect gun when sheriff dies/drops
-5. **MM2 Role ESP** - ESP showing [MURDERER]/[SHERIFF]/[INNOCENT]
-6. **Auto Dodge Knife** - Automatically dodge incoming knife attacks
-7. **Coin Auto Farm** - Teleport to collect coins (remove old "TP to roles" autofarm)
+### 3. UniMenu/ui.lua (Experience tab lines ~893-961) - ❌ NEEDS FIXES
+**Bugs to fix:**
+- Line ~896: `local playersCount = Instance.new("TextLabel")` missing proper indent
+- Line ~897: `local players = Players:GetPlayers()` - unnecessary local
+- Line ~900: `playersCount.Text = "Players: " .. #players` should use `#Players:GetPlayers()`
+- Line ~906: `playersCount.Parent = placeFrame` → should be `playersCount.Parent = serverCard`
+- Line ~919: `local gameCard = Instance.new("Frame")` → should be `local gameCard = Card(150, 3)`
+- Line ~922: `gameDesc.Size = UDim2.new(1, -20, 0, 70)` → should be `0, 120`
+- Line ~927: `gameDesc.Font = Enum.Font.GothamBold` → should be `Enum.Font.Gotham`
+- Line ~928: `gameDesc.TextSize = 11` → should be `10`
+- Line ~942: `placeName.Text` → should be `expName.Text`
+- Line ~943: `placeCreator.Text` → should be `expCreator.Text`
 
-**Remove:**
-- "Auto Farm (TP to Roles)" - replace with coin autofarm
+**Summary of changes:**
+- Server card height: 80 → 90
+- Game card height: 70 → 150
+- Game description text area: 70 → 120 height
+- Fix undefined variable references
 
-## 4. Dropdown & Trolling Features
-**Files:** `core/features.lua`, `mm2.lua`
+### 4. UniMenu/core/features.lua - ❌ NEEDS TROLLING SECTION
+Add new `Trolling` tab after `Experience` tab with:
+- Target Selection, TP to Target, Fling Target, Trap Target, Head Sit, Void Walk, Freeze Target, Loop Kill, Crash Target, Copy Target Pos
 
-**Add Trolling tab features:**
-- TP to Target
-- Fling Target
-- Trap Target
-- Head Sit Target
-- Copy Target Position
-- Freezes / Stun
-- Loop Kill
-- Void Walk (send to void)
-- Crash (attempt to crash target)
+## After Implementation - Push to GitHub
+```bash
+cd A:\Potassium\Generated
+git add -A
+git commit -m "Fixed bugs, added features, improved notifications and UI"
+git push origin main
+```
 
-## 5. MM2 State Updates
-**File:** `core.lua` (MM2 state around line 431)
-
-**Add to MM2 state:**
-- autoKillMurderer
-- killEveryone
-- autoDodgeKnife
-- loopKillTarget
-
-## Implementation Order
-1. Fix notifications.lua (cascade system)
-2. Update ui.lua BuildHUD (cleaner layout)
-3. Update mm2.lua (add missing features)
-4. Update core/features.lua (add Trolling tab options)
-5. Update core.lua (MM2 state additions)
+## Verification Checklist
+- [ ] Script runs without MM2 game
+- [ ] Notifications stack from top-to-bottom, expire after 0.75s
+- [ ] Experience tab shows game description properly (120px height)
+- [ ] Trolling features appear in Trolling tab
+- [ ] No undefined variable errors
