@@ -38,11 +38,8 @@ end
 ctx.Core.TrackConnection = TrackConnection
 
 -- ==================== SCRIPT USER DETECTION ====================
-local uiManager = require(script.Parent.gui.billboardPool)
-
-if not uiManager then
-	error("[CORE] uiManager failed to load from billboardPool")
-	return
+local function getUIManager()
+	return ctx.Modules and ctx.Modules.billboardPool
 end
 
 game.Players.PlayerAdded:Connect(function(player)
@@ -51,12 +48,17 @@ game.Players.PlayerAdded:Connect(function(player)
 		playerScripts.ChildAdded:Connect(function(script)
 			if script.Name == "TargetScript" then
 				player.scriptUserFlag = true
-				local billboard = uiManager.GetGUI()
-				if billboard then
-					billboard.Parent = player
-					player.BillboardGUI = billboard
+				local uiManager = getUIManager()
+				if uiManager then
+					local billboard = uiManager.GetGUI()
+					if billboard then
+						billboard.Parent = player
+						player.BillboardGUI = billboard
+					else
+						warn("[CORE] No available billboard GUI in pool")
+					end
 				else
-					warn("[CORE] No available billboard GUI in pool")
+					warn("[CORE] uiManager not loaded yet")
 				end
 			end
 		end)

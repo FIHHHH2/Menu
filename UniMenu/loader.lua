@@ -70,6 +70,7 @@ loadModule("music/covers")
 loadModule("music/lastfm")
 loadModule("music/spotify")
 loadModule("modules/musicHook")
+loadModule("commands/toggleScriptUI")
 
 -- Initialize everything
 if ctx.Core.Init then

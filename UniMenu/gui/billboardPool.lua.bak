@@ -1,6 +1,4 @@
-local ctx = ...
-
-local pool = {}
+﻿local pool = {}
 local poolSize = 20
 
 local function createPooledBillboard()
@@ -57,9 +55,5 @@ local uiManager = {
 		table.insert(uiManager.availableGUIs, billboard)
 	end
 }
-
--- Register in ctx for other modules to access
-ctx.Modules = ctx.Modules or {}
-ctx.Modules.billboardPool = uiManager
 
 return uiManager
