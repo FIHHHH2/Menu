@@ -60,10 +60,6 @@ local function BuildProceduralCover(song, artist)
     grad.Rotation = gen * 45
     grad.Parent = frame
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = frame
-
     -- Decorative shapes
     for i = 1, 3 do
       local shape = Instance.new("Frame")
@@ -72,9 +68,6 @@ local function BuildProceduralCover(song, artist)
       shape.BackgroundTransparency = 0.7 + i * 0.1
       shape.BackgroundColor3 = Color3.fromHSV((hue1 + i * 40) % 360 / 360, 0.6, 0.8)
       shape.Parent = frame
-      local c = Instance.new("UICorner")
-      c.CornerRadius = UDim.new(1, 0)
-      c.Parent = shape
     end
 
     -- Song initial

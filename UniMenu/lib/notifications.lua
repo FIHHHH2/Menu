@@ -9,10 +9,17 @@ local XP = ctx.Config.XP
 -- Current notification reference (only ONE at a time)
 local currentNotification = nil
 
+-- Helper to destroy a gui safely
+local function DestroyGuiSafely(gui)
+  if gui and gui.Parent then
+    pcall(function() gui:Destroy() end)
+  end
+end
+
 -- ==================== HELPER: Create Notification GUI ====================
 local function CreateNotificationGui(message, notifType)
   notifType = notifType or "info"
-  
+
   local notificationGui = Instance.new("ScreenGui")
   notificationGui.Name = "UniMenuNotification"
   notificationGui.ResetOnSpawn = false
@@ -74,25 +81,15 @@ local function CreateNotificationGui(message, notifType)
   return notificationGui, frame
 end
 
--- ==================== REMOVE CURRENT NOTIFICATION ====================
+-- ==================== REMOVE CURRENT NOTIFICATION (SYNC DESTROY) ====================
 local function RemoveCurrentNotification()
-  if currentNotification and currentNotification.gui and currentNotification.gui.Parent then
-    local frame = currentNotification.frame
+  -- Destroy the previous GUI immediately, no fade wait (prevents stacking/leaks)
+  if currentNotification then
     local gui = currentNotification.gui
-    
-    -- Fade out
-    local fadeTween = TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-      { BackgroundTransparency = 1 })
-    fadeTween:Play()
-    
-    fadeTween.Completed:Wait()
-    
-    -- Destroy GUI
-    if gui and gui.Parent then
-      pcall(function() gui:Destroy() end)
-    end
+    local frame = currentNotification.frame
+    DestroyGuiSafely(gui)
+    currentNotification = nil
   end
-  currentNotification = nil
 end
 
 -- ==================== SHOW NOTIFICATION ====================
@@ -100,14 +97,14 @@ local function ShowNotification(message, duration, notifType)
   -- Enforce max 1 second
   duration = math.min(duration or 1.0, 1.0)
   notifType = notifType or "info"
-  
+
   XP = ctx.Config.XP -- Refresh theme
-  
-  -- Remove any existing notification first (no stacking)
+
+  -- Destroy any existing notification FIRST (no stacking, no leftover GUI)
   RemoveCurrentNotification()
-  
+
   local notificationGui, frame = CreateNotificationGui(message, notifType)
-  
+
   currentNotification = {
     gui = notificationGui,
     frame = frame,
@@ -116,19 +113,22 @@ local function ShowNotification(message, duration, notifType)
     createdAt = os.clock(),
     duration = duration,
   }
-  
+
   -- Animate in
   local targetPos = UDim2.new(1, -220, 0, 8)
   TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out),
     { Position = targetPos }):Play()
   TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Linear),
     { BackgroundTransparency = 0 }):Play()
-  
-  -- Auto-expire
+
+  -- Auto-expire (only the latest notification removes itself)
   task.delay(duration, function()
-    RemoveCurrentNotification()
+    if currentNotification and currentNotification.gui == notificationGui then
+      DestroyGuiSafely(notificationGui)
+      currentNotification = nil
+    end
   end)
-  
+
   return currentNotification
 end
 

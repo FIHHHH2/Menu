@@ -1,82 +1,130 @@
-# UniMenu Bug Fix Plan (Updated)
+# UniMenu UI Fixes & Spotify Integration Plan
 
-## Context
-The UniMenu cheat panel (`A:\Potassium\Generated\UniMenu\`) has multiple UI issues reported by the user:
-1. **Experience tab**: Unable to get game cover art
-2. **Music tab**: Cover art not centered well, not scaled properly
-3. **All UIs**: Everything should be squared (no squircle/rounded corners)
-4. **Experience tab**: Place description text clipping/overflowing its frame
-5. **Notifications**: Previous GUI doesn't delete itself when creating new notification
-6. **Keybinds tab**: Clear (Clr) buttons clipping with keybind display
-7. **Trolling tab**: Dropdown doesn't appear, nothing in the UI works
+## Overview
+This plan addresses UI issues and adds Spotify integration. All changes are implementation-ready.
 
-## Root Cause Analysis
+## Tasks
 
-### 1. Experience Tab Cover Art
-- **File**: `ui.lua` lines 937-946 (`RefreshExperienceInfo`)
-- **Issue**: Uses `thumbnails.roblox.com/v1/places/gameicons` endpoint which returns small 512x512 game icons, not the larger experience thumbnail
-- **Fix**: Use `thumbnails.roblox.com/v1/places/gameicons?size=768x432` or the proper experience thumbnail endpoint
+### 1. Make MM2 Module Optional
+**File**: `loader.lua`
+- **Change**: Conditionally load `mm2.lua` only if MM2 is detected.
+  ```lua
+  -- Detect MM2 before loading module
+  local isMM2 = false
+  pcall(function()
+    isMM2 = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes") \
+            and game:GetService("ReplicatedStorage").Remotes:FindFirstChild("Gameplay")
+  end)
+  if isMM2 then
+    loadModule("mm2")
+  end
+  ```
 
-### 2. Music Tab Cover Art Positioning/Scaling
-- **File**: `ui.lua` lines 565-590 (Music tab "Now Playing" card) and 2216-2238 (HUD music display)
-- **Issues**:
-  - Music cover uses `ScaleType.Crop` but positioned at (2,2) with size 64x64 - not centered
-  - HUD music cover has `UICorner` with radius 4 (rounded) - should be square
-  - No proper aspect ratio handling
-- **Fix**: Center the cover art, use proper scaling, remove UICorner
+### 2. Add Spotify Tab with OAuth & Controls
+**File**: `ui.lua`
+- **Change**: Add new tab with Spotify authentication and playback controls.
+  ```lua
+  -- Spotify Tab
+  if currentTab == "Spotify" then
+    local spotifyCard = Card(200, 1)
+    Lbl(spotifyCard, "Spotify Connect", Enum.Font.GothamBold, 12, XP.text, 10, 8)
+    
+    -- Client ID Input
+    local clientIdBox = Instance.new("TextBox")
+    clientIdBox.Size = UDim2.new(1, -20, 0, 30)
+    clientIdBox.Position = UDim2.new(0, 10, 0, 40)
+    clientIdBox.Text = Music.spotify.clientId or ""
+    clientIdBox.PlaceholderText = "Spotify Client ID"
+    clientIdBox.Parent = spotifyCard
 
-### 3. Squircle/Rounded Corners - All UIs
-- **Files found with UICorner**:
-  - `ui.lua` line 2236-2238: HUD music cover (CornerRadius 4)
-  - `core.lua` line 765-766: Some UI element (CornerRadius 0.08 - 8% of size = squircle)
-  - `music/covers.lua` line 63-64: CornerRadius 8
-  - `music/covers.lua` line 75-76: CornerRadius 1,0 (fully circular)
-- **Fix**: Remove ALL UICorner instances or set CornerRadius to 0 for square corners
+    -- Connect Button
+    ActionBtn(spotifyCard, "Connect", 10, 80, 80, Color3.fromRGB(30, 200, 80), function()
+      -- Trigger OAuth flow
+      if ctx.Core.Spotify.StartAuth() then
+        ctx.Core.ShowNotification("Spotify: Check browser for auth")
+      end
+    end)
 
-### 4. Experience Tab Place Description Clipping
-- **File**: `ui.lua` lines 910-922 (`gameDesc` TextLabel)
-- **Issue**: `TextWrapped = true` but `ClipsDescendants = true` on parent card may not be enough; text size 11 with 70px height may overflow
-- **Fix**: Ensure parent card has `ClipsDescendants = true`, possibly reduce text size or increase card height
+    -- Playback Controls
+    if Music.spotify.connected then
+      ActionBtn(spotifyCard, "Play", 100, 80, 60, XP.accent, function() ctx.Core.Spotify.Play() end)
+      ActionBtn(spotifyCard, "Pause", 170, 80, 60, Color3.fromRGB(200, 50, 50), function() ctx.Core.Spotify.Pause() end)
+      -- Add Next/Prev/Volume sliders similarly
+    end
+  end
+  ```
 
-### 5. Notification GUI Cleanup
-- **File**: `lib/notifications.lua`
-- **Current state**: Uses single `currentNotification` reference
-- **Issue**: The previous notification GUI might not be fully destroyed before creating new one; fade animation may not complete
-- **Fix**: Ensure synchronous cleanup - destroy previous GUI immediately before creating new one, or await the fade completion
+### 3. Fix Notification Cleanup
+**File**: `lib/notifications.lua`
+- **Change**: Destroy previous notification GUI immediately when creating a new one.
+  ```lua
+  -- In ShowNotification, before creating new GUI:
+  RemoveCurrentNotification() -- Destroy previous GUI sync
+  ```
 
-### 6. Keybinds Tab Clear Button Clipping
-- **File**: `ui.lua` lines 1092-1138 (`keyLbl` and `clrBtn`)
-- **Issue**: `keyLbl` size 70x20 at position (1, -102), `clrBtn` size 36x20 at (1, -74) - they overlap! The clrBtn is positioned inside the keyLbl's space
-- **Fix**: Adjust positioning - keyLbl should end before clrBtn starts, or reduce keyLbl width
+### 4. Square All UI Elements
+**Files**: `ui.lua`, `music/covers.lua`, `core.lua`
+- **Change**: Remove all `UICorner` instances.
 
-### 7. Trolling Tab Dropdown Not Working
-- **File**: `ui.lua` lines 1247-1388
-- **Issues**:
-  - `playerList` is captured at line 39 as `local playerList = ctx.Core.playerList` - this is a snapshot, not a live reference
-  - `dropdownMenu` parented to `frame` (line 1332) but positioned using absolute coordinates that may be wrong
-  - `activeDropdowns` table referenced but not defined in scope
-  - Dropdown options use `playerList` which may be empty if `UpdatePlayerList()` hasn't run yet
-- **Fix**: 
-  - Use `ctx.Core.playerList` directly (live reference)
-  - Fix dropdown positioning
-  - Define `activeDropdowns` or remove reference
-  - Ensure `UpdatePlayerList()` is called before Trolling tab renders
+### 5. Fix Experience Tab Cover Art
+**File**: `ui.lua`
+- **Change**: Use higher-resolution thumbnail URL.
+  ```lua
+  local url = "https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" .. game.PlaceId .. "&size=256x256&format=Png&isCircular=false"
+  ```
 
-## Files to Modify
+### 6. Fix Music Tab Cover Art Positioning
+**File**: `ui.lua`
+- **Change**: Adjust cover art size/position and use `ScaleType.Fit`.
+  ```lua
+  mCover.Size = UDim2.new(0, 60, 0, 60)
+  mCover.Position = UDim2.new(0, 4, 0, 4)
+  mCover.ScaleType = Enum.ScaleType.Fit
+  ```
 
-1. **`lib/notifications.lua`** - Fix notification cleanup
-2. **`ui.lua`** - Fix Experience cover art, Music cover art, square corners, description clipping, keybind clipping, Trolling dropdown
-3. **`core.lua`** - Remove UICorner (line 765-766)
-4. **`music/covers.lua`** - Remove UICorner instances
+### 7. Fix Place Description Clipping
+**File**: `ui.lua`
+- **Change**: Increase `gameCard` height and ensure text wraps.
+  ```lua
+  gameCard.Size = UDim2.new(1, 0, 0, 140)
+  gameDesc.Size = UDim2.new(1, -20, 1, -38)
+  ```
 
-## Validation Plan
+### 8. Fix Keybind Overlay Clipping
+**File**: `ui.lua`
+- **Change**: Adjust button positions in keybind rows.
+  ```lua
+  keyLbl.Size = UDim2.new(0, 58, 0, 20)
+  keyLbl.Position = UDim2.new(1, -112, 0.5, -10)
+  clrBtn.Position = UDim2.new(1, -36, 0.5, -10)
+  ```
 
-1. Load script in-game
-2. Open Experience tab → verify cover art loads correctly
-3. Open Music tab → verify cover art centered and squared
-4. Open HUD → verify music cover is square (no rounded corners)
-5. Open any tab → verify no rounded corners anywhere
-6. Experience tab → verify description text doesn't clip
-7. Trigger multiple notifications rapidly → only one shows, previous destroyed
-8. Open Keybinds tab → verify Clear button doesn't overlap key display
-9. Open Trolling tab → verify dropdown opens, shows players, selection works
+### 9. Fix Trolling Tab Dropdown
+**File**: `ui.lua`
+- **Change**: Use live player list, correct dropdown positioning, and add action buttons.
+  ```lua
+  -- Use live player list
+  local livePlayerList = ctx.Core.playerList or {}
+  
+  -- Position dropdown menu relative to dropCard
+  dropdownMenu.Position = UDim2.new(0, 6, 0, 52)
+  dropdownMenu.Parent = dropCard
+  
+  -- Add action buttons after selection
+  if selectedPlayer then
+    -- Action buttons code as previously planned
+  end
+  ```
+
+## Validation Steps
+1. **MM2 Optional**: Test GUI in non-MM2 game → no errors.
+2. **Spotify**: Authenticate → control playback.
+3. **Notifications**: Rapid triggers → no stacking.
+4. **UI Corners**: Verify all elements are squared.
+5. **Cover Art**: Experience/Music tabs display correct images.
+6. **Description**: No text clipping in Experience tab.
+7. **Keybinds**: No button overlap in overlay.
+8. **Trolling**: Dropdown works, actions functional.
+
+## Implementation
+Execute the code changes above. Test each fix in a Roblox environment.

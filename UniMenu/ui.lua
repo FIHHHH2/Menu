@@ -88,11 +88,12 @@ ctx.Core.NotifyKeybindUIUpdate = NotifyKeybindUIUpdate
 local function ClampPosition(frame, parentFrame)
   local absPos = frame.AbsolutePosition
   local absSize = frame.AbsoluteSize
-  local parentSize = parentFrame and parentFrame.AbsoluteSize or Vector2.new(workspace.CurrentCamera.ViewportSize.X, workspace.CurrentCamera.ViewportSize.Y)
-  
+  local parentSize = parentFrame and parentFrame.AbsoluteSize or
+  Vector2.new(workspace.CurrentCamera.ViewportSize.X, workspace.CurrentCamera.ViewportSize.Y)
+
   local clampedX = math.clamp(absPos.X, 0, parentSize.X - absSize.X)
   local clampedY = math.clamp(absPos.Y, 0, parentSize.Y - absSize.Y)
-  
+
   if absPos.X ~= clampedX or absPos.Y ~= clampedY then
     frame.Position = UDim2.new(0, clampedX, 0, clampedY)
   end
@@ -457,8 +458,12 @@ local function CreateSlider(container, configKey, minVal, maxVal, isDecimal, onC
     connEnd = UserInputService.InputEnded:Connect(function(endInput)
       if endInput.UserInputType == Enum.UserInputType.MouseButton1 then
         isDragging = false
-        if connChange then connChange:Disconnect(); connChange = nil end
-        if connEnd then connEnd:Disconnect(); connEnd = nil end
+        if connChange then
+          connChange:Disconnect(); connChange = nil
+        end
+        if connEnd then
+          connEnd:Disconnect(); connEnd = nil
+        end
       end
     end)
   end
@@ -551,9 +556,11 @@ BuildContent = function(container)
       b.BorderSizePixel = 1; b.BorderColor3 = XP.borderDark
       b.Parent = parent
       b.MouseEnter:Connect(function()
-        ctx.Core.Animate(b, { BackgroundColor3 = Color3.new(
-          math.min(clr.R + 0.1, 1), math.min(clr.G + 0.1, 1), math.min(clr.B + 0.1, 1)
-        )}, 0.1)
+        ctx.Core.Animate(b, {
+          BackgroundColor3 = Color3.new(
+            math.min(clr.R + 0.1, 1), math.min(clr.G + 0.1, 1), math.min(clr.B + 0.1, 1)
+          )
+        }, 0.1)
       end)
       b.MouseLeave:Connect(function()
         ctx.Core.Animate(b, { BackgroundColor3 = clr }, 0.1)
@@ -567,12 +574,12 @@ BuildContent = function(container)
     npCard.BorderColor3 = Color3.fromRGB(30, 215, 96)
 
     local mCover = Instance.new("ImageLabel")
-    mCover.Size = UDim2.new(0, 64, 0, 64)
-    mCover.Position = UDim2.new(0, 2, 0, 2)
+    mCover.Size = UDim2.new(0, 60, 0, 60)
+    mCover.Position = UDim2.new(0, 4, 0, 4)
     mCover.BackgroundColor3 = Color3.fromRGB(20, 26, 38)
     mCover.BorderSizePixel = 1
     mCover.BorderColor3 = Color3.fromRGB(30, 215, 96)
-    mCover.ScaleType = Enum.ScaleType.Crop
+    mCover.ScaleType = Enum.ScaleType.Fit
     mCover.Image = Music.coverAsset
     mCover.ClipsDescendants = true
     mCover.Parent = npCard
@@ -605,7 +612,7 @@ BuildContent = function(container)
     -- Source Toggle Card
     local sourceCard = Card(80, 10)
     Lbl(sourceCard, "Music Source", Enum.Font.GothamBold, 11, XP.text, 10, 8)
-    
+
     local sourceToggle = Instance.new("TextButton")
     sourceToggle.Size = UDim2.new(0, 120, 0, 24)
     sourceToggle.Position = UDim2.new(0, 10, 0, 30)
@@ -617,7 +624,7 @@ BuildContent = function(container)
     sourceToggle.BorderSizePixel = 1
     sourceToggle.BorderColor3 = XP.borderDark
     sourceToggle.Parent = sourceCard
-    
+
     sourceToggle.MouseButton1Click:Connect(function()
       Music.useSpotifyDirect = not Music.useSpotifyDirect
       sourceToggle.Text = Music.useSpotifyDirect and "Spotify Direct" or "Last.fm"
@@ -635,11 +642,12 @@ BuildContent = function(container)
       local spotifyCard = Card(140, 11, Color3.fromRGB(18, 24, 18))
       spotifyCard.BorderColor3 = Color3.fromRGB(30, 200, 80)
       Lbl(spotifyCard, "⚡ Spotify Direct", Enum.Font.GothamBold, 11, Color3.fromRGB(30, 200, 80), 10, 8)
-      
+
       local spotifyStatus = Lbl(spotifyCard, "Status: " .. (Music.spotify.connected and "Connected" or "Not Connected"),
-        Enum.Font.Gotham, 9, Music.spotify.connected and Color3.fromRGB(30, 215, 96) or XP.tabInactiveText, 10, 24, 1, 12, true)
+        Enum.Font.Gotham, 9, Music.spotify.connected and Color3.fromRGB(30, 215, 96) or XP.tabInactiveText, 10, 24, 1, 12,
+        true)
       Music.menuSpotifyStatus = spotifyStatus
-      
+
       -- Client ID input
       Lbl(spotifyCard, "Client ID", Enum.Font.GothamBold, 9, XP.text, 10, 44)
       local clientIdBox = Instance.new("TextBox")
@@ -656,7 +664,7 @@ BuildContent = function(container)
       clientIdBox.ClearTextOnFocus = false
       clientIdBox.ClipsDescendants = true
       clientIdBox.Parent = spotifyCard
-      
+
       -- Connect button
       local connectBtn = Instance.new("TextButton")
       connectBtn.Size = UDim2.new(0, 80, 0, 22)
@@ -669,7 +677,7 @@ BuildContent = function(container)
       connectBtn.BorderSizePixel = 1
       connectBtn.BorderColor3 = XP.borderDark
       connectBtn.Parent = spotifyCard
-      
+
       connectBtn.MouseButton1Click:Connect(function()
         Music.spotify.clientId = clientIdBox.Text:gsub("%s+", "")
         if Music.spotify.clientId ~= "" and ctx.Core.Spotify then
@@ -689,7 +697,7 @@ BuildContent = function(container)
           ctx.Core.ShowNotification("Spotify: Enter a valid Client ID")
         end
       end)
-      
+
       -- Disconnect button
       if Music.spotify.connected then
         local discBtn = Instance.new("TextButton")
@@ -703,7 +711,7 @@ BuildContent = function(container)
         discBtn.BorderSizePixel = 1
         discBtn.BorderColor3 = XP.borderDark
         discBtn.Parent = spotifyCard
-        
+
         discBtn.MouseButton1Click:Connect(function()
           if ctx.Core.Spotify then ctx.Core.Spotify.Disconnect() end
           BuildContent(container)
@@ -845,9 +853,11 @@ BuildContent = function(container)
       b.BorderSizePixel = 1; b.BorderColor3 = XP.borderDark
       b.Parent = parent
       b.MouseEnter:Connect(function()
-        ctx.Core.Animate(b, { BackgroundColor3 = Color3.new(
-          math.min(clr.R + 0.1, 1), math.min(clr.G + 0.1, 1), math.min(clr.B + 0.1, 1)
-        )}, 0.1)
+        ctx.Core.Animate(b, {
+          BackgroundColor3 = Color3.new(
+            math.min(clr.R + 0.1, 1), math.min(clr.G + 0.1, 1), math.min(clr.B + 0.1, 1)
+          )
+        }, 0.1)
       end)
       b.MouseLeave:Connect(function()
         ctx.Core.Animate(b, { BackgroundColor3 = clr }, 0.1)
@@ -857,35 +867,39 @@ BuildContent = function(container)
     end
 
     -- Experience Cover Card
-    local expCoverCard = Card(180, 1, Color3.fromRGB(12, 16, 24))
+    local expCoverCard = Card(200, 1, Color3.fromRGB(12, 16, 24))
     expCoverCard.BorderColor3 = XP.accent
 
     local expCover = Instance.new("ImageLabel")
-    expCover.Size = UDim2.new(0, 140, 0, 140)
+    expCover.Size = UDim2.new(0, 120, 0, 120)
     expCover.Position = UDim2.new(0, 16, 0, 20)
     expCover.BackgroundColor3 = Color3.fromRGB(20, 26, 38)
     expCover.BorderSizePixel = 1
     expCover.BorderColor3 = XP.accent
-    expCover.ScaleType = Enum.ScaleType.Crop
+    expCover.ScaleType = Enum.ScaleType.Fit
     expCover.Image = ""
     expCover.ClipsDescendants = true
     expCover.Parent = expCoverCard
 
-    local expName = Lbl(expCoverCard, "Loading...", Enum.Font.GothamBold, 15, XP.text, 168, 24, 0.65, 22, true)
-    local expId = Lbl(expCoverCard, "Place ID: " .. tostring(game.PlaceId), Enum.Font.Code, 10, XP.tabInactiveText, 168, 50, 0.65, 16, true)
-    local expPlayers = Lbl(expCoverCard, "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers, Enum.Font.GothamBold, 12, XP.accent, 168, 72, 0.65, 18, true)
-    local expJobId = Lbl(expCoverCard, "Job ID: " .. tostring(game.JobId):sub(1, 36) .. "...", Enum.Font.Code, 9, XP.tabInactiveText, 168, 94, 0.65, 16, true)
-    local expCreator = Lbl(expCoverCard, "Creator: Loading...", Enum.Font.Gotham, 9, XP.tabInactiveText, 168, 116, 0.65, 16, true)
+    local expName = Lbl(expCoverCard, "Loading...", Enum.Font.GothamBold, 15, XP.text, 148, 24, 0.55, 22, true)
+    local expId = Lbl(expCoverCard, "Place ID: " .. tostring(game.PlaceId), Enum.Font.Code, 10, XP.tabInactiveText, 148,
+      50, 0.55, 16, true)
+    local expPlayers = Lbl(expCoverCard, "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers,
+      Enum.Font.GothamBold, 12, XP.accent, 148, 72, 0.55, 18, true)
+    local expJobId = Lbl(expCoverCard, "Job ID: " .. tostring(game.JobId):sub(1, 36) .. "...", Enum.Font.Code, 9,
+      XP.tabInactiveText, 148, 94, 0.55, 16, true)
+    local expCreator = Lbl(expCoverCard, "Creator: Loading...", Enum.Font.Gotham, 9, XP.tabInactiveText, 148, 116, 0.55,
+      16, true)
 
     -- Action buttons
-    ActionBtn(expCoverCard, "🔄 Refresh", 16, 148, 110, XP.accent, function()
+    ActionBtn(expCoverCard, "🔄 Refresh", 16, 152, 110, XP.accent, function()
       RefreshExperienceInfo()
     end)
-    ActionBtn(expCoverCard, "📋 Copy Place ID", 134, 148, 110, Color3.fromRGB(30, 200, 80), function()
+    ActionBtn(expCoverCard, "📋 Copy Place ID", 134, 152, 110, Color3.fromRGB(30, 200, 80), function()
       if setclipboard then setclipboard(tostring(game.PlaceId)) end
       ctx.Core.ShowNotification("Place ID copied to clipboard")
     end)
-    ActionBtn(expCoverCard, "📋 Copy Job ID", 250, 148, 110, Color3.fromRGB(30, 200, 80), function()
+    ActionBtn(expCoverCard, "📋 Copy Job ID", 250, 152, 110, Color3.fromRGB(30, 200, 80), function()
       if setclipboard then setclipboard(tostring(game.JobId)) end
       ctx.Core.ShowNotification("Job ID copied to clipboard")
     end)
@@ -904,17 +918,17 @@ BuildContent = function(container)
     playersCount.TextXAlignment = Enum.TextXAlignment.Left
     playersCount.Parent = serverCard
 
-    -- Game Info Card
-    local gameCard = Card(100, 3)
+    -- Game Info Card - larger height for description
+    local gameCard = Card(140, 3)
     Lbl(gameCard, "Game Details", Enum.Font.GothamBold, 12, XP.text, 10, 8)
     local gameDesc = Instance.new("TextLabel")
-    gameDesc.Size = UDim2.new(1, -20, 0, 70)
+    gameDesc.Size = UDim2.new(1, -20, 1, -38)
     gameDesc.Position = UDim2.new(0, 10, 0, 28)
     gameDesc.Text = "Loading game description..."
     gameDesc.TextColor3 = Color3.fromRGB(230, 240, 255)
     gameDesc.BackgroundTransparency = 1
-    gameDesc.Font = Enum.Font.GothamBold
-    gameDesc.TextSize = 11
+    gameDesc.Font = Enum.Font.Gotham
+    gameDesc.TextSize = 10
     gameDesc.TextXAlignment = Enum.TextXAlignment.Left
     gameDesc.TextYAlignment = Enum.TextYAlignment.Top
     gameDesc.TextWrapped = true
@@ -934,14 +948,22 @@ BuildContent = function(container)
         end
       end)
 
-      -- Fetch experience thumbnail
+      -- Fetch experience thumbnail (square game icon, proper size)
       pcall(function()
         local HttpService = game:GetService("HttpService")
-        local url = "https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" .. game.PlaceId .. "&size=512x512&format=Png&isCircular=false"
+        local url = "https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" ..
+        game.PlaceId .. "&size=256x256&format=Png&isCircular=false"
         local response = HttpService:GetAsync(url)
         local data = HttpService:JSONDecode(response)
         if data and data.data and data.data[1] and data.data[1].imageUrl then
           expCover.Image = data.data[1].imageUrl
+        end
+      end)
+      -- Fallback: try universe thumbnail if game icon fails
+      pcall(function()
+        if expCover.Image == "" then
+          local AssetService = game:GetService("AssetService")
+          local info = AssetService:GetGamePlaces(game.PlaceId)
         end
       end)
 
@@ -1091,8 +1113,8 @@ BuildContent = function(container)
 
       local keyLbl = Instance.new("TextLabel")
       keyLbl.Name = "KeyLabel"
-      keyLbl.Size = UDim2.new(0, 70, 0, 20)
-      keyLbl.Position = UDim2.new(1, -102, 0.5, -10)
+      keyLbl.Size = UDim2.new(0, 58, 0, 20)
+      keyLbl.Position = UDim2.new(1, -112, 0.5, -10)
       keyLbl.Text = keyCodeName(keybinds[kbName])
       keyLbl.TextColor3 = keybinds[kbName] and XP.accent or Color3.fromRGB(150, 150, 150)
       keyLbl.BackgroundColor3 = XP.panel1
@@ -1104,9 +1126,22 @@ BuildContent = function(container)
       keyLbl.TextXAlignment = Enum.TextXAlignment.Center
       keyLbl.Parent = row
 
+      local clrBtn = Instance.new("TextButton")
+      clrBtn.Size = UDim2.new(0, 36, 0, 20)
+      clrBtn.Position = UDim2.new(1, -36, 0.5, -10)
+      clrBtn.Text = "Clr"
+      clrBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+      clrBtn.BackgroundColor3 = Color3.fromRGB(140, 45, 45)
+      clrBtn.BorderSizePixel = 1
+      clrBtn.BorderColor3 = XP.borderDark
+      clrBtn.Font = Enum.Font.GothamBold
+      clrBtn.TextSize = 8
+      clrBtn.ClipsDescendants = true
+      clrBtn.Parent = row
+
       local setBtn = Instance.new("TextButton")
       setBtn.Size = UDim2.new(0, 36, 0, 20)
-      setBtn.Position = UDim2.new(1, -36, 0.5, -10)
+      setBtn.Position = UDim2.new(1, -74, 0.5, -10)
       setBtn.Text = "Set"
       setBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
       setBtn.BackgroundColor3 = XP.titleBar
@@ -1123,19 +1158,6 @@ BuildContent = function(container)
         ColorSequenceKeypoint.new(1, XP.titleBarGrad3)
       })
       setGrad.Parent = setBtn
-
-      local clrBtn = Instance.new("TextButton")
-      clrBtn.Size = UDim2.new(0, 36, 0, 20)
-      clrBtn.Position = UDim2.new(1, -74, 0.5, -10)
-      clrBtn.Text = "Clr"
-      clrBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-      clrBtn.BackgroundColor3 = Color3.fromRGB(140, 45, 45)
-      clrBtn.BorderSizePixel = 1
-      clrBtn.BorderColor3 = XP.borderDark
-      clrBtn.Font = Enum.Font.GothamBold
-      clrBtn.TextSize = 8
-      clrBtn.ClipsDescendants = true
-      clrBtn.Parent = row
 
       clrBtn.MouseButton1Click:Connect(function()
         keybinds[kbName] = nil
@@ -1245,6 +1267,9 @@ BuildContent = function(container)
 
   -- TROLLING TAB - TARGET PLAYER SELECTION
   if currentTab == "Trolling" then
+    -- Use live player list reference
+    local livePlayerList = ctx.Core.playerList or {}
+
     local dropCard = Instance.new("Frame")
     dropCard.Size = UDim2.new(1, 0, 0, 56)
     dropCard.BackgroundColor3 = XP.panel2
@@ -1317,28 +1342,24 @@ BuildContent = function(container)
       if dropdownOpen then
         if dropdownMenu then dropdownMenu:Destroy() end
         dropdownMenu = Instance.new("Frame")
-        dropdownMenu.Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, math.min(#playerList * 22 + 4, 140))
+        dropdownMenu.Size = UDim2.new(1, -12, 0, math.min(#livePlayerList * 22 + 4, 160))
         dropdownMenu.BackgroundColor3 = XP.panel1
         dropdownMenu.BackgroundTransparency = 0
         dropdownMenu.BorderSizePixel = 1
         dropdownMenu.BorderColor3 = XP.accent
         dropdownMenu.ZIndex = 200
         dropdownMenu.ClipsDescendants = true
-        
-        -- Position absolutely relative to the main GUI frame
-        local dropdownAbsPos = dropdown.AbsolutePosition
-        local frameAbsPos = frame.AbsolutePosition
-        dropdownMenu.Position = UDim2.new(0, dropdownAbsPos.X - frameAbsPos.X, 0, dropdownAbsPos.Y - frameAbsPos.Y + dropdown.AbsoluteSize.Y + 2)
-        dropdownMenu.Parent = frame -- Parent to main frame to avoid clipping
-        table.insert(activeDropdowns, dropdownMenu)
+        -- Parent to dropCard (same parent as dropdown) so positioning is local
+        dropdownMenu.Position = UDim2.new(0, 6, 0, 52)
+        dropdownMenu.Parent = dropCard
 
         local scroll = Instance.new("ScrollingFrame")
         scroll.Size = UDim2.new(1, -4, 1, -4)
         scroll.Position = UDim2.new(0, 2, 0, 2)
         scroll.BackgroundTransparency = 1
         scroll.ScrollBarThickness = 0
-        scroll.CanvasSize = UDim2.new(0, 0, 0, #playerList * 22)
-        scroll.ZIndex = 101
+        scroll.CanvasSize = UDim2.new(0, 0, 0, #livePlayerList * 22)
+        scroll.ZIndex = 201
         scroll.ClipsDescendants = true
         scroll.Parent = dropdownMenu
 
@@ -1347,7 +1368,19 @@ BuildContent = function(container)
         scrollLayout.SortOrder = Enum.SortOrder.LayoutOrder
         scrollLayout.Parent = scroll
 
-        for idx, plr in ipairs(playerList) do
+        if #livePlayerList == 0 then
+          local empty = Instance.new("TextLabel")
+          empty.Size = UDim2.new(1, 0, 0, 20)
+          empty.Text = "No players found"
+          empty.TextColor3 = XP.tabInactiveText
+          empty.BackgroundTransparency = 1
+          empty.Font = Enum.Font.Gotham
+          empty.TextSize = 9
+          empty.TextXAlignment = Enum.TextXAlignment.Center
+          empty.Parent = scroll
+        end
+
+        for idx, plr in ipairs(livePlayerList) do
           local opt = Instance.new("TextButton")
           opt.Size = UDim2.new(1, 0, 0, 20)
           opt.Text = plr.DisplayName .. " (@" .. plr.Name .. ")"
@@ -1359,7 +1392,7 @@ BuildContent = function(container)
           opt.TextSize = 9
           opt.TextXAlignment = Enum.TextXAlignment.Left
           opt.LayoutOrder = idx
-          opt.ZIndex = 102
+          opt.ZIndex = 202
           opt.ClipsDescendants = true
           opt.Parent = scroll
 
@@ -1377,6 +1410,8 @@ BuildContent = function(container)
             if dropdownMenu then
               dropdownMenu:Destroy(); dropdownMenu = nil
             end
+            -- Rebuild content to show action buttons
+            BuildContent(contentContainerRef)
           end)
         end
       else
@@ -1385,6 +1420,86 @@ BuildContent = function(container)
         end
       end
     end)
+
+    -- ACTION BUTTONS (shown after player selected)
+    if selectedPlayer then
+      local actionCard = Instance.new("Frame")
+      actionCard.Size = UDim2.new(1, 0, 0, 130)
+      actionCard.BackgroundColor3 = XP.panel2
+      actionCard.BorderSizePixel = 1
+      actionCard.BorderColor3 = XP.borderDark
+      actionCard.LayoutOrder = 1
+      actionCard.ClipsDescendants = true
+      actionCard.Parent = contentScroll
+
+      local actionHead = Instance.new("Frame")
+      actionHead.Size = UDim2.new(1, 0, 0, 20)
+      actionHead.BackgroundColor3 = XP.titleBar
+      actionHead.BorderSizePixel = 0
+      actionHead.Parent = actionCard
+
+      local actionHeadGrad = Instance.new("UIGradient")
+      actionHeadGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, XP.titleBarGrad1),
+        ColorSequenceKeypoint.new(1, XP.titleBarGrad3)
+      })
+      actionHeadGrad.Parent = actionHead
+
+      local actionLabel = Instance.new("TextLabel")
+      actionLabel.Size = UDim2.new(1, -8, 1, 0)
+      actionLabel.Position = UDim2.new(0, 6, 0, 0)
+      actionLabel.Text = "ACTIONS FOR " .. selectedPlayer.DisplayName:upper()
+      actionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+      actionLabel.BackgroundTransparency = 1
+      actionLabel.TextXAlignment = Enum.TextXAlignment.Left
+      actionLabel.Font = Enum.Font.GothamBold
+      actionLabel.TextSize = 8
+      actionLabel.Parent = actionHead
+
+      local function ActionBtn(parent, lbl, x, y, w, clr, fn)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0, w, 0, 26); b.Position = UDim2.new(0, x, 0, y)
+        b.Text = lbl; b.Font = Enum.Font.GothamBold; b.TextSize = 10
+        b.TextColor3 = Color3.fromRGB(255, 255, 255); b.BackgroundColor3 = clr
+        b.BorderSizePixel = 1; b.BorderColor3 = XP.borderDark
+        b.Parent = parent
+        b.MouseEnter:Connect(function()
+          ctx.Core.Animate(b, {
+            BackgroundColor3 = Color3.new(
+              math.min(clr.R + 0.1, 1), math.min(clr.G + 0.1, 1), math.min(clr.B + 0.1, 1)
+            )
+          }, 0.1)
+        end)
+        b.MouseLeave:Connect(function()
+          ctx.Core.Animate(b, { BackgroundColor3 = clr }, 0.1)
+        end)
+        b.MouseButton1Click:Connect(function() task.spawn(fn) end)
+        return b
+      end
+
+      ActionBtn(actionCard, "Teleport To", 10, 30, 100, XP.accent, function()
+        if ctx.Core.TeleportToTarget then ctx.Core.TeleportToTarget() end
+      end)
+
+      ActionBtn(actionCard, "Fling", 120, 30, 100, Color3.fromRGB(200, 100, 30), function()
+        if ctx.Core.FlingTarget then ctx.Core.FlingTarget() end
+      end)
+
+      ActionBtn(actionCard, "Trap", 230, 30, 100, Color3.fromRGB(200, 50, 50), function()
+        if ctx.Core.TargetTrap then ctx.Core.TargetTrap() end
+      end)
+
+      ActionBtn(actionCard, "Head Sit", 340, 30, 100, Color3.fromRGB(100, 150, 200), function()
+        if ctx.Core.HeadSitTarget then ctx.Core.HeadSitTarget() end
+      end)
+
+      ActionBtn(actionCard, "Clear Selection", 10, 66, 130, Color3.fromRGB(120, 120, 120), function()
+        selectedPlayer = nil
+        ctx.Core.selectedPlayer = nil
+        dropdown.Text = "Select Target Player..."
+        BuildContent(contentContainerRef)
+      end)
+    end
   end
 
   -- THEMES TAB
@@ -1434,9 +1549,11 @@ BuildContent = function(container)
       b.BorderSizePixel = 1; b.BorderColor3 = XP.borderDark
       b.Parent = parent
       b.MouseEnter:Connect(function()
-        ctx.Core.Animate(b, { BackgroundColor3 = Color3.new(
-          math.min(clr.R + 0.1, 1), math.min(clr.G + 0.1, 1), math.min(clr.B + 0.1, 1)
-        )}, 0.1)
+        ctx.Core.Animate(b, {
+          BackgroundColor3 = Color3.new(
+            math.min(clr.R + 0.1, 1), math.min(clr.G + 0.1, 1), math.min(clr.B + 0.1, 1)
+          )
+        }, 0.1)
       end)
       b.MouseLeave:Connect(function()
         ctx.Core.Animate(b, { BackgroundColor3 = clr }, 0.1)
@@ -1665,7 +1782,6 @@ BuildContent = function(container)
             tBtn.Text = newState and "ON" or "OFF"
             tBtn.BackgroundColor3 = newState and XP.green or Color3.fromRGB(150, 150, 150)
           end)
-
         elseif feat.isButton then
           local bBtn = Instance.new("TextButton")
           bBtn.Size = UDim2.new(0, 42, 0, 16)
@@ -1684,7 +1800,6 @@ BuildContent = function(container)
             if feat.condition and not feat.condition() then return end
             if feat.action then feat.action() end
           end)
-
         elseif feat.isCyclePart then
           local partOptions = { "Head", "HumanoidRootPart", "Torso", "UpperTorso" }
           local currentPart = S.aimbotTargetPart or "Head"
@@ -1902,14 +2017,14 @@ BuildGUI = function()
   sidebarPadding.Parent = sidebar
 
   local sidebarItems = {
-    { isHeader = true, name = "MAIN GAMEPLAY" },
+    { isHeader = true,   name = "MAIN GAMEPLAY" },
     { tab = "Combat" },
     { tab = "Movement" },
     { tab = "Visuals" },
-    { isHeader = true, name = "GAME & EXPLOITS" },
+    { isHeader = true,   name = "GAME & EXPLOITS" },
     { tab = "MM2" },
     { tab = "Trolling" },
-    { isHeader = true, name = "SYSTEM & UTILS" },
+    { isHeader = true,   name = "SYSTEM & UTILS" },
     { tab = "Server" },
     { tab = "Themes" },
     { tab = "Config" },
@@ -2078,8 +2193,10 @@ BuildGUI = function()
       -- Clamp to viewport
       local viewportSize = workspace.CurrentCamera.ViewportSize
       local frameSize = frame.AbsoluteSize
-      newX = math.clamp(newX, -startPos.X.Scale * viewportSize.X, viewportSize.X - frameSize.X + (1 - startPos.X.Scale) * viewportSize.X)
-      newY = math.clamp(newY, -startPos.Y.Scale * viewportSize.Y + 32, viewportSize.Y - frameSize.Y + (1 - startPos.Y.Scale) * viewportSize.Y)
+      newX = math.clamp(newX, -startPos.X.Scale * viewportSize.X,
+        viewportSize.X - frameSize.X + (1 - startPos.X.Scale) * viewportSize.X)
+      newY = math.clamp(newY, -startPos.Y.Scale * viewportSize.Y + 32,
+        viewportSize.Y - frameSize.Y + (1 - startPos.Y.Scale) * viewportSize.Y)
       frame.Position = UDim2.new(startPos.X.Scale, newX, startPos.Y.Scale, newY)
     end
   end)
@@ -2227,15 +2344,12 @@ BuildHUD = function()
   musicCover.Size = UDim2.new(0, 52, 0, 52)
   musicCover.Position = UDim2.new(0, 2, 0, 2)
   musicCover.BackgroundColor3 = XP.panel1
-  musicCover.BorderSizePixel = 0
-  musicCover.ScaleType = Enum.ScaleType.Crop
+  musicCover.BorderSizePixel = 1
+  musicCover.BorderColor3 = XP.borderDark
+  musicCover.ScaleType = Enum.ScaleType.Fit
   musicCover.ClipsDescendants = true
   musicCover.Parent = musicFrame
   Music.hudCover = musicCover
-
-  local musicCoverCorner = Instance.new("UICorner")
-  musicCoverCorner.CornerRadius = UDim.new(0, 4)
-  musicCoverCorner.Parent = musicCover
 
   local musicText = Instance.new("TextLabel")
   musicText.Size = UDim2.new(1, -60, 0, 20)

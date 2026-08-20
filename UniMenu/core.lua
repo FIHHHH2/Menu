@@ -762,10 +762,6 @@ local function BuildProceduralCover(song, artist)
     grad.Rotation = gen == 0 and 0 or (gen == 1 and 45) or (gen == 2 and 90) or 135
     grad.Parent = frame
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0.08, 0)
-    corner.Parent = frame
-
     local letter = Instance.new("TextLabel")
     letter.Size = UDim2.new(1, 0, 1, 0)
     letter.Position = UDim2.new(0, 0, 0, 0)
