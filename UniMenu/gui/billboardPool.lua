@@ -1,4 +1,4 @@
-﻿local pool = {}
+local pool = {}
 local poolSize = 20
 
 local function createPooledBillboard()
@@ -57,3 +57,4 @@ local uiManager = {
 }
 
 return uiManager
+
