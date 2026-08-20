@@ -511,6 +511,33 @@ BuildContent = function(container)
 
   -- MUSIC TAB
   if currentTab == "Music" then
+
+    -- Spotify Tab
+    elseif currentTab == "Spotify" then
+        local spotifyCard = Card(200, 1)
+        Lbl(spotifyCard, "Spotify Connect", Enum.Font.GothamBold, 12, XP.text, 10, 8)
+        
+        -- Client ID Input
+        local clientIdBox = Instance.new("TextBox")
+        clientIdBox.Size = UDim2.new(1, -20, 0, 30)
+        clientIdBox.Position = UDim2.new(0, 10, 0, 40)
+        clientIdBox.Text = Music.spotify.clientId or ""
+        clientIdBox.PlaceholderText = "Spotify Client ID"
+        clientIdBox.Parent = spotifyCard
+        
+        -- Connect Button
+        ActionBtn(spotifyCard, "Connect", 10, 80, 80, Color3.fromRGB(30, 200, 80), function()
+            if ctx.Core.Spotify.StartAuth() then
+                ctx.Core.ShowNotification("Spotify: Check browser for auth")
+            end
+        end)
+        
+        -- Playback Controls (Conditional)
+        if Music.spotify.connected then
+            ActionBtn(spotifyCard, "Play", 100, 80, 60, XP.accent, function() ctx.Core.Spotify.Play() end)
+            ActionBtn(spotifyCard, "Pause", 170, 80, 60, Color3.fromRGB(200, 50, 50), function() ctx.Core.Spotify.Pause() end)
+        end
+
     local listLayout = Instance.new("UIListLayout")
     listLayout.FillDirection = Enum.FillDirection.Vertical
     listLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -1267,6 +1294,53 @@ BuildContent = function(container)
 
   -- TROLLING TAB - TARGET PLAYER SELECTION
   if currentTab == "Trolling" then
+
+    -- Peer Detection Card
+    local peerCard = Card(120, 1)
+    Lbl(peerCard, "Script Users", Enum.Font.GothamBold, 12, XP.text, 10, 8)
+    
+    local peerList = Instance.new("ScrollingFrame")
+    peerList.Size = UDim2.new(1, -20, 1, -38)
+    peerList.Position = UDim2.new(0, 10, 0, 38)
+    peerList.BackgroundTransparency = 1
+    peerList.ScrollBarThickness = 2
+    peerList.Parent = peerCard
+    
+    local peerLayout = Instance.new("UIListLayout")
+    peerLayout.FillDirection = Enum.FillDirection.Vertical
+    peerLayout.Padding = UDim.new(0, 4)
+    peerLayout.Parent = peerList
+    
+    -- Function to update peer list
+    local function UpdatePeerList()
+        peerLayout:ClearAllChildren() -- Clear existing
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player and plr:GetAttribute("UniMenu_Peer") then
+                local data = HttpService:JSONDecode(plr:GetAttribute("UniMenu_Peer"))
+                if data and data.scriptVersion == "1.0.1" then
+                    local peerEntry = Instance.new("TextLabel")
+                    peerEntry.Size = UDim2.new(1, -8, 0, 24)
+                    peerEntry.Text = plr.Name .. " - " .. (data.song or "No song")
+                    peerEntry.TextColor3 = XP.text
+                    peerEntry.BackgroundTransparency = 1
+                    peerEntry.Font = Enum.Font.Gotham
+                    peerEntry.TextSize = 10
+                    peerEntry.Parent = peerList
+                end
+            end
+        end
+    end
+    
+    -- Initial update
+    UpdatePeerList()
+    
+    -- Update on player change
+    Players.PlayerAdded:Connect(UpdatePeerList)
+    Players.PlayerRemoving:Connect(UpdatePeerList)
+    
+    -- Update on attribute change
+    Players.Player:GetAttributeChangedSignal("UniMenu_Peer"):Connect(UpdatePeerList)
+
     -- Use live player list reference
     local livePlayerList = ctx.Core.playerList or {}
 
