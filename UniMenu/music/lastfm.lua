@@ -61,7 +61,7 @@ local function LastfmPoll()
   end
 
   local ok, data = pcall(function() return HttpService:JSONDecode(res.Body) end)
-  if not ok or not data then
+  if not ok or not data or not data.recenttracks then
     Music.statusText = "[ERR] Failed to decode JSON response"
     if ctx.UI and ctx.UI.UpdateMusicUI then ctx.UI.UpdateMusicUI() end
     return
@@ -73,13 +73,13 @@ local function LastfmPoll()
     return
   end
 
-  if not data.recenttracks then
+  if not data or not data.recenttracks or not data.recenttracks.track then
     Music.statusText = "[ERR] No recent tracks found for user"
     if ctx.UI and ctx.UI.UpdateMusicUI then ctx.UI.UpdateMusicUI() end
     return
   end
 
-  local tracks = data.recenttracks.track
+      local tracks = data.recenttracks.track or {}
   local t = nil
   if typeof(tracks) == "table" then
     t = tracks[1] or tracks
