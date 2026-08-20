@@ -57,6 +57,8 @@ local function loadModule(name)
 end
 
 -- Load modules in dependency order
+loadModule("gui/billboardPool")
+loadModule("gui/scriptBillboard")
 loadModule("core")
 loadModule("core/features")
 loadModule("ui")
@@ -67,6 +69,7 @@ loadModule("lib/notifications")
 loadModule("music/covers")
 loadModule("music/lastfm")
 loadModule("music/spotify")
+loadModule("modules/musicHook")
 
 -- Initialize everything
 if ctx.Core.Init then
