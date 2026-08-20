@@ -1,4 +1,4 @@
-local pool = {}
+﻿local pool = {}
 local poolSize = 20
 
 local function createPooledBillboard()
@@ -13,6 +13,19 @@ local function createPooledBillboard()
 	mainFrame.BackgroundTransparency = 0.6
 	mainFrame.Parent = billboard
 
+	-- Script indicator (text-based fallback instead of icon)
+	local scriptIcon = Instance.new("TextLabel")
+	scriptIcon.Name = "ScriptIcon"
+	scriptIcon.Size = UDim2.new(0.3, 0, 0.3, 0)
+	scriptIcon.Position = UDim2.new(0.35, 0, 0.1, 0)
+	scriptIcon.BackgroundTransparency = 1
+	scriptIcon.Text = "♪"  -- Unicode music note
+	scriptIcon.TextColor3 = Color3.new(1, 1, 1)
+	scriptIcon.TextSize = 20
+	scriptIcon.Font = Enum.Font.GothamBold
+	scriptIcon.TextScaled = true
+	scriptIcon.Parent = mainFrame
+
 	local songTitle = Instance.new("TextLabel")
 	songTitle.Name = "SongTitle"
 	songTitle.BackgroundTransparency = 1
@@ -21,13 +34,6 @@ local function createPooledBillboard()
 	songTitle.Size = UDim2.new(1, 0, 0.7, 0)
 	songTitle.Position = UDim2.new(0, 0, 0.3, 0)
 	songTitle.Parent = mainFrame
-
-	local scriptIcon = Instance.new("ImageLabel")
-	scriptIcon.Name = "ScriptIcon"
-	scriptIcon.Size = UDim2.new(0.3, 0, 0.3, 0)
-	scriptIcon.Position = UDim2.new(0.35, 0, 0.1, 0)
-	scriptIcon.Image = "rbxassetid://1234567890" -- Placeholder ID
-	scriptIcon.Parent = mainFrame
 
 	return billboard
 end
