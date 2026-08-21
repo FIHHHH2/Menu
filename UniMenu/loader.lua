@@ -3,7 +3,7 @@
 
 local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/main/UniMenu/"
 
-local ctx = {
+local ctx
     Services = {},
     State = {
         S = {},
@@ -119,4 +119,9 @@ game:GetService("Players").LocalPlayer.AncestryChanged:Connect(function(_, paren
             end
         end
     end
-end)
+end)ptUI")
+
+-- Initialize everything
+if ctx.Core.Init then
+	ctx.Core.Init()
+end
