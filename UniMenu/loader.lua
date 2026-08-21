@@ -76,7 +76,9 @@ local isMM2 = (gameId == 142823291) -- Murder Mystery 2 PlaceId
 
 -- ==================== LOAD MODULES IN DEPENDENCY ORDER ====================
 -- Always load these core modules
-loadModule("utils") -- Shared utilities
+-- Load core modules in strict order
+loadModule("utils") -- 1. Shared utilities
+loadModule("core")  -- 2. Core services (depends on utils)
 loadModule("core") -- Core services, state, peer detection
 loadModule("main_ui") -- Main UI and universal features
 

@@ -21,7 +21,39 @@ local camera = workspace.CurrentCamera
 
 local S = ctx.State.S
 local Music = ctx.State.Music
-local gameConfig = ctx.Config.gameConfig
+-- Game detection and dynamic tab loading
+local function DetectGame()
+    local placeId = game.PlaceId
+    if placeId == 142823291 then -- MM2
+        return "MM2"
+    elseif placeId == 6872265036 then -- Example: Tower of Hell
+        return "TowerOfHell"
+    end
+    return "Unknown"
+end
+
+local currentGame = DetectGame()
+local gameConfig = ctx.Config.gameConfig or {}
+
+-- Dynamically load game-specific UI
+local function LoadGameTab()
+    if currentGame == "MM2" then
+        -- Load existing MM2 UI
+        BuildMM2Tab()
+    elseif currentGame == "TowerOfHell" then
+        -- New tab implementation example
+        local tab = {
+            name = "Tower",
+            features = {
+                "AutoJump", "SpeedBoost", "AntiFall"
+            }
+        }
+        AddDynamicTab(tab)
+    end
+end
+
+-- Call during UI initialization
+LoadGameTab()
 local Themes = ctx.Config.Themes
 local XP = ctx.Config.XP
 local currentThemeName = ctx.Config.currentThemeName
