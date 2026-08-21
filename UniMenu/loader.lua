@@ -62,11 +62,11 @@ local function loadModule(name)
 	end
 
 	local ok, result = pcall(fn, ctx)
-if not ok then
-    error("Failed to execute module " .. name .. ": " .. tostring(result))
-else
-    ctx.Modules[name] = result
-end
+	if not ok then
+		error("Failed to execute module " .. name .. ": " .. tostring(result))
+	else
+		ctx.Modules[name] = result
+	end
 
 	ctx.Modules[name] = result
 	cache[name] = true
@@ -81,7 +81,7 @@ local isMM2 = (gameId == 142823291) -- Murder Mystery 2 PlaceId
 -- Always load these core modules
 -- Load core modules in strict order
 loadModule("utils") -- 1. Shared utilities
-loadModule("core")  -- 2. Core services (depends on utils)
+loadModule("core") -- 2. Core services (depends on utils)
 loadModule("core") -- Core services, state, peer detection
 loadModule("main_ui") -- Main UI and universal features
 
