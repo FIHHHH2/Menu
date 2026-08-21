@@ -319,6 +319,8 @@ local function CreateLogger(module)
 end
 
 -- Initialize loggers
+-- Ensure Utils module is loaded before assigning logger
+local Utils = ctx.Modules.utils or {}
 ctx.Modules.utils.Log = CreateLogger("Utils")
 ctx.Core.DebugLog = CreateLogger("Core")
 
