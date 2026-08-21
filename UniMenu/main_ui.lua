@@ -11,7 +11,11 @@ local Lighting = ctx.Services.Lighting
 local HttpService = ctx.Services.HttpService
 local ReplicatedStorage = ctx.Services.ReplicatedStorage
 
-local player = Players.LocalPlayer
+local player = game:GetService("Players").LocalPlayer
+if not player then
+    error("Player not found")
+    return
+end
 local PlayerGui = player:WaitForChild("PlayerGui")
 local camera = workspace.CurrentCamera
 
