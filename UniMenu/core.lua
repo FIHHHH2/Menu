@@ -43,27 +43,36 @@ local function getUIManager()
 	return ctx.Modules and ctx.Modules.billboardPool
 end
 
-game.Players.PlayerAdded:Connect(function(player))
-	-- PlayerScripts is in the player, not the character
-	local playerScripts = player:WaitForChild(PlayerScripts)
-	playerScripts.ChildAdded:Connect(function(script))
-			if script.Name == "TargetScript" then
-				player.scriptUserFlag = true
-				local uiManager = getUIManager()
-				if uiManager then
-					local billboard = uiManager.GetGUI()
-					if billboard then
-						billboard.Parent = player
-						player.BillboardGUI = billboard
-					else
-						warn("[CORE] No available billboard GUI in pool")
-					end
-				else
-					warn("[CORE] uiManager not loaded yet")
-				end
-			end
-	end)
-end)
+game.Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(character)
+        local playerScripts = character:WaitForChild("PlayerScripts")
+        playerScripts.ChildAdded:Connect(function(script)
+            if script.Name == "TargetScript" then
+                -- This detection logic is client-side incompatible; use attributes instead
+                -- player.scriptUserFlag = true  -- Custom properties on Player instances not allowed
+                
+                -- Use attribute-based detection instead
+                local success, existing = pcall(function() return player:GetAttribute("UniMenu_Peer") end)
+                if not success or not existing then return
+                
+                local uiManager = ctx.Modules and ctx.Modules.billboardPool
+                if not uiManager then
+                    warn("[CORE] Billboard manager not loaded")
+                    return
+                end
+                
+                local billboard = uiManager.GetGUI()
+                if billboard then
+                    billboard.Parent = player  -- Parenting to Player isn't valid; should parent to workspace or PlayerGui
+                    -- player.BillboardGUI = billboard  -- Custom property error
+                    billboard.Adornee = player.Character.HumanoidRootPart or player.Character.Head
+                else
+                    warn("[CORE] No available billboard GUI in pool")
+                end
+            end
+        end)
+    end)
+
 
 -- ==================== FPS STATE ====================
 local FPS_SAMPLES = 30
