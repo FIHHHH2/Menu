@@ -52,8 +52,10 @@ game.Players.PlayerAdded:Connect(function(player)
                 -- player.scriptUserFlag = true  -- Custom properties on Player instances not allowed
                 
                 -- Use attribute-based detection instead
-                local success, existing = pcall(function() return player:GetAttribute("UniMenu_Peer") end)
-                if not success or not existing then return
+                local success, existing = pcall(function() 
+                    return player:GetAttribute("UniMenu_Peer") 
+                end)
+                if not success or not existing then return end
                 
                 local uiManager = ctx.Modules and ctx.Modules.billboardPool
                 if not uiManager then
@@ -63,14 +65,16 @@ game.Players.PlayerAdded:Connect(function(player)
                 
                 local billboard = uiManager.GetGUI()
                 if billboard then
-                    billboard.Parent = player  -- Parenting to Player isn't valid; should parent to workspace or PlayerGui
-                    -- player.BillboardGUI = billboard  -- Custom property error
-                    billboard.Adornee = player.Character.HumanoidRootPart or player.Character.Head
+                    -- BillboardGui must be parented to workspace or PlayerGui, not Player instance
+                    billboard.Parent = game:GetService("Workspace")
+                    billboard.Adornee = player.Character and player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Head")
                 else
                     warn("[CORE] No available billboard GUI in pool")
                 end
             end
         end)
+    end)
+
     end)
 
 
