@@ -62,10 +62,13 @@ local function loadModule(name)
 	end
 
 	local ok, result = pcall(fn, ctx)
-	if not ok then
-		error("Failed to execute module " .. name .. ": " .. tostring(result))
-	end
+if not ok then
+    error("Failed to execute module " .. name .. ": " .. tostring(result))
+else
+    ctx.Modules[name] = result
+end
 
+	ctx.Modules[name] = result
 	cache[name] = true
 	return true
 end

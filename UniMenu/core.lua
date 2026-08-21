@@ -321,8 +321,9 @@ end
 -- Initialize loggers
 -- Ensure Utils module is loaded before assigning logger
 -- Ensure Utils module is properly initialized
+-- Ensure Utils is available with proper error handling
 if not ctx.Modules.utils then
-    error("Utils module not loaded in core.lua")
+    error("[UniMenu] Utils module not loaded in core.lua")
 end
 ctx.Modules.utils.Log = CreateLogger("Utils")
 ctx.Core.DebugLog = CreateLogger("Core")
