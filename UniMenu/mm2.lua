@@ -3,12 +3,12 @@
 
 local ctx = ...
 
-local Players = ctx.Services.Players
+local Players = game:GetService("Players")
 local RunService = ctx.Services.RunService
 local TweenService = ctx.Services.TweenService
 local ReplicatedStorage = ctx.Services.ReplicatedStorage
 
-local player = Players:GetService("Players").LocalPlayer
+local player = game:GetService("Players").LocalPlayer or Players:WaitForChild("LocalPlayer")
 if not player then
     player = Players:WaitForChild("LocalPlayer")
 end

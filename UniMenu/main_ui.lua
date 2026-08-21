@@ -799,7 +799,7 @@ local function BuildContent()
 end
 
 -- ==================== REGISTER DEFAULT KEYBINDS ====================
-RegisterKeybind("ToggleMenu", Enum.KeyCode.RightShift, function()
+RegisterKeybind("ToggleMenu", Enum.KeyCode.Bracket, function()
     isOpen = not isOpen
     if isOpen then
         BuildGUI()
