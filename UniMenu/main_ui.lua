@@ -563,7 +563,7 @@ end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    for name, kb in pairs(keybinds) do
+    for _, kb in pairs(keybinds) do
         if input.KeyCode == kb.key then
             kb.callback()
         end
