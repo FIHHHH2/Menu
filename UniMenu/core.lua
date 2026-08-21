@@ -319,7 +319,7 @@ local function CreateLogger(module)
 end
 
 -- Initialize loggers
-Utils.Log = CreateLogger("Utils")
+ctx.Modules.utils.Log = CreateLogger("Utils")
 ctx.Core.DebugLog = CreateLogger("Core")
 
 -- Configuration validation schema
