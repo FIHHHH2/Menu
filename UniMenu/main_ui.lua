@@ -114,8 +114,21 @@ local ThemeDefaults = {
     },
 }
 
+-- Cache theme colors to avoid recalculation
+local function CacheTheme(theme)
+    local cached = {}
+    for k, v in pairs(theme) do
+        if type(v) == "table" and v.R and v.G and v.B then
+            cached[k] = Color3.new(v.R, v.G, v.B)
+        else
+            cached[k] = v
+        end
+    end
+    return cached
+end
+
 ctx.Config.Themes = ThemeDefaults
-ctx.Config.XP = ThemeDefaults[currentThemeName]
+ctx.Config.XP = CacheTheme(ThemeDefaults[currentThemeName])
 
 -- ==================== UI HELPERS ====================
 local function Lbl(parent, text, font, size, color, x, y)
@@ -557,8 +570,20 @@ end
 -- ==================== KEYBIND MANAGEMENT ====================
 local keybinds = {}
 
+-- Centralized keybind storage with validation
+local keybinds = {}
+
 local function RegisterKeybind(name, defaultKey, callback)
+    if keybinds[name] then
+        Utils.Warn("Keybind conflict for", name, "- overwriting")
+        return
+    end
+    if not Enum.KeyCode[defaultKey] then
+        Utils.Error("Invalid default key for", name, "- using KEY_NONE")
+        defaultKey = Enum.KeyCode.None
+    end
     keybinds[name] = { key = defaultKey, callback = callback }
+    return keybinds[name]
 end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)

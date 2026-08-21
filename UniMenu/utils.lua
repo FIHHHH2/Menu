@@ -8,18 +8,43 @@ local TweenService = ctx.Services.TweenService
 local Utils = {}
 
 -- Table utilities
+-- Iterative DeepCopy to prevent stack overflows
 function Utils.DeepCopy(orig)
-    local copy
-    if type(orig) == "table" then
-        copy = {}
-        for k, v in pairs(orig) do
-            copy[Utils.DeepCopy(k)] = Utils.DeepCopy(v)
+    local copies = {}
+    local stack = { { orig, false } }
+    
+    while #stack > 0 do
+        local obj, processed = table.remove(stack, 1)
+        if processed then
+            local copy = copies[obj]
+            if type(obj) == "table" then
+                for k, v in pairs(obj) do
+                    if type(k) == "table" then k = copies[k] end
+                    if type(v) == "table" then v = copies[v] end
+                    copy[k] = v
+                end
+                setmetatable(copy, copies[getmetatable(obj)])
+            end
+        else
+            if type(obj) ~= "table" then
+                copies[obj] = obj
+                continue
+            end
+            if copies[obj] then continue end
+            copies[obj] = {}
+            table.insert(stack, 1, { obj, true })
+            local mt = getmetatable(obj)
+            if mt then
+                copies[mt] = Utils.DeepCopy(mt)
+                setmetatable(copies[obj], copies[mt])
+            end
+            for k, v in pairs(obj) do
+                table.insert(stack, { v, false })
+                table.insert(stack, { k, false })
+            end
         end
-        setmetatable(copy, Utils.DeepCopy(getmetatable(orig)))
-    else
-        copy = orig
     end
-    return copy
+    return copies[orig]
 end
 
 function Utils.TableFind(tbl, value)
@@ -136,36 +161,48 @@ function Utils.Tween(instance, properties, duration, easingStyle, easingDirectio
 end
 
 -- HTTP utilities
-function Utils.HttpGet(url, headers)
-    local requestFunc = game.HttpGet or (syn and syn.request) or request
-    if not requestFunc then return nil end
+-- Unified HTTP handler with timeout and error logging
+local function UnifiedRequest(method, url, body, headers, timeout)
+    local requestFunc = (syn and syn.request) or request or game.HttpGet
+    if not requestFunc then return false, "No HTTP method available" end
+
+    local startTime = os.clock()
+    local success, result = pcall(function()
+        if syn and syn.request then
+            local res = syn.request({
+                Url = url,
+                Method = method,
+                Body = body,
+                Headers = headers,
+                TimeLimit = timeout or 10
+            })
+            return res.Success, res.Body
+        elseif request then
+            local res = request({
+                Url = url,
+                Method = method,
+                Body = body,
+                Headers = headers,
+            })
+            return res.Success, res.Body
+        elseif game.HttpGet and method == "GET" then
+            return pcall(function() return game:HttpGet(url, headers) end)
+        end
+    end)
     
-    if game.HttpGet then
-        return pcall(function() return game:HttpGet(url, headers) end)
-    elseif syn and syn.request then
-        local res = syn.request({ Url = url, Method = "GET", Headers = headers })
-        return res.Success, res.Body
-    elseif request then
-        local res = request({ Url = url, Method = "GET", Headers = headers })
-        return res.Success, res.Body
+    if not success or (os.clock() - startTime) > (timeout or 10) then
+        Utils.Log("HTTP Error", method, url, "Timeout or failure")
+        return false, "Request timed out or failed"
     end
-    
-    return false, "No HTTP method available"
+    return result
 end
 
-function Utils.HttpPost(url, body, headers)
-    local requestFunc = (syn and syn.request) or request
-    if not requestFunc then return nil end
-    
-    if syn and syn.request then
-        local res = syn.request({ Url = url, Method = "POST", Body = body, Headers = headers })
-        return res.Success, res.Body
-    elseif request then
-        local res = request({ Url = url, Method = "POST", Body = body, Headers = headers })
-        return res.Success, res.Body
-    end
-    
-    return false, "No HTTP method available"
+function Utils.HttpGet(url, headers, timeout)
+    return UnifiedRequest("GET", url, nil, headers, timeout)
+end
+
+function Utils.HttpPost(url, body, headers, timeout)
+    return UnifiedRequest("POST", url, body, headers, timeout)
 end
 
 -- Encoding utilities

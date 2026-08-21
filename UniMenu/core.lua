@@ -302,47 +302,46 @@ local function RemoveCurrentNotification()
     end
 end
 
-local function ShowNotification(text, duration)
-    if not text or text == "" then return end
-    
-    RemoveCurrentNotification()
-    
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "UniMenu_Notification"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.DisplayOrder = 100
-    gui.Parent = game:GetService("CoreGui")
-    
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 300, 0, 40)
-    frame.Position = UDim2.new(1, -320, 1, -60)
-    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    frame.BackgroundTransparency = 0.1
-    frame.BorderSizePixel = 1
-    frame.BorderColor3 = Color3.fromRGB(100, 100, 255)
-    frame.Parent = gui
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -20, 1, 0)
-    label.Position = UDim2.new(0, 10, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.TextWrapped = true
-    label.Parent = frame
-    
-    currentNotification = gui
-    
-    task.delay(duration or 3, function()
-        if currentNotification == gui then
-            RemoveCurrentNotification()
+-- Debug logging system
+local function CreateLogger(module)
+    return function(...)
+        local args = {...}
+        for i, v in ipairs(args) do
+            args[i] = tostring(v)
         end
-    end)
+        local msg = string.format("[UniMenu:%s] %s", module, table.concat(args, " "))
+        print(msg)
+        -- Optional: Write to file
+        -- local logFile = io.open("UniMenu/logs/debug.log", "a")
+        -- logFile:write(string.format("%s %s\n", os.date("%Y-%m-%d %H:%M:%S"), msg))
+        -- logFile:close()
+    end
 end
+
+-- Initialize loggers
+Utils.Log = CreateLogger("Utils")
+ctx.Core.DebugLog = CreateLogger("Core")
+
+-- Configuration validation schema
+local configSchema = {
+    speed = { type = "number", min = 16, max = 1000 },
+    jumpPower = { type = "number", min = 50, max = 1000 },
+}
+
+function ValidateConfig(config)
+    for key, value in pairs(configSchema) do
+        if config[key] and typeof(config[key]) ~= value.type then
+            Utils.Warn("Invalid config:", key, "expected", value.type)
+            config[key] = nil -- Reset invalid value
+        elseif value.min and config[key] < value.min or value.max and config[key] > value.max then
+            Utils.Warn("Config out of range:", key, "clamped to", value.min or value.max)
+            config[key] = math.clamp(config[key], value.min, value.max)
+        end
+    end
+end
+
+-- Validate initial config
+ValidateConfig(ctx.State.S)
 
 ctx.Core.ShowNotification = ShowNotification
 ctx.Core.RemoveCurrentNotification = RemoveCurrentNotification

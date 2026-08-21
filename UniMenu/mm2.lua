@@ -73,44 +73,55 @@ end
 -- ==================== MM2 ESP ====================
 local mm2EspObjects = {}
 
+-- Use weak tables to prevent memory leaks
+local mm2EspObjects = setmetatable({}, { __mode = "k" })
+
 local function CreateMM2ESP(plr, color, label)
-    if mm2EspObjects[plr.Name] then
-        mm2EspObjects[plr.Name]:Destroy()
+    if mm2EspObjects[plr] then
+        local obj = mm2EspObjects[plr]
+        if obj.highlight then obj.highlight:Destroy() end
+        if obj.billboard then obj.billboard:Destroy() end
+        mm2EspObjects[plr] = nil
     end
     
     local char = plr.Character
     if not char then return end
     
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "MM2_ESP_" .. plr.Name
-    highlight.Adornee = char
-    highlight.FillColor = color
-    highlight.OutlineColor = color
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Parent = char
-    
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "MM2_Label_" .. plr.Name
-    billboard.Adornee = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head")
-    billboard.Size = UDim2.new(0, 100, 0, 20)
-    billboard.StudsOffset = Vector3.new(0, 3, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = workspace
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Text = label
-    label.TextColor3 = color
-    label.TextStrokeTransparency = 0
-    label.TextStrokeColor3 = Color3.new(0, 0, 0)
-    label.Font = Enum.Font.GothamBold
-    label.TextSize = 14
-    label.Parent = billboard
-    
-    mm2EspObjects[plr.Name] = { highlight = highlight, billboard = billboard }
+    -- Debounce if character is being updated
+    task.defer(function()
+        if not plr.Character == char then return end
+        
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "MM2_ESP_" .. plr.Name
+        highlight.Adornee = char
+        highlight.FillColor = color
+        highlight.OutlineColor = color
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = char
+        
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "MM2_Label_" .. plr.Name
+        billboard.Adornee = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head")
+        billboard.Size = UDim2.new(0, 100, 0, 20)
+        billboard.StudsOffset = Vector3.new(0, 3, 0)
+        billboard.AlwaysOnTop = true
+        billboard.Parent = workspace
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = label
+        label.TextColor3 = color
+        label.TextStrokeTransparency = 0
+        label.TextStrokeColor3 = Color3.new(0, 0, 0)
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 14
+        label.Parent = billboard
+        
+        mm2EspObjects[plr] = { highlight = highlight, billboard = billboard }
+    end)
 end
 
 local function RemoveMM2ESP(plr)
@@ -210,6 +221,10 @@ local autoKillConn = nil
 local autoGrabConn = nil
 local coinFarmConn = nil
 
+local autoKillConn = nil
+local AUTO_KILL_COOLDOWN = 0.5 -- seconds
+local lastAutoKill = 0
+
 local function ToggleAutoKillMurderer(enabled)
     MM2.autoKillMurderer = enabled
     
@@ -221,6 +236,7 @@ local function ToggleAutoKillMurderer(enabled)
     if enabled then
         autoKillConn = RunService.Heartbeat:Connect(function()
             if not MM2.autoKillMurderer then return end
+            if tick() - lastAutoKill < AUTO_KILL_COOLDOWN then return end
             
             local murderer = GetMM2Murderer()
             if not murderer then return end
@@ -232,23 +248,23 @@ local function ToggleAutoKillMurderer(enabled)
             
             if not myRoot or not murdererRoot then return end
             
-            -- Check if we have gun
+            -- Check if we have gun and it's equipped
             local myTool = myChar and myChar:FindFirstChildWhichIsA("Tool")
-            if not myTool or myTool.Name ~= "Gun" then return end
+            if not myTool or myTool.Name ~= "Gun" or myTool ~= player:GetPrimaryPartCFrame().Tool then
+                return
+            end
             
             -- Check distance
             local dist = (myRoot.Position - murdererRoot.Position).Magnitude
             if dist > 100 then return end
             
-            -- Shoot
+            -- Shoot with cooldown check
+            lastAutoKill = tick()
             local remote = ReplicatedStorage:FindFirstChild("Remotes")
             if remote then
                 local gameplay = remote:FindFirstChild("Gameplay")
-                if gameplay then
-                    local shoot = gameplay:FindFirstChild("ShootGun")
-                    if shoot then
-                        shoot:FireServer(murdererRoot.Position)
-                    end
+                if gameplay and gameplay:FindFirstChild("ShootGun") then
+                    gameplay.ShootGun:FireServer(murdererRoot.Position)
                 end
             end
         end)
