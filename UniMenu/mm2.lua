@@ -8,7 +8,10 @@ local RunService = ctx.Services.RunService
 local TweenService = ctx.Services.TweenService
 local ReplicatedStorage = ctx.Services.ReplicatedStorage
 
-local player = Players:GetService("Players").LocalPlayer or Players:WaitForChild("LocalPlayer")
+local player = Players:GetService("Players").LocalPlayer
+if not player then
+    player = Players:WaitForChild("LocalPlayer")
+end
 local camera = workspace.CurrentCamera
 
 local S = ctx.State.S
