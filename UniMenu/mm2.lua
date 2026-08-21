@@ -1,329 +1,360 @@
 -- UniMenu MM2 Module
--- MM2-specific features, hooks, ESP, auto-farm, magic bullet
--- This module is OPTIONAL - script works without MM2
+-- Murder Mystery 2 specific features
 
 local ctx = ...
 
--- Services
 local Players = ctx.Services.Players
 local RunService = ctx.Services.RunService
 local TweenService = ctx.Services.TweenService
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ReplicatedStorage = ctx.Services.ReplicatedStorage
 
--- Core helpers
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- State refs
 local S = ctx.State.S
 local MM2 = ctx.State.MM2
 local GetCharacter = ctx.Core.GetCharacter
 local GetHumanoid = ctx.Core.GetHumanoid
 local GetRoot = ctx.Core.GetRoot
 
--- Detection: check for MM2 (OPTIONAL - doesn't break script if not found)
+-- Detection: check for MM2
 local isMM2 = false
 pcall(function()
     isMM2 = ReplicatedStorage:FindFirstChild("Remotes")
         and ReplicatedStorage.Remotes:FindFirstChild("Gameplay")
 end)
 
--- Initialize MM2 state if not exists
-if not MM2 then
-    ctx.State.MM2 = {
-        roleESP = false,
-        coinESP = false,
-        autoKillMurderer = false,
-        killEveryone = false,
-        autoDodgeKnife = false,
-        autoGrabGun = false,
-        coinAutoFarm = false,
-        lastCoinFarmTime = 0,
-        coinFarmDelay = 0.5,
-        lastGrabTime = 0,
-        grabDelay = 1.0,
-    }
-    MM2 = ctx.State.MM2
-end
-
 -- Only run MM2-specific code if MM2 is detected
-if isMM2 then
-    -- ==================== MM2 ROLE DETECTION ====================
-    local function GetMM2Murderer()
-        for _, p in ipairs(Players:GetPlayers()) do
-            local char = p.Character
-            local bp = p:FindFirstChild("Backpack")
-            local charTool = char and char:FindFirstChildWhichIsA("Tool")
-            local bpTool = bp and bp:FindFirstChildWhichIsA("Tool")
-            local hasK = (char and (char:FindFirstChild("Knife")
-                    or (charTool and (charTool.Name:lower():find("knife")
-                        or charTool:FindFirstChild("KnifeServer")))))
-                or (bp and (bp:FindFirstChild("Knife")
-                    or (bpTool and (bpTool.Name:lower():find("knife")
-                        or bpTool:FindFirstChild("KnifeServer")))))
-            if hasK then return p end
-        end
-        return nil
-    end
-
-    local function GetMM2Sheriff()
-        for _, p in ipairs(Players:GetPlayers()) do
-            local char = p.Character
-            local bp = p:FindFirstChild("Backpack")
-            local charTool = char and char:FindFirstChildWhichIsA("Tool")
-            local bpTool = bp and bp:FindFirstChildWhichIsA("Tool")
-            local hasG = (char and (char:FindFirstChild("Gun")
-                    or (charTool and (charTool.Name:lower():find("gun")
-                        or charTool:FindFirstChild("GunServer")))))
-                or (bp and (bp:FindFirstChild("Gun")
-                    or (bpTool and (bpTool.Name:lower():find("gun")
-                        or bpTool:FindFirstChild("GunServer")))))
-            if hasG then return p end
-        end
-        return nil
-    end
-
-    ctx.Game.MM2 = {}
-    ctx.Game.MM2.GetMM2Murderer = GetMM2Murderer
-    ctx.Game.MM2.GetMM2Sheriff = GetMM2Sheriff
-
-    -- ==================== COIN AUTO FARM ====================
-    task.spawn(function()
-        while task.wait(0.5) do
-            if not MM2.coinAutoFarm or os.clock() - MM2.lastCoinFarmTime < MM2.coinFarmDelay then
-                continue
-            end
-            MM2.lastCoinFarmTime = os.clock()
-
-            local myChar = GetCharacter()
-            if not myChar then continue end
-            local myRoot = GetRoot(myChar)
-            if not myRoot then continue end
-
-            local closestCoin = nil
-            local closestDistance = math.huge
-
-            for _, obj in ipairs(workspace:GetChildren()) do
-                if obj.Name:find("Coin") and obj:IsA("Part") then
-                    local dist = (obj.Position - myRoot.Position).Magnitude
-                    if dist < closestDistance then
-                        closestDistance = dist
-                        closestCoin = obj
-                    end
-                end
-            end
-
-            if closestCoin then
-                myRoot.CFrame = closestCoin.CFrame * CFrame.new(0, 3, 0)
-            end
-        end
-    end)
-
-    -- ==================== AUTO KILL MURDERER ====================
-    task.spawn(function()
-        while task.wait(0.3) do
-            if not MM2.autoKillMurderer then continue end
-            local murderer = GetMM2Murderer()
-            if murderer and murderer.Character then
-                local hum = murderer.Character:FindFirstChild("Humanoid")
-                if hum then hum.Health = 0 end
-            end
-        end
-    end)
-
-    -- ==================== AUTO DODGE KNIFE ====================
-    task.spawn(function()
-        while task.wait(0.05) do
-            if not MM2.autoDodgeKnife then continue end
-            local myChar = GetCharacter()
-            if not myChar then continue end
-            local myRoot = GetRoot(myChar)
-            if not myRoot then continue end
-
-            local murderer = GetMM2Murderer()
-            if not murderer or not murderer.Character then continue end
-
-            local bp = murderer:FindFirstChild("Backpack")
-            local knife = murderer.Character:FindFirstChild("Knife")
-                or (bp and bp:FindFirstChild("Knife"))
-            if not knife then continue end
-
-            local handle = knife:FindFirstChild("Handle")
-            if not handle then continue end
-
-            local dist = (handle.Position - myRoot.Position).Magnitude
-            if dist < 15 then
-                myRoot.CFrame = myRoot.CFrame * CFrame.new(0, 0, -8)
-            end
-        end
-    end)
-
-    -- ==================== AUTO GRAB GUN ====================
-    task.spawn(function()
-        while task.wait(1) do
-            if not MM2.autoGrabGun or os.clock() - MM2.lastGrabTime < MM2.grabDelay then
-                continue
-            end
-            MM2.lastGrabTime = os.clock()
-
-            local sheriff = GetMM2Sheriff()
-            if sheriff and sheriff.Character then
-                local bp = sheriff:FindFirstChild("Backpack")
-                local gun = sheriff.Character:FindFirstChild("Gun")
-                    or (bp and bp:FindFirstChild("Gun"))
-                if gun then
-                    local myChar = GetCharacter()
-                    if myChar then
-                        gun.Parent = myChar
-                    end
-                end
-            end
-        end
-    end)
+if not isMM2 then
+    return ctx.Game
 end
 
--- ==================== MM2 FEATURE LIST ====================
-local SRef = S
+-- ==================== MM2 ROLE DETECTION ====================
+local function GetMM2Murderer()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == player then continue end
+        local char = p.Character
+        local bp = p:FindFirstChild("Backpack")
+        local charTool = char and char:FindFirstChildWhichIsA("Tool")
+        local bpTool = bp and bp:FindFirstChildWhichIsA("Tool")
+        
+        if charTool and charTool.Name == "Knife" then return p end
+        if bpTool and bpTool.Name == "Knife" then return p end
+    end
+    return nil
+end
 
-local mm2FeatureList = {
-    { isSection = true, name = "MM2 Automation" },
-    {
-        name = "Coins ESP",
-        desc = "Highlight all coins with yellow ESP",
-        isToggle = true,
-        get = function() return S.mm2CoinsESP end,
-        toggle = function(state) S.mm2CoinsESP = state end,
-    },
-    {
-        name = "Auto Kill Murderer",
-        desc = "Automatically kill the murderer",
-        isToggle = true,
-        get = function() return MM2.autoKillMurderer end,
-        toggle = function(state) MM2.autoKillMurderer = state end,
-    },
-    {
-        name = "Kill Everyone",
-        desc = "Kill all players in the game",
-        isButton = true,
-        action = function()
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= player and p.Character then
-                    local hum = p.Character:FindFirstChild("Humanoid")
-                    if hum then hum.Health = 0 end
-                end
+local function GetMM2Sheriff()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == player then continue end
+        local char = p.Character
+        local bp = p:FindFirstChild("Backpack")
+        local charTool = char and char:FindFirstChildWhichIsA("Tool")
+        local bpTool = bp and bp:FindFirstChildWhichIsA("Tool")
+        
+        if charTool and charTool.Name == "Gun" then return p end
+        if bpTool and bpTool.Name == "Gun" then return p end
+    end
+    return nil
+end
+
+local function GetMM2Innocents()
+    local murderer = GetMM2Murderer()
+    local sheriff = GetMM2Sheriff()
+    local innocents = {}
+    
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == player or p == murderer or p == sheriff then continue end
+        table.insert(innocents, p)
+    end
+    return innocents
+end
+
+-- ==================== MM2 ESP ====================
+local mm2EspObjects = {}
+
+local function CreateMM2ESP(plr, color, label)
+    if mm2EspObjects[plr.Name] then
+        mm2EspObjects[plr.Name]:Destroy()
+    end
+    
+    local char = plr.Character
+    if not char then return end
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "MM2_ESP_" .. plr.Name
+    highlight.Adornee = char
+    highlight.FillColor = color
+    highlight.OutlineColor = color
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = char
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "MM2_Label_" .. plr.Name
+    billboard.Adornee = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head")
+    billboard.Size = UDim2.new(0, 100, 0, 20)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = workspace
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = label
+    label.TextColor3 = color
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 14
+    label.Parent = billboard
+    
+    mm2EspObjects[plr.Name] = { highlight = highlight, billboard = billboard }
+end
+
+local function RemoveMM2ESP(plr)
+    local obj = mm2EspObjects[plr.Name]
+    if obj then
+        if obj.highlight then obj.highlight:Destroy() end
+        if obj.billboard then obj.billboard:Destroy() end
+        mm2EspObjects[plr.Name] = nil
+    end
+end
+
+local function UpdateMM2ESP()
+    if not MM2.roleESP then
+        for plrName in pairs(mm2EspObjects) do
+            RemoveMM2ESP(Players:FindFirstChild(plrName))
+        end
+        return
+    end
+    
+    local murderer = GetMM2Murderer()
+    local sheriff = GetMM2Sheriff()
+    local innocents = GetMM2Innocents()
+    
+    if murderer then CreateMM2ESP(murderer, Color3.fromRGB(255, 50, 50), "🔪 Murderer") end
+    if sheriff then CreateMM2ESP(sheriff, Color3.fromRGB(50, 150, 255), "🔫 Sheriff") end
+    for _, p in ipairs(innocents) do
+        CreateMM2ESP(p, Color3.fromRGB(100, 255, 100), "👤 Innocent")
+    end
+    
+    -- Clean up for players who left or changed role
+    for plrName, _ in pairs(mm2EspObjects) do
+        local plr = Players:FindFirstChild(plrName)
+        if not plr or plr == murderer or plr == sheriff then continue end
+        local isInnocent = false
+        for _, p in ipairs(innocents) do if p == plr then isInnocent = true break end end
+        if not isInnocent then RemoveMM2ESP(plr) end
+    end
+end
+
+-- ==================== COIN ESP ====================
+local coinEspObjects = {}
+
+local function CreateCoinESP(coin)
+    if coinEspObjects[coin] then return end
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "Coin_ESP"
+    billboard.Adornee = coin
+    billboard.Size = UDim2.new(0, 50, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 2, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = workspace
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "💰"
+    label.TextColor3 = Color3.fromRGB(255, 215, 0)
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 24
+    label.TextScaled = true
+    label.Parent = billboard
+    
+    coinEspObjects[coin] = billboard
+end
+
+local function RemoveCoinESP(coin)
+    local billboard = coinEspObjects[coin]
+    if billboard then
+        billboard:Destroy()
+        coinEspObjects[coin] = nil
+    end
+end
+
+local function UpdateCoinESP()
+    if not MM2.coinESP then
+        for coin, _ in pairs(coinEspObjects) do
+            RemoveCoinESP(coin)
+        end
+        return
+    end
+    
+    local map = workspace:FindFirstChild("Map")
+    if map then
+        for _, coin in ipairs(map:GetDescendants()) do
+            if coin.Name == "Coin_Server" and coin:IsA("BasePart") then
+                CreateCoinESP(coin)
             end
-        end,
-    },
-    {
-        name = "Auto Grab Gun",
-        desc = "Auto-grab sheriff's gun when dropped",
-        isToggle = true,
-        get = function() return MM2.autoGrabGun end,
-        toggle = function(state) MM2.autoGrabGun = state end,
-    },
-    {
-        name = "MM2 Role ESP",
-        desc = "Show ESP for Murderer/Sheriff/Innocent",
-        isToggle = true,
-        get = function() return S.mm2RoleESP end,
-        toggle = function(state) S.mm2RoleESP = state end,
-    },
-    {
-        name = "Auto Dodge Knife",
-        desc = "Automatically dodge incoming knife attacks",
-        isToggle = true,
-        get = function() return MM2.autoDodgeKnife end,
-        toggle = function(state) MM2.autoDodgeKnife = state end,
-    },
-    {
-        name = "Coin Auto Farm",
-        desc = "Teleport to nearest coin automatically",
-        isToggle = true,
-        get = function() return MM2.coinAutoFarm end,
-        toggle = function(state) MM2.coinAutoFarm = state end,
-    },
-    { isSection = true, name = "Teleports" },
-    {
-        name = "TP to Murderer",
-        desc = "Teleport behind the murderer",
-        isButton = true,
-        action = function()
-            if not isMM2 then
-                ctx.Core.ShowNotification("MM2 not detected", 0.75, "warning")
-                return
-            end
-            local murderer = ctx.Game.MM2.GetMM2Murderer()
-            if murderer and murderer.Character then
-                local root = murderer.Character:FindFirstChild("HumanoidRootPart")
-                local myRoot = GetRoot()
-                if root and myRoot then
-                    myRoot.CFrame = root.CFrame * CFrame.new(0, 3, 5)
-                end
-            end
-        end,
-    },
-    {
-        name = "TP to Sheriff",
-        desc = "Teleport behind the sheriff",
-        isButton = true,
-        action = function()
-            if not isMM2 then
-                ctx.Core.ShowNotification("MM2 not detected", 0.75, "warning")
-                return
-            end
-            local sheriff = ctx.Game.MM2.GetMM2Sheriff()
-            if sheriff and sheriff.Character then
-                local root = sheriff.Character:FindFirstChild("HumanoidRootPart")
-                local myRoot = GetRoot()
-                if root and myRoot then
-                    myRoot.CFrame = root.CFrame * CFrame.new(0, 3, 5)
-                end
-            end
-        end,
-    },
-    {
-        name = "TP to Lobby",
-        desc = "Teleport back to lobby",
-        isButton = true,
-        action = function()
+        end
+    end
+end
+
+-- ==================== AUTO FEATURES ====================
+local autoKillConn = nil
+local autoGrabConn = nil
+local coinFarmConn = nil
+
+local function ToggleAutoKillMurderer(enabled)
+    MM2.autoKillMurderer = enabled
+    
+    if autoKillConn then
+        autoKillConn:Disconnect()
+        autoKillConn = nil
+    end
+    
+    if enabled then
+        autoKillConn = RunService.Heartbeat:Connect(function()
+            if not MM2.autoKillMurderer then return end
+            
+            local murderer = GetMM2Murderer()
+            if not murderer then return end
+            
+            local myChar = GetCharacter()
             local myRoot = GetRoot()
-            if myRoot then
-                myRoot.CFrame = CFrame.new(0, 50, 0)
+            local murdererChar = murderer.Character
+            local murdererRoot = murdererChar and murdererChar:FindFirstChild("HumanoidRootPart")
+            
+            if not myRoot or not murdererRoot then return end
+            
+            -- Check if we have gun
+            local myTool = myChar and myChar:FindFirstChildWhichIsA("Tool")
+            if not myTool or myTool.Name ~= "Gun" then return end
+            
+            -- Check distance
+            local dist = (myRoot.Position - murdererRoot.Position).Magnitude
+            if dist > 100 then return end
+            
+            -- Shoot
+            local remote = ReplicatedStorage:FindFirstChild("Remotes")
+            if remote then
+                local gameplay = remote:FindFirstChild("Gameplay")
+                if gameplay then
+                    local shoot = gameplay:FindFirstChild("ShootGun")
+                    if shoot then
+                        shoot:FireServer(murdererRoot.Position)
+                    end
+                end
             end
-        end,
-    },
-}
-
--- Register MM2 features (always register, even without MM2)
-if isMM2 then
-    ctx.Core.RegisterFeatures("MM2", mm2FeatureList)
-else
-    local basicMM2Features = {
-        { isSection = true, name = "MM2 Features" },
-        {
-            name = "MM2 Not Detected",
-            desc = "This game is not Murder Mystery 2",
-            isButton = true,
-            action = function()
-                ctx.Core.ShowNotification("Not in MM2 - features disabled", 0.75, "info")
-            end,
-        },
-    }
-    ctx.Core.RegisterFeatures("MM2", basicMM2Features)
+        end)
+    end
 end
 
--- Peer icon toggle (added to Config tab)
-local peerIconFeature = {
-    name = "Show Peer Icons",
-    desc = "Show music peer icons above other UniMenu users",
-    isToggle = true,
-    get = function() return SRef.showPeerIcon end,
-    toggle = function(state) ctx.Core.TogglePeerIcon(state) end,
+local function ToggleAutoGrabGun(enabled)
+    MM2.autoGrabGun = enabled
+    
+    if autoGrabConn then
+        autoGrabConn:Disconnect()
+        autoGrabConn = nil
+    end
+    
+    if enabled then
+        autoGrabConn = RunService.Heartbeat:Connect(function()
+            if not MM2.autoGrabGun then return end
+            if tick() - MM2.lastGrabTime < MM2.grabDelay then return end
+            
+            local myChar = GetCharacter()
+            if not myChar then return end
+            
+            -- Check if we already have gun
+            if myChar:FindFirstChild("Gun") then return end
+            
+            local map = workspace:FindFirstChild("Map")
+            if not map then return end
+            
+            for _, obj in ipairs(map:GetDescendants()) do
+                if obj.Name == "GunDrop" and obj:IsA("BasePart") then
+                    local dist = (GetRoot().Position - obj.Position).Magnitude
+                    if dist < 15 then
+                        local remote = ReplicatedStorage:FindFirstChild("Remotes")
+                        if remote then
+                            local gameplay = remote:FindFirstChild("Gameplay")
+                            if gameplay then
+                                local grab = gameplay:FindFirstChild("GrabGun")
+                                if grab then
+                                    grab:FireServer(obj)
+                                    MM2.lastGrabTime = tick()
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end
+
+local function ToggleCoinAutoFarm(enabled)
+    MM2.coinAutoFarm = enabled
+    
+    if coinFarmConn then
+        coinFarmConn:Disconnect()
+        coinFarmConn = nil
+    end
+    
+    if enabled then
+        coinFarmConn = RunService.Heartbeat:Connect(function()
+            if not MM2.coinAutoFarm then return end
+            if tick() - MM2.lastCoinFarmTime < MM2.coinFarmDelay then return end
+            
+            local myRoot = GetRoot()
+            if not myRoot then return end
+            
+            local map = workspace:FindFirstChild("Map")
+            if not map then return end
+            
+            for _, coin in ipairs(map:GetDescendants()) do
+                if coin.Name == "Coin_Server" and coin:IsA("BasePart") then
+                    local dist = (myRoot.Position - coin.Position).Magnitude
+                    if dist < 12 then
+                        myRoot.CFrame = coin.CFrame
+                        MM2.lastCoinFarmTime = tick()
+                        break
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- ==================== CHARACTER EVENTS ====================
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(function()
+        task.wait(1)
+        UpdateMM2ESP()
+    end)
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+    RemoveMM2ESP(plr)
+end)
+
+-- ==================== EXPORTS ====================
+ctx.Game.MM2 = {
+    GetMM2Murderer = GetMM2Murderer,
+    GetMM2Sheriff = GetMM2Sheriff,
+    GetMM2Innocents = GetMM2Innocents,
+    UpdateMM2ESP = UpdateMM2ESP,
+    UpdateCoinESP = UpdateCoinESP,
+    ToggleAutoKillMurderer = ToggleAutoKillMurderer,
+    ToggleAutoGrabGun = ToggleAutoGrabGun,
+    ToggleCoinAutoFarm = ToggleCoinAutoFarm,
+    isMM2 = isMM2,
 }
 
-if not ctx.Core.features["Config"] then
-    ctx.Core.features["Config"] = {}
-end
-table.insert(ctx.Core.features["Config"], peerIconFeature)
-
-ctx.Modules.mm2 = true
+return ctx.Game.MM2
