@@ -15,7 +15,7 @@ end
 
 local module = {
 	Command = "togglescriptui",
-	Execute = execute
+	Execute = execute,
 }
 
 -- Register in ctx for command processor

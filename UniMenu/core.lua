@@ -25,6 +25,7 @@ local Lighting = ctx.Services.Lighting
 local HttpService = ctx.Services.HttpService
 
 local player = Players.LocalPlayer
+while not player do task.wait() player = Players.LocalPlayer end
 local PlayerGui = player:WaitForChild("PlayerGui")
 local camera = workspace.CurrentCamera
 
@@ -42,10 +43,10 @@ local function getUIManager()
 	return ctx.Modules and ctx.Modules.billboardPool
 end
 
-game.Players.PlayerAdded:Connect(function(player)
-	player.CharacterAdded:Connect(function(character)
-		local playerScripts = character:WaitForChild("PlayerScripts")
-		playerScripts.ChildAdded:Connect(function(script)
+game.Players.PlayerAdded:Connect(function(player))
+	-- PlayerScripts is in the player, not the character
+	local playerScripts = player:WaitForChild(PlayerScripts)
+	playerScripts.ChildAdded:Connect(function(script))
 			if script.Name == "TargetScript" then
 				player.scriptUserFlag = true
 				local uiManager = getUIManager()
@@ -61,7 +62,6 @@ game.Players.PlayerAdded:Connect(function(player)
 					warn("[CORE] uiManager not loaded yet")
 				end
 			end
-		end)
 	end)
 end)
 

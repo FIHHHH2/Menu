@@ -1,25 +1,21 @@
 local ctx = ...
 
-local function getUIManager()
-	return ctx.Modules and ctx.Modules.billboardPool
-end
+local lastSong = ""
+local lastArtist = ""
 
-local lastUpdate = tick()
-
-if not _G.MusicPlayer then
-	warn("MusicPlayer module not found - disabling song updates")
-	return
-end
-
-_G.MusicPlayer.songChanged:Connect(function(songData)
-	if not game.ReplicatedStorage.scriptUIEnabled then return end
-	
-	for _, player in ipairs(game.Players:GetPlayers()) do
-		if player.scriptUserFlag and player.BillboardGUI then
-			if tick() - lastUpdate > 1 then -- 1Hz update
-				player.BillboardGUI.SongTitle.Text = songData.title
-				lastUpdate = tick()
-			end
-		end
-	end
+-- Heartbeat to detect music state changes
+task.spawn(function()
+    while task.wait(1) do  -- 1Hz check
+        if ctx.State.Music.song ~= lastSong or ctx.State.Music.artist ~= lastArtist then
+            lastSong = ctx.State.Music.song
+            lastArtist = ctx.State.Music.artist
+            
+            -- Trigger peer billboard update
+            if ctx.Core.BroadcastPeerData then
+                ctx.Core.BroadcastPeerData()
+            end
+        end
+    end
 end)
+
+return {}  -- No module exports needed
