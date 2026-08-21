@@ -61,12 +61,13 @@ local function loadModule(name)
 		error("Failed to compile module " .. name .. ": " .. tostring(err))
 	end
 
-	local ok, result = pcall(fn, ctx)
-	if not ok then
-		error("Failed to execute module " .. name .. ": " .. tostring(result))
-	else
-		ctx.Modules[name] = result
-	end
+local ok, result = pcall(fn, ctx)
+    if not ok then
+        error("Failed to execute module " .. name .. ": " .. tostring(result))
+    else
+        ctx.Modules[name] = result
+        Utils.Log("Module loaded: " .. name)
+    end
 
 	ctx.Modules[name] = result
 	cache[name] = true
