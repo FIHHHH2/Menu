@@ -8,12 +8,16 @@ return function(Shared)
     local TweenSvc   = Shared.Services.TweenService
 
     local Player     = Shared.Player
-    local Tabs       = Shared.Tabs
-    local MkSection  = Shared.MakeSection
-    local MkToggle   = Shared.MakeToggle
-    local MkButton   = Shared.MakeButton
+    local Tabs       = Shared.Tabs or {}
+    local MkSection  = Shared.MakeSection or function() end
+    local MkToggle   = Shared.MakeToggle  or function() return Instance.new("Frame"), function() end end
+    local MkButton   = Shared.MakeButton  or function() return Instance.new("TextButton") end
 
     local tab = Tabs["MM2"]
+    if not tab then
+        warn("[MM2_Functions] Tab 'MM2' not found -- UI_Handler may have failed to load")
+        return
+    end
 
     -- HELPERS
     local function getRole(plr)

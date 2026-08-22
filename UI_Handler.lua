@@ -1,8 +1,17 @@
-﻿-- UI_Handler.lua
+-- UI_Handler.lua
 -- Internet Explorer 7 themed GUI
 -- Layout: IE7 titlebar | nav strip | checkered sidebar + white content
 
 return function(Shared)
+    -- Pre-initialize so downstream modules never see nil even if UI errors partway
+    Shared.Tabs        = {}
+    Shared.GUI         = nil
+    Shared.MakeSection = function() end
+    Shared.MakeToggle  = function() return Instance.new("Frame"), function() end end
+    Shared.MakeSlider  = function() return Instance.new("Frame") end
+    Shared.MakeButton  = function() return Instance.new("TextButton") end
+    Shared.SwitchTab   = function() end
+
     local TweenService = Shared.Services.TweenService
     local UserInput    = Shared.Services.UserInput
     local CoreGui      = Shared.Services.CoreGui
@@ -404,7 +413,7 @@ return function(Shared)
     local googleStroke = Instance.new("UIStroke")
     googleStroke.Color     = Color3.fromRGB(70, 130, 210)
     googleStroke.Thickness = 3
-    googleStroke.LineJoinMode = Enum.LineJoinMode.Round
+    -- LineJoinMode omitted (not available in all executors)
     googleStroke.Parent    = googleLabel
 
     -- Sub text below logo

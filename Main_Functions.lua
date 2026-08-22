@@ -9,13 +9,17 @@ return function(Shared)
     local SoundSvc   = Shared.Services.SoundService
 
     local Player     = Shared.Player
-    local Tabs       = Shared.Tabs
-    local MkSection  = Shared.MakeSection
-    local MkToggle   = Shared.MakeToggle
-    local MkSlider   = Shared.MakeSlider
-    local MkButton   = Shared.MakeButton
+    local Tabs       = Shared.Tabs or {}
+    local MkSection  = Shared.MakeSection or function() end
+    local MkToggle   = Shared.MakeToggle  or function() return Instance.new("Frame"), function() end end
+    local MkSlider   = Shared.MakeSlider  or function() return Instance.new("Frame") end
+    local MkButton   = Shared.MakeButton  or function() return Instance.new("TextButton") end
 
     local tab = Tabs["Main"]
+    if not tab then
+        warn("[Main_Functions] Tab 'Main' not found -- UI_Handler may have failed to load")
+        return
+    end
 
     local function getChar()    return Shared.Character end
     local function getHRP()     return Shared.HumanoidRP end
