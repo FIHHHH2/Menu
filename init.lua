@@ -1,4 +1,4 @@
-﻿-- init.lua
+-- init.lua
 -- Usage: loadstring(game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu/main/init.lua"))()
 
 local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/main"
