@@ -641,11 +641,12 @@ local function RegisterKeybind(name, defaultKey, callback)
 		SafeUtilsWarn("Keybind conflict for", name, "- overwriting")
 		return
 	end
-	if not Enum.KeyCode[defaultKey] then
+	local keyCode = typeof(defaultKey) == "EnumItem" and defaultKey or Enum.KeyCode[defaultKey]
+	if not keyCode then
 		SafeUtilsError("Invalid default key for", name, "- using KEY_NONE")
-		defaultKey = Enum.KeyCode.None
+		keyCode = Enum.KeyCode.None
 	end
-	keybinds[name] = { key = defaultKey, callback = callback }
+	keybinds[name] = { key = keyCode, callback = callback }
 	return keybinds[name]
 end
 
