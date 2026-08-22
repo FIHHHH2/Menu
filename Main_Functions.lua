@@ -1,11 +1,10 @@
 -- Main_Functions.lua
--- General Movement, Multipliers, Teleports in Quad 2-Column Format
+-- General Movement, Multipliers, Flight Speed, Click TP in Quad 2-Column Format
 
 return function(Shared)
     local Players    = Shared.Services.Players
     local RunService = Shared.Services.RunService
     local UserInput  = Shared.Services.UserInput
-    local TweenSvc   = Shared.Services.TweenService
 
     local Player     = Shared.Player
     local Tabs       = Shared.Tabs or {}
@@ -48,8 +47,7 @@ return function(Shared)
 
     -- Flight
     local flightBV, flightConn
-    local FLIGHT_SPEED = 65
-    MkToggle(leftCol, "Flight (WASD+Space)", "Flight", 3, function(state)
+    MkToggle(leftCol, "Flight", "Flight", 3, function(state)
         local hrp = getHRP()
         if not hrp then return end
         if state then
@@ -62,6 +60,7 @@ return function(Shared)
             local cam = workspace.CurrentCamera
             flightConn = RunService.Heartbeat:Connect(function()
                 if not Shared.Flags["Flight"] then return end
+                local speed = Shared.Flags["FlightSpeed"] or 65
                 local dir = Vector3.zero
                 if UserInput:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.CFrame.LookVector end
                 if UserInput:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.CFrame.LookVector end
@@ -69,7 +68,7 @@ return function(Shared)
                 if UserInput:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.CFrame.RightVector end
                 if UserInput:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0, 1, 0) end
                 if UserInput:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3.new(0, 1, 0) end
-                flightBV.Velocity = dir.Magnitude > 0 and (dir.Unit * FLIGHT_SPEED) or Vector3.zero
+                flightBV.Velocity = dir.Magnitude > 0 and (dir.Unit * speed) or Vector3.zero
             end)
         else
             if flightConn then flightConn:Disconnect(); flightConn = nil end
@@ -77,9 +76,14 @@ return function(Shared)
         end
     end)
 
+    -- Flight Speed Slider
+    MkSlider(leftCol, "Flight Speed", "FlightSpeed", 20, 250, 65, 4, function(val)
+        Shared.Flags["FlightSpeed"] = val
+    end)
+
     -- Noclip
     local noclipConn
-    MkToggle(leftCol, "Noclip (Walk Through Walls)", "Noclip", 4, function(state)
+    MkToggle(leftCol, "Noclip (Phase Walls)", "Noclip", 5, function(state)
         if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
         if state then
             noclipConn = RunService.Stepped:Connect(function()
@@ -101,7 +105,7 @@ return function(Shared)
 
     -- Click TP
     local clickTPConn
-    MkToggle(leftCol, "Click TP (Left Click)", "ClickTP", 5, function(state)
+    MkToggle(leftCol, "Click TP (Mouse Click)", "ClickTP", 6, function(state)
         if clickTPConn then clickTPConn:Disconnect(); clickTPConn = nil end
         if state then
             clickTPConn = UserInput.InputBegan:Connect(function(input, gpe)
@@ -146,7 +150,7 @@ return function(Shared)
 
     MkSection(rightCol, "Graphics Optimization", 20)
 
-    MkToggle(rightCol, "Disable VFX", "NoVFX", 21, function(state)
+    MkToggle(rightCol, "Disable VFX (FPS Boost)", "NoVFX", 21, function(state)
         for _, obj in ipairs(workspace:GetDescendants()) do
             if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
                 obj.Enabled = not state
@@ -155,7 +159,7 @@ return function(Shared)
         workspace.Terrain.Decoration = not state
     end)
 
-    MkToggle(rightCol, "Remove Textures", "NoTextures", 22, function(state)
+    MkToggle(rightCol, "Remove Textures (FPS Boost)", "NoTextures", 22, function(state)
         for _, obj in ipairs(workspace:GetDescendants()) do
             if obj:IsA("Decal") or obj:IsA("Texture") then
                 obj.Transparency = state and 1 or 0
@@ -163,5 +167,5 @@ return function(Shared)
         end
     end)
 
-    print("[Main_Functions] Loaded -- Quad 2-column layout online")
+    print("[Main_Functions] Loaded -- Sliders and Movement active")
 end
