@@ -2,14 +2,29 @@
 -- Loadstring entry: load this to bootstrap the entire menu
 -- Usage: loadstring(game:HttpGet("YOUR_RAW_URL/init.lua"))()
 
-local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/refs/heads/main"
+local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/main"
 
 local function loadModule(name)
-    local ok, result = pcall(function()
-        return loadstring(game:HttpGet(BASE_URL .. "/" .. name .. ".lua"))()
+    local src, httpErr = pcall(function()
+        return game:HttpGet(BASE_URL .. "/" .. name .. ".lua")
     end)
+    if not src or type(httpErr) ~= "string" then
+        warn("[Menu] HttpGet failed for: " .. name .. " | " .. tostring(httpErr))
+        return function() end
+    end
+    local chunk, compileErr = loadstring(httpErr)
+    if not chunk then
+        warn("[Menu] Compile error in: " .. name .. " | " .. tostring(compileErr))
+        return function() end
+    end
+    local ok, result = pcall(chunk)
     if not ok then
-        warn("[Menu] Failed to load module: " .. name .. " | " .. tostring(result))
+        warn("[Menu] Runtime error in: " .. name .. " | " .. tostring(result))
+        return function() end
+    end
+    if type(result) ~= "function" then
+        warn("[Menu] Module did not return a function: " .. name)
+        return function() end
     end
     return result
 end
