@@ -191,7 +191,7 @@ local function UnifiedRequest(method, url, body, headers, timeout)
     end)
     
     if not success or (os.clock() - startTime) > (timeout or 10) then
-        Utils.Log("HTTP Error", method, url, "Timeout or failure")
+        print("[UniMenu] HTTP Error " .. tostring(method) .. " " .. tostring(url) .. " Timeout or failure")
         return false, "Request timed out or failed"
     end
     return result

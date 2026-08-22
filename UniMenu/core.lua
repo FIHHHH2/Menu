@@ -336,8 +336,14 @@ local function CreateLogger(module)
 end
 
 -- Initialize loggers
-ctx.Modules.utils.Log = CreateLogger("Utils")
-ctx.Core.DebugLog = CreateLogger("Core")
+local Utils = ctx.Modules and ctx.Modules.utils
+if Utils and Utils.Log then
+	ctx.Modules.utils.Log = CreateLogger("Utils")
+	ctx.Core.DebugLog = CreateLogger("Core")
+else
+	-- Fallback if utils not yet loaded
+	ctx.Core.DebugLog = CreateLogger("Core")
+end
 
 -- Configuration validation schema
 local configSchema = {
@@ -345,13 +351,21 @@ local configSchema = {
 	jumpPower = { type = "number", min = 50, max = 1000 },
 }
 
+local function SafeUtilsWarn(...)
+	if Utils and Utils.Warn then
+		Utils.Warn(...)
+	else
+		warn("[UniMenu] " .. table.concat({...}, " "))
+	end
+end
+
 function ValidateConfig(config)
 	for key, value in pairs(configSchema) do
 		if config[key] and typeof(config[key]) ~= value.type then
-			Utils.Warn("Invalid config:", key, "expected", value.type)
+			SafeUtilsWarn("Invalid config:", key, "expected", value.type)
 			config[key] = nil -- Reset invalid value
 		elseif value.min and config[key] < value.min or value.max and config[key] > value.max then
-			Utils.Warn("Config out of range:", key, "clamped to", value.min or value.max)
+			SafeUtilsWarn("Config out of range:", key, "clamped to", value.min or value.max)
 			config[key] = math.clamp(config[key], value.min, value.max)
 		end
 	end

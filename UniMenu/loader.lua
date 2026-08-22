@@ -61,17 +61,15 @@ local function loadModule(name)
 		error("Failed to compile module " .. name .. ": " .. tostring(err))
 	end
 
-local ok, result = pcall(fn, ctx)
-    if not ok then
-        error("Failed to execute module " .. name .. ": " .. tostring(result))
-    else
-        ctx.Modules[name] = result
-        Utils.Log("Module loaded: " .. name)
-    end
+	local ok, result = pcall(fn, ctx)
+	if not ok then
+		error("Failed to execute module " .. name .. ": " .. tostring(result))
+	end
 
-	ctx.Modules[name] = result
+	ctx.Modules[name] = result or true
 	cache[name] = true
-	return true
+	print("[UniMenu] Module loaded: " .. name)
+	return result
 end
 
 -- ==================== GAME DETECTION ====================
@@ -83,7 +81,6 @@ local isMM2 = (gameId == 142823291) -- Murder Mystery 2 PlaceId
 -- Load core modules in strict order
 loadModule("utils") -- 1. Shared utilities
 loadModule("core") -- 2. Core services (depends on utils)
-loadModule("core") -- Core services, state, peer detection
 loadModule("main_ui") -- Main UI and universal features
 
 -- Conditionally load game-specific modules

@@ -60,6 +60,22 @@ local currentThemeName = ctx.Config.currentThemeName
 
 local Utils = ctx.Modules and ctx.Modules.utils
 
+local function SafeUtilsWarn(...)
+	if Utils and Utils.Warn then
+		Utils.Warn(...)
+	else
+		warn("[UniMenu] " .. table.concat({...}, " "))
+	end
+end
+
+local function SafeUtilsError(...)
+	if Utils and Utils.Error then
+		Utils.Error(...)
+	else
+		error("[UniMenu] " .. table.concat({...}, " "))
+	end
+end
+
 -- ==================== GUI STATE ====================
 local gui = nil
 local isOpen = false
@@ -607,11 +623,11 @@ local keybinds = {}
 
 local function RegisterKeybind(name, defaultKey, callback)
     if keybinds[name] then
-        Utils.Warn("Keybind conflict for", name, "- overwriting")
+        SafeUtilsWarn("Keybind conflict for", name, "- overwriting")
         return
     end
     if not Enum.KeyCode[defaultKey] then
-        Utils.Error("Invalid default key for", name, "- using KEY_NONE")
+        SafeUtilsError("Invalid default key for", name, "- using KEY_NONE")
         defaultKey = Enum.KeyCode.None
     end
     keybinds[name] = { key = defaultKey, callback = callback }
