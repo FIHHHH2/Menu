@@ -52,8 +52,8 @@ local function LoadGameTab()
     end
 end
 
--- Call during UI initialization
-LoadGameTab()
+-- Call during UI initialization (commented out - BuildMM2Tab/AddDynamicTab not implemented)
+-- LoadGameTab()
 local Themes = ctx.Config.Themes
 local XP = ctx.Config.XP
 local currentThemeName = ctx.Config.currentThemeName
