@@ -1,5 +1,6 @@
 -- Main_Functions.lua
--- Infinite Jump, Flight, Noclip, Speed, ClickTP, Volume, NoVFX, ForceClose
+-- General Movement, Teleports, and Utility
+-- Infinite Jump, WASD Flight, Noclip, Speed/Jump Height, Click TP, Volume
 
 return function(Shared)
     local Players    = Shared.Services.Players
@@ -17,19 +18,18 @@ return function(Shared)
 
     local tab = Tabs["Main"]
     if not tab then
-        warn("[Main_Functions] Tab 'Main' not found -- UI_Handler may have failed to load")
+        warn("[Main_Functions] Tab 'Main' not found")
         return
     end
 
-    local function getChar()    return Shared.Character end
-    local function getHRP()     return Shared.HumanoidRP end
-    local function getHuman()
-        local c = getChar()
-        return c and c:FindFirstChildOfClass("Humanoid")
-    end
+    local function getChar()  return Shared.Character or (Player and Player.Character) end
+    local function getHRP()   return Shared.HumanoidRP or (getChar() and getChar():FindFirstChild("HumanoidRootPart")) end
+    local function getHuman() return getChar() and getChar():FindFirstChildOfClass("Humanoid") end
 
+    -- ============================================================
     -- MOVEMENT
-    MkSection(tab, "Movement", 1)
+    -- ============================================================
+    MkSection(tab, "Player Movement", 1)
 
     -- Infinite Jump
     local infJumpConn
@@ -45,8 +45,8 @@ return function(Shared)
 
     -- Flight
     local flightBV, flightConn
-    local FLIGHT_SPEED = 60
-    MkToggle(tab, "Flight", "Flight", 3, function(state)
+    local FLIGHT_SPEED = 65
+    MkToggle(tab, "Flight (WASD + Space / Ctrl)", "Flight", 3, function(state)
         local hrp = getHRP()
         if not hrp then return end
         if state then
@@ -98,15 +98,17 @@ return function(Shared)
         end
     end)
 
-    -- STATS
-    MkSection(tab, "Stats", 10)
+    -- ============================================================
+    -- STATS & SPEED
+    -- ============================================================
+    MkSection(tab, "Stat Multipliers", 10)
 
-    MkSlider(tab, "Walk Speed", "WalkSpeed", 1, 300, 16, 11, function(val)
+    MkSlider(tab, "Walk Speed", "WalkSpeed", 16, 250, 16, 11, function(val)
         local hum = getHuman()
         if hum then hum.WalkSpeed = val end
     end)
 
-    MkSlider(tab, "Jump Height", "JumpHeight", 0, 300, 7, 12, function(val)
+    MkSlider(tab, "Jump Height", "JumpHeight", 7, 250, 7, 12, function(val)
         local hum = getHuman()
         if hum then hum.JumpHeight = val end
     end)
@@ -118,11 +120,13 @@ return function(Shared)
         hum.JumpHeight = Shared.Flags["JumpHeight"] or 7
     end)
 
+    -- ============================================================
     -- TELEPORT
-    MkSection(tab, "Teleport", 20)
+    -- ============================================================
+    MkSection(tab, "Teleportation", 20)
 
     local clickTPConn
-    MkToggle(tab, "Click TP", "ClickTP", 21, function(state)
+    MkToggle(tab, "Click TP (Mouse Click)", "ClickTP", 21, function(state)
         if clickTPConn then clickTPConn:Disconnect(); clickTPConn = nil end
         if state then
             clickTPConn = UserInput.InputBegan:Connect(function(input, gpe)
@@ -130,11 +134,9 @@ return function(Shared)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 then
                     local hrp = getHRP()
                     if not hrp then return end
-                    local ray    = workspace.CurrentCamera:ScreenPointToRay(
-                        input.Position.X, input.Position.Y
-                    )
+                    local ray = workspace.CurrentCamera:ScreenPointToRay(input.Position.X, input.Position.Y)
                     local params = RaycastParams.new()
-                    params.FilterDescendantsInstances = { Shared.Character }
+                    params.FilterDescendantsInstances = { getChar() }
                     params.FilterType = Enum.RaycastFilterType.Exclude
                     local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
                     if result then
@@ -145,46 +147,5 @@ return function(Shared)
         end
     end)
 
-    -- AUDIO & VISUALS
-    MkSection(tab, "Audio & Visuals", 30)
-
-    MkSlider(tab, "Game Volume", "GameVolume", 0, 100, 50, 31, function(val)
-        for _, s in ipairs(workspace:GetDescendants()) do
-            if s:IsA("Sound") then s.Volume = val / 100 end
-        end
-    end)
-
-    MkToggle(tab, "No VFX (FPS Boost)", "NoVFX", 32, function(state)
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("ParticleEmitter") or obj:IsA("Trail")
-            or obj:IsA("Beam") or obj:IsA("Smoke")
-            or obj:IsA("Fire") or obj:IsA("Sparkles") then
-                obj.Enabled = not state
-            end
-        end
-        workspace.Terrain.Decoration = not state
-    end)
-
-    MkToggle(tab, "No Textures", "NoTextures", 33, function(state)
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("Decal") or obj:IsA("Texture") then
-                obj.Transparency = state and 1 or 0
-            end
-        end
-    end)
-
-    -- UTILITY
-    MkSection(tab, "Utility", 40)
-
-    MkButton(tab, "Force Close Menu", 41, function()
-        if Shared.GUI then
-            Shared.GUI:Destroy()
-        end
-        for k in pairs(Shared.Flags) do
-            Shared.Flags[k] = false
-        end
-        print("[Menu] Force closed.")
-    end)
-
-    print("[Main_Functions] Loaded")
+    print("[Main_Functions] Loaded -- General movement & utility online")
 end

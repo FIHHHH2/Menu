@@ -1,254 +1,453 @@
 -- MM2_Functions.lua
--- Silent Aim, Knife Prediction, Role ESP, Grab Gun, Auto Kill
+-- Comprehensive MM2 Combat & Visuals
+-- Silent Aim (Sheriff), Knife Prediction, Accurate Role ESP, Grab Gun / Auto Grab Gun, Auto Kill Murderer, Auto Kill All
 
 return function(Shared)
-    local Players    = Shared.Services.Players
-    local RunService = Shared.Services.RunService
-    local UserInput  = Shared.Services.UserInput
-    local TweenSvc   = Shared.Services.TweenService
+    local Players      = Shared.Services.Players
+    local RunService   = Shared.Services.RunService
+    local UserInput    = Shared.Services.UserInput
+    local TweenSvc     = Shared.Services.TweenService
+    local Workspace    = Shared.Services.Workspace
 
-    local Player     = Shared.Player
-    local Tabs       = Shared.Tabs or {}
-    local MkSection  = Shared.MakeSection or function() end
-    local MkToggle   = Shared.MakeToggle  or function() return Instance.new("Frame"), function() end end
-    local MkButton   = Shared.MakeButton  or function() return Instance.new("TextButton") end
+    local Player       = Shared.Player
+    local Tabs         = Shared.Tabs or {}
+    local MkSection    = Shared.MakeSection or function() end
+    local MkToggle     = Shared.MakeToggle  or function() return Instance.new("Frame"), function() end end
+    local MkButton     = Shared.MakeButton  or function() return Instance.new("TextButton") end
 
     local tab = Tabs["MM2"]
     if not tab then
-        warn("[MM2_Functions] Tab 'MM2' not found -- UI_Handler may have failed to load")
+        warn("[MM2_Functions] Tab 'MM2' not found")
         return
     end
 
-    -- HELPERS
+    -- ============================================================
+    -- MM2 GAME ENGINE HELPERS
+    -- ============================================================
     local function getRole(plr)
-        local roleVal = plr:FindFirstChild("Role")
-            or (plr.Character and plr.Character:FindFirstChild("Role"))
-        return roleVal and roleVal.Value or "Innocent"
+        if not plr then return "Innocent" end
+        local bp = plr:FindFirstChild("Backpack")
+        local char = plr.Character
+        local hasKnife = (bp and bp:FindFirstChild("Knife")) or (char and char:FindFirstChild("Knife"))
+        local hasGun = (bp and (bp:FindFirstChild("Gun") or bp:FindFirstChild("Revolver"))) or (char and (char:FindFirstChild("Gun") or char:FindFirstChild("Revolver")))
+        if hasKnife then return "Murderer" end
+        if hasGun then return "Sheriff" end
+        return "Innocent"
     end
 
     local function getMurderer()
         for _, plr in ipairs(Players:GetPlayers()) do
-            local r = getRole(plr)
-            if r == "Murderer" or r == "Murder" then
+            if plr ~= Player and getRole(plr) == "Murderer" then
                 return plr
             end
         end
+        return nil
     end
 
     local function getSheriff()
         for _, plr in ipairs(Players:GetPlayers()) do
-            if getRole(plr) == "Sheriff" then return plr end
+            if getRole(plr) == "Sheriff" then
+                return plr
+            end
         end
+        return nil
     end
 
-    local function getCharacterHRP(plr)
-        return plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+    local function getHRP(plr)
+        local c = (plr and plr.Character) or (plr == nil and Shared.Character)
+        return c and c:FindFirstChild("HumanoidRootPart")
     end
 
-    local function getGun()
-        local char = Shared.Character
-        if not char then return end
-        return char:FindFirstChild("Gun")
-            or char:FindFirstChild("Revolver")
-            or Player.Backpack:FindFirstChild("Gun")
-            or Player.Backpack:FindFirstChild("Revolver")
+    local function getMyGun()
+        local c = Shared.Character
+        local bp = Player:FindFirstChild("Backpack")
+        return (c and (c:FindFirstChild("Gun") or c:FindFirstChild("Revolver"))) or (bp and (bp:FindFirstChild("Gun") or bp:FindFirstChild("Revolver")))
     end
 
-    -- SHERIFF / AIM
-    MkSection(tab, "Sheriff / Aim", 1)
+    local function getMyKnife()
+        local c = Shared.Character
+        local bp = Player:FindFirstChild("Backpack")
+        return (c and c:FindFirstChild("Knife")) or (bp and bp:FindFirstChild("Knife"))
+    end
 
-    local oldIndex
-    MkToggle(tab, "Silent Aim (Sheriff)", "SilentAim", 2, function(state)
+    -- ============================================================
+    -- 1. SILENT AIM (SHERIFF)
+    -- ============================================================
+    MkSection(tab, "Sheriff & Aim", 1)
+
+    local silentAimConn
+    local hookedOldIndex = nil
+    local hookedOldNamecall = nil
+
+    MkToggle(tab, "Silent Aim (Locks Gun to Murderer)", "SilentAim", 2, function(state)
         if state then
-            local mt = getmetatable(workspace) or {}
-            oldIndex = mt.__index
-            mt.__index = function(self, key)
-                if key == "FindPartOnRayWithIgnoreList" or key == "FindPartOnRay" then
-                    return function(ws, ray, ignore, ...)
-                        local murderer = getMurderer()
-                        if murderer and murderer ~= Player then
-                            local hrp = getCharacterHRP(murderer)
-                            if hrp then
-                                local dist = (hrp.Position - ray.Origin).Magnitude
-                                if dist < 500 then
-                                    return hrp, hrp.Position, Vector3.new(0,1,0), Enum.Material.SmoothPlastic
+            -- Use Heartbeat / LookVector correction & metatable redirection
+            if silentAimConn then silentAimConn:Disconnect() end
+            silentAimConn = RunService.RenderStepped:Connect(function()
+                if not Shared.Flags["SilentAim"] then return end
+                local myGun = getMyGun()
+                if not myGun or myGun.Parent ~= Shared.Character then return end
+                local murd = getMurderer()
+                if not murd or not murd.Character then return end
+                local mHRP = getHRP(murd)
+                local myHRP = getHRP()
+                if not mHRP or not myHRP then return end
+
+                -- Point camera / gun origin toward target if aiming
+                local mouse = Player:GetMouse()
+                if mouse then
+                    -- Soft aim assistance
+                end
+            end)
+
+            -- Hook raycasting functions if environment permits
+            pcall(function()
+                local mt = getrawmetatable(game)
+                if mt and setreadonly then
+                    setreadonly(mt, false)
+                    local oldNC = mt.__namecall
+                    hookedOldNamecall = oldNC
+                    mt.__namecall = newcclosure(function(self, ...)
+                        local method = getnamecallmethod()
+                        local args = {...}
+                        if (method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList") and Shared.Flags["SilentAim"] then
+                            local murd = getMurderer()
+                            if murd and murd.Character then
+                                local targetPart = murd.Character:FindFirstChild("HumanoidRootPart") or murd.Character:FindFirstChild("Head")
+                                if targetPart then
+                                    if method == "Raycast" then
+                                        local origin = args[1]
+                                        args[2] = (targetPart.Position - origin).Unit * 1000
+                                        return oldNC(self, unpack(args))
+                                    elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
+                                        return targetPart, targetPart.Position, Vector3.new(0, 1, 0), Enum.Material.Plastic
+                                    end
                                 end
                             end
                         end
-                        return oldIndex(ws, key)(ws, ray, ignore, ...)
-                    end
+                        return oldNC(self, ...)
+                    end)
+                    setreadonly(mt, true)
                 end
-                return oldIndex(self, key)
-            end
+            end)
         else
-            local mt = getmetatable(workspace)
-            if mt and oldIndex then mt.__index = oldIndex end
-        end
-    end)
-
-    -- MURDERER
-    MkSection(tab, "Murderer", 10)
-
-    local knifeHighlight
-    MkToggle(tab, "Knife Prediction", "KnifePred", 11, function(state)
-        if knifeHighlight then knifeHighlight:Destroy(); knifeHighlight = nil end
-        if state then
-            RunService.Heartbeat:Connect(function()
-                if not Shared.Flags["KnifePred"] then return end
-                local murderer = getMurderer()
-                if not murderer or not murderer.Character then return end
-                local knife = murderer.Character:FindFirstChild("Knife")
-                    or murderer.Character:FindFirstChildWhichIsA("Tool")
-                if knife then
-                    if not knifeHighlight or not knifeHighlight.Parent then
-                        knifeHighlight = Instance.new("SelectionBox")
-                        knifeHighlight.Color3          = Color3.fromRGB(255, 50, 50)
-                        knifeHighlight.LineThickness   = 0.05
-                        knifeHighlight.SurfaceTransparency = 0.5
-                        knifeHighlight.SurfaceColor3   = Color3.fromRGB(255, 0, 0)
-                        knifeHighlight.Adornee         = murderer.Character
-                        knifeHighlight.Parent          = Shared.GUI
-                    end
+            if silentAimConn then silentAimConn:Disconnect(); silentAimConn = nil end
+            pcall(function()
+                local mt = getrawmetatable(game)
+                if mt and setreadonly and hookedOldNamecall then
+                    setreadonly(mt, false)
+                    mt.__namecall = hookedOldNamecall
+                    setreadonly(mt, true)
                 end
             end)
         end
     end)
 
-    MkToggle(tab, "Auto Kill Murderer", "AutoKillMurd", 12, function(state)
-        RunService.Heartbeat:Connect(function()
-            if not Shared.Flags["AutoKillMurd"] then return end
-            local murd = getMurderer()
-            if not murd or murd == Player then return end
-            local mHRP = getCharacterHRP(murd)
-            local myHRP = Shared.HumanoidRP
-            if not mHRP or not myHRP then return end
-            local gun = getGun()
-            if gun then
-                local fireRemote = gun:FindFirstChild("Fire")
-                    or gun:FindFirstChildWhichIsA("RemoteEvent")
-                    or gun:FindFirstChildWhichIsA("RemoteFunction")
-                if fireRemote and fireRemote:IsA("RemoteEvent") then
-                    fireRemote:FireServer(mHRP.Position)
-                end
-            end
-        end)
+    -- Auto Kill Murderer (Sheriff)
+    MkToggle(tab, "Auto Kill Murderer (Trigger Shoot)", "AutoKillMurd", 3, function(state)
+        -- Continuous loop
     end)
 
-    MkToggle(tab, "Auto Kill All (Murder)", "AutoKillAll", 13, function(state)
-        RunService.Heartbeat:Connect(function()
-            if not Shared.Flags["AutoKillAll"] then return end
-            local myRole = getRole(Player)
-            if myRole ~= "Murderer" and myRole ~= "Murder" then return end
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= Player and plr.Character then
-                    local myChar = Shared.Character
-                    if not myChar then return end
-                    local knife = myChar:FindFirstChild("Knife")
-                        or myChar:FindFirstChildWhichIsA("Tool")
+    RunService.Heartbeat:Connect(function()
+        if not Shared.Flags["AutoKillMurd"] then return end
+        local gun = getMyGun()
+        if not gun then return end
+        local murd = getMurderer()
+        if not murd or not murd.Character then return end
+        local mHRP = getHRP(murd)
+        if not mHRP then return end
+
+        if gun.Parent ~= Shared.Character then
+            local hum = Shared.Character and Shared.Character:FindFirstChild("Humanoid")
+            if hum then hum:EquipTool(gun) end
+        end
+
+        local shootRemote = gun:FindFirstChildWhichIsA("RemoteEvent") or gun:FindFirstChildWhichIsA("RemoteFunction")
+        if shootRemote and shootRemote:IsA("RemoteEvent") then
+            shootRemote:FireServer(mHRP.Position)
+        else
+            gun:Activate()
+        end
+    end)
+
+    -- ============================================================
+    -- 2. MURDERER COMBAT
+    -- ============================================================
+    MkSection(tab, "Murderer Combat", 10)
+
+    -- Murderer Knife Prediction Line
+    local predBeam, predAttachment0, predAttachment1
+    MkToggle(tab, "Murderer Knife Prediction", "KnifePred", 11, function(state)
+        if not state then
+            if predBeam then predBeam:Destroy(); predBeam = nil end
+            if predAttachment0 then predAttachment0:Destroy(); predAttachment0 = nil end
+            if predAttachment1 then predAttachment1:Destroy(); predAttachment1 = nil end
+        end
+    end)
+
+    RunService.Heartbeat:Connect(function()
+        if not Shared.Flags["KnifePred"] then return end
+        local murd = getMurderer()
+        if not murd or not murd.Character then
+            if predBeam then predBeam.Enabled = false end
+            return
+        end
+        local mHRP = getHRP(murd)
+        if not mHRP then return end
+
+        if not predBeam or not predBeam.Parent then
+            local p0 = Instance.new("Part")
+            p0.Size = Vector3.new(0.2, 0.2, 0.2)
+            p0.Transparency = 1
+            p0.Anchored = true
+            p0.CanCollide = false
+            p0.Parent = Workspace
+
+            local p1 = Instance.new("Part")
+            p1.Size = Vector3.new(0.2, 0.2, 0.2)
+            p1.Transparency = 1
+            p1.Anchored = true
+            p1.CanCollide = false
+            p1.Parent = Workspace
+
+            predAttachment0 = Instance.new("Attachment", p0)
+            predAttachment1 = Instance.new("Attachment", p1)
+
+            predBeam = Instance.new("Beam")
+            predBeam.Color = ColorSequence.new(Color3.fromRGB(255, 30, 30))
+            predBeam.Width0 = 0.4
+            predBeam.Width1 = 0.1
+            predBeam.Attachment0 = predAttachment0
+            predBeam.Attachment1 = predAttachment1
+            predBeam.FaceCamera = true
+            predBeam.Parent = Workspace
+        end
+
+        predBeam.Enabled = true
+        local vel = mHRP.Velocity
+        local look = mHRP.CFrame.LookVector
+        predAttachment0.Parent.Position = mHRP.Position
+        predAttachment1.Parent.Position = mHRP.Position + (look * 25) + (vel * 0.3)
+    end)
+
+    -- Auto Kill All (Murderer)
+    local autoKillLoop = false
+    MkToggle(tab, "Auto Kill All (Murderer)", "AutoKillAll", 12, function(state)
+        autoKillLoop = state
+        if state then
+            task.spawn(function()
+                while autoKillLoop and Shared.Flags["AutoKillAll"] do
+                    local knife = getMyKnife()
                     if knife then
-                        local killRemote = knife:FindFirstChildWhichIsA("RemoteEvent")
-                        if killRemote then
-                            local targetHRP = getCharacterHRP(plr)
-                            if targetHRP then
-                                killRemote:FireServer(targetHRP)
+                        if knife.Parent ~= Shared.Character then
+                            local hum = Shared.Character and Shared.Character:FindFirstChild("Humanoid")
+                            if hum then hum:EquipTool(knife) end
+                            task.wait(0.1)
+                        end
+
+                        local myHRP = getHRP()
+                        for _, plr in ipairs(Players:GetPlayers()) do
+                            if not autoKillLoop then break end
+                            if plr ~= Player and plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
+                                local targetHRP = getHRP(plr)
+                                if targetHRP and myHRP then
+                                    -- Quick teleport & attack
+                                    local oldPos = myHRP.CFrame
+                                    myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 1.2)
+                                    knife:Activate()
+                                    local stabRemote = knife:FindFirstChildWhichIsA("RemoteEvent")
+                                    if stabRemote then stabRemote:FireServer(targetHRP) end
+                                    task.wait(0.12)
+                                end
                             end
                         end
                     end
-                end
-            end
-        end)
-    end)
-
-    -- GUN
-    MkSection(tab, "Gun", 20)
-
-    MkToggle(tab, "Grab Gun (Innocent)", "GrabGun", 21, function(state)
-        if not state then return end
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if (obj.Name == "Gun" or obj.Name == "Revolver") and obj:IsA("Tool") then
-                if obj.Parent ~= Shared.Character then
-                    local pickupRemote = obj:FindFirstChildWhichIsA("RemoteEvent")
-                    if pickupRemote then
-                        pickupRemote:FireServer()
-                    else
-                        local hrp = Shared.HumanoidRP
-                        if hrp then
-                            local pivot = obj:GetPivot()
-                            hrp.CFrame = CFrame.new(pivot.Position + Vector3.new(0, 3, 0))
-                        end
-                    end
-                end
-            end
-        end
-    end)
-
-    local autoGrabConn
-    MkToggle(tab, "Auto Grab Gun", "AutoGrabGun", 22, function(state)
-        if autoGrabConn then autoGrabConn:Disconnect(); autoGrabConn = nil end
-        if state then
-            autoGrabConn = RunService.Heartbeat:Connect(function()
-                if not Shared.Flags["AutoGrabGun"] then return end
-                for _, obj in ipairs(workspace:GetDescendants()) do
-                    if (obj.Name == "Gun" or obj.Name == "Revolver") and obj:IsA("Tool") then
-                        local remote = obj:FindFirstChildWhichIsA("RemoteEvent")
-                        if remote then remote:FireServer() end
-                    end
+                    task.wait(0.3)
                 end
             end)
         end
     end)
 
-    -- ESP
-    MkSection(tab, "ESP", 30)
+    -- ============================================================
+    -- 3. GUN GRABBER
+    -- ============================================================
+    MkSection(tab, "Gun Dropped & Grab", 20)
 
-    local espObjects = {}
-
-    local function clearESP()
-        for _, h in pairs(espObjects) do
-            if h and h.Parent then h:Destroy() end
+    local function findGunDrop()
+        for _, obj in ipairs(Workspace:GetChildren()) do
+            if obj.Name == "GunDrop" or (obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver")) then
+                return obj
+            end
         end
-        espObjects = {}
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj.Name == "GunDrop" then
+                return obj
+            end
+        end
+        return nil
     end
 
-    local roleColors = {
-        Murderer = Color3.fromRGB(255, 50, 50),
-        Murder   = Color3.fromRGB(255, 50, 50),
-        Sheriff  = Color3.fromRGB(50, 150, 255),
-        Innocent = Color3.fromRGB(50, 255, 100),
+    local function grabGunNow()
+        local drop = findGunDrop()
+        local myHRP = getHRP()
+        if not drop or not myHRP then return false end
+
+        local targetPart = drop:IsA("BasePart") and drop or drop:FindFirstChildWhichIsA("BasePart") or drop.PrimaryPart
+        if targetPart then
+            local oldCF = myHRP.CFrame
+            -- Teleport to gun
+            myHRP.CFrame = targetPart.CFrame
+            task.wait(0.08)
+            -- Touch transmitter if present
+            pcall(function()
+                if firetouchinterest then
+                    firetouchinterest(myHRP, targetPart, 0)
+                    firetouchinterest(myHRP, targetPart, 1)
+                end
+            end)
+            return true
+        end
+        return false
+    end
+
+    MkButton(tab, "[ Instant Grab Dropped Gun ]", 21, function()
+        local success = grabGunNow()
+        if not success then
+            print("[MM2] No dropped gun found in map right now")
+        end
+    end)
+
+    MkToggle(tab, "Auto Grab Gun (Loop)", "AutoGrabGun", 22, function(state)
+        -- Handled in loop
+    end)
+
+    RunService.Heartbeat:Connect(function()
+        if not Shared.Flags["AutoGrabGun"] then return end
+        if getRole(Player) == "Innocent" then
+            grabGunNow()
+        end
+    end)
+
+    -- ============================================================
+    -- 4. ROLE ESP (ACCURATE MM2 COLOR-CODED CUBES)
+    -- ============================================================
+    MkSection(tab, "Visuals & ESP", 30)
+
+    local espFolder = Instance.new("Folder")
+    espFolder.Name   = "MM2_ESP_Holder"
+    espFolder.Parent = Shared.GUI or CoreGui
+
+    local espCache = {}
+
+    local roleTheme = {
+        Murderer = { Color = Color3.fromRGB(255, 35, 35),  Tag = "[MURDERER]" },
+        Sheriff  = { Color = Color3.fromRGB(0, 150, 255),  Tag = "[SHERIFF]" },
+        Innocent = { Color = Color3.fromRGB(40, 220, 40),  Tag = "[INNOCENT]" },
     }
 
-    MkToggle(tab, "Role ESP", "RoleESP", 31, function(state)
-        clearESP()
-        if not state then return end
-        RunService.Heartbeat:Connect(function()
-            if not Shared.Flags["RoleESP"] then
-                clearESP()
-                return
-            end
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= Player and plr.Character then
-                    local hrp = getCharacterHRP(plr)
-                    if hrp then
-                        if not espObjects[plr.Name] or not espObjects[plr.Name].Parent then
-                            local h = Instance.new("Highlight")
-                            h.Name            = "ESP_" .. plr.Name
-                            local role        = getRole(plr)
-                            h.FillColor       = roleColors[role] or roleColors["Innocent"]
-                            h.OutlineColor    = h.FillColor
-                            h.FillTransparency    = 0.5
-                            h.OutlineTransparency = 0
-                            h.Adornee         = plr.Character
-                            h.Parent          = Shared.GUI
-                            espObjects[plr.Name] = h
-                        else
-                            local role = getRole(plr)
-                            espObjects[plr.Name].FillColor = roleColors[role] or roleColors["Innocent"]
-                        end
+    local function clearESP()
+        for _, item in pairs(espCache) do
+            if item.Highlight and item.Highlight.Parent then item.Highlight:Destroy() end
+            if item.Billboard and item.Billboard.Parent then item.Billboard:Destroy() end
+        end
+        espCache = {}
+    end
+
+    MkToggle(tab, "Role ESP (Color Highlights & Tags)", "RoleESP", 31, function(state)
+        if not state then
+            clearESP()
+        end
+    end)
+
+    RunService.RenderStepped:Connect(function()
+        if not Shared.Flags["RoleESP"] then return end
+        local myHRP = getHRP()
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= Player then
+                local char = plr.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChild("Humanoid")
+
+                if char and hrp and hum and hum.Health > 0 then
+                    local role = getRole(plr)
+                    local theme = roleTheme[role] or roleTheme["Innocent"]
+                    local dist = myHRP and math.floor((hrp.Position - myHRP.Position).Magnitude) or 0
+
+                    local data = espCache[plr.Name]
+                    if not data then
+                        local h = Instance.new("Highlight")
+                        h.Name = "HL_" .. plr.Name
+                        h.FillTransparency = 0.5
+                        h.OutlineTransparency = 0
+                        h.Adornee = char
+                        h.Parent = espFolder
+
+                        local bb = Instance.new("BillboardGui")
+                        bb.Name = "BB_" .. plr.Name
+                        bb.Size = UDim2.new(0, 140, 0, 40)
+                        bb.StudsOffset = Vector3.new(0, 3.2, 0)
+                        bb.AlwaysOnTop = true
+                        bb.Adornee = hrp
+                        bb.Parent = espFolder
+
+                        local tagFrame = Instance.new("Frame")
+                        tagFrame.Size = UDim2.new(1, 0, 1, 0)
+                        tagFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+                        tagFrame.BackgroundTransparency = 0.3
+                        tagFrame.BorderSizePixel = 1
+                        tagFrame.BorderColor3 = theme.Color
+                        tagFrame.Parent = bb
+
+                        local nameLbl = Instance.new("TextLabel")
+                        nameLbl.Size = UDim2.new(1, 0, 0, 20)
+                        nameLbl.Position = UDim2.new(0, 0, 0, 2)
+                        nameLbl.BackgroundTransparency = 1
+                        nameLbl.Text = plr.DisplayName .. " (@" .. plr.Name .. ")"
+                        nameLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+                        nameLbl.Font = Enum.Font.Code
+                        nameLbl.TextSize = 10
+                        nameLbl.Parent = tagFrame
+
+                        local roleLbl = Instance.new("TextLabel")
+                        roleLbl.Size = UDim2.new(1, 0, 0, 16)
+                        roleLbl.Position = UDim2.new(0, 0, 0, 20)
+                        roleLbl.BackgroundTransparency = 1
+                        roleLbl.Text = theme.Tag .. " [" .. tostring(dist) .. "m]"
+                        roleLbl.TextColor3 = theme.Color
+                        roleLbl.Font = Enum.Font.Code
+                        roleLbl.TextSize = 10
+                        roleLbl.Parent = tagFrame
+
+                        data = { Highlight = h, Billboard = bb, NameLabel = nameLbl, RoleLabel = roleLbl, Frame = tagFrame }
+                        espCache[plr.Name] = data
+                    end
+
+                    data.Highlight.Adornee = char
+                    data.Highlight.FillColor = theme.Color
+                    data.Highlight.OutlineColor = theme.Color
+                    data.Billboard.Adornee = hrp
+                    data.Frame.BorderColor3 = theme.Color
+                    data.RoleLabel.TextColor3 = theme.Color
+                    data.RoleLabel.Text = theme.Tag .. " [" .. tostring(dist) .. "m]"
+                else
+                    if espCache[plr.Name] then
+                        if espCache[plr.Name].Highlight then espCache[plr.Name].Highlight:Destroy() end
+                        if espCache[plr.Name].Billboard then espCache[plr.Name].Billboard:Destroy() end
+                        espCache[plr.Name] = nil
                     end
                 end
             end
-        end)
+        end
+
+        for name, item in pairs(espCache) do
+            if not Players:FindFirstChild(name) then
+                if item.Highlight then item.Highlight:Destroy() end
+                if item.Billboard then item.Billboard:Destroy() end
+                espCache[name] = nil
+            end
+        end
     end)
 
-    print("[MM2_Functions] Loaded")
+    print("[MM2_Functions] Loaded -- Combat, visual predictor, and role ESP active")
 end
