@@ -1,38 +1,37 @@
 -- Spotify_Handler.lua
--- Connect to Spotify via access token, display song above head as BillboardGui
--- Controls: skip, prev, pause/play
--- SETUP: Go to developer.spotify.com, create an app, get an access token with scopes:
---   user-read-playback-state  user-modify-playback-state
--- Then paste the token into CONFIG.ACCESS_TOKEN below
+-- Spotify Playback Controls & Billboard formatted into Quad Columns
 
 return function(Shared)
     local Http      = Shared.Services.Http
     local Player    = Shared.Player
     local RunSvc    = Shared.Services.RunService
-    local Tabs      = Shared.Tabs
-    local MkSection = Shared.MakeSection
-    local MkButton  = Shared.MakeButton
-    local MkToggle  = Shared.MakeToggle
+    local Tabs      = Shared.Tabs or {}
+    local QuadCols  = Shared.QuadCols or {}
+    local MkSection = Shared.MakeSection or function() end
+    local MkButton  = Shared.MakeButton  or function() return Instance.new("TextButton") end
+    local MkToggle  = Shared.MakeToggle  or function() return Instance.new("Frame"), function() end end
 
     local tab = Tabs["Spotify"]
+    local cols = QuadCols["Spotify"]
+    if not tab or not cols then
+        warn("[Spotify_Handler] Quad columns not found")
+        return
+    end
 
-    -- CONFIGURATION
+    local leftCol  = cols.Left
+    local rightCol = cols.Right
+
     local CONFIG = {
-        ACCESS_TOKEN = "",  -- Paste your Spotify access token here
+        ACCESS_TOKEN = "",
     }
 
-    local currentTrack = { name = "Not Playing", artist = "", isPlaying = false }
+    local currentTrack = { name = "Not Playing", artist = "No Artist", isPlaying = false }
     local billboard    = nil
     local pollConn     = nil
-
-    -- SPOTIFY API HELPERS
     local BASE = "https://api.spotify.com/v1/me/player"
 
     local function spotifyRequest(endpoint, method, body)
-        if CONFIG.ACCESS_TOKEN == "" then
-            warn("[Spotify] No access token set.")
-            return nil
-        end
+        if CONFIG.ACCESS_TOKEN == "" then return nil end
         local ok, result = pcall(function()
             return Http:RequestAsync({
                 Url     = BASE .. endpoint,
@@ -44,11 +43,7 @@ return function(Shared)
                 Body    = body and Http:JSONEncode(body) or nil,
             })
         end)
-        if not ok then
-            warn("[Spotify] Request failed: " .. tostring(result))
-            return nil
-        end
-        return result
+        return ok and result or nil
     end
 
     local function getCurrentTrack()
@@ -64,7 +59,6 @@ return function(Shared)
         }
     end
 
-    -- BILLBOARD ABOVE HEAD
     local function buildBillboard()
         if billboard then billboard:Destroy(); billboard = nil end
         local hrp = Shared.HumanoidRP
@@ -72,7 +66,7 @@ return function(Shared)
 
         billboard = Instance.new("BillboardGui")
         billboard.Name          = "SpotifyBillboard"
-        billboard.Size          = UDim2.new(0, 210, 0, 60)
+        billboard.Size          = UDim2.new(0, 200, 0, 50)
         billboard.StudsOffset   = Vector3.new(0, 3.5, 0)
         billboard.AlwaysOnTop   = false
         billboard.Adornee       = hrp
@@ -81,66 +75,38 @@ return function(Shared)
         local bg = Instance.new("Frame")
         bg.Size             = UDim2.new(1, 0, 1, 0)
         bg.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-        bg.BackgroundTransparency = 0.15
-        bg.BorderSizePixel  = 0
+        bg.BackgroundTransparency = 0.2
+        bg.BorderSizePixel  = 1
+        bg.BorderColor3     = Color3.fromRGB(30, 215, 96)
         bg.Parent           = billboard
-        Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 8)
-
-        -- Music note icon placeholder (Roblox cant load external images directly)
-        local art = Instance.new("ImageLabel")
-        art.Size             = UDim2.new(0, 44, 0, 44)
-        art.Position         = UDim2.new(0, 8, 0.5, -22)
-        art.BackgroundColor3 = Color3.fromRGB(30, 215, 96)
-        art.BorderSizePixel  = 0
-        art.Image            = "rbxassetid://3926305904"
-        art.Parent           = bg
-        Instance.new("UICorner", art).CornerRadius = UDim.new(0, 6)
 
         local songLbl = Instance.new("TextLabel")
-        songLbl.Name                  = "SongName"
-        songLbl.Size                  = UDim2.new(1, -62, 0, 24)
-        songLbl.Position              = UDim2.new(0, 58, 0, 8)
+        songLbl.Size                  = UDim2.new(1, -12, 0, 22)
+        songLbl.Position              = UDim2.new(0, 6, 0, 4)
         songLbl.BackgroundTransparency = 1
         songLbl.Text                  = currentTrack.name
         songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
-        songLbl.Font                  = Enum.Font.GothamBold
-        songLbl.TextSize              = 12
+        songLbl.Font                  = Enum.Font.Code
+        songLbl.TextSize              = 11
         songLbl.TextXAlignment        = Enum.TextXAlignment.Left
         songLbl.TextTruncate          = Enum.TextTruncate.AtEnd
         songLbl.Parent                = bg
 
         local artistLbl = Instance.new("TextLabel")
-        artistLbl.Name                  = "ArtistName"
-        artistLbl.Size                  = UDim2.new(1, -62, 0, 18)
-        artistLbl.Position              = UDim2.new(0, 58, 0, 32)
+        artistLbl.Size                  = UDim2.new(1, -12, 0, 18)
+        artistLbl.Position              = UDim2.new(0, 6, 0, 24)
         artistLbl.BackgroundTransparency = 1
         artistLbl.Text                  = currentTrack.artist
-        artistLbl.TextColor3            = Color3.fromRGB(180, 180, 180)
-        artistLbl.Font                  = Enum.Font.Gotham
+        artistLbl.TextColor3            = Color3.fromRGB(30, 215, 96)
+        artistLbl.Font                  = Enum.Font.Code
         artistLbl.TextSize              = 10
         artistLbl.TextXAlignment        = Enum.TextXAlignment.Left
         artistLbl.TextTruncate          = Enum.TextTruncate.AtEnd
         artistLbl.Parent                = bg
 
-        local dot = Instance.new("Frame")
-        dot.Size             = UDim2.new(0, 6, 0, 6)
-        dot.Position         = UDim2.new(1, -10, 0, 6)
-        dot.BackgroundColor3 = Color3.fromRGB(30, 215, 96)
-        dot.BorderSizePixel  = 0
-        dot.Parent           = bg
-        Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
-
         Shared._SpotifyLabels = { songLbl, artistLbl }
     end
 
-    local function updateBillboard(track)
-        if not Shared._SpotifyLabels then return end
-        local s, a = Shared._SpotifyLabels[1], Shared._SpotifyLabels[2]
-        if s then s.Text = track.name end
-        if a then a.Text = track.artist end
-    end
-
-    -- POLL LOOP (every 5 seconds)
     local function startPolling()
         if pollConn then pollConn:Disconnect() end
         local elapsed = 0
@@ -151,73 +117,47 @@ return function(Shared)
                 local track = getCurrentTrack()
                 if track then
                     currentTrack = track
-                    if billboard then updateBillboard(track) end
+                    if Shared._SpotifyLabels then
+                        Shared._SpotifyLabels[1].Text = track.name
+                        Shared._SpotifyLabels[2].Text = track.artist
+                    end
                 end
             end
         end)
     end
 
-    -- UI
-    MkSection(tab, "Spotify", 1)
-
+    -- LEFT COLUMN: AUTH & SETTINGS
+    MkSection(leftCol, "Authentication", 1)
     local statusLbl = Instance.new("TextLabel")
-    statusLbl.Name                  = "SpotifyStatus"
-    statusLbl.Size                  = UDim2.new(1, -4, 0, 20)
+    statusLbl.Size                  = UDim2.new(1, 0, 0, 20)
     statusLbl.BackgroundTransparency = 1
-    statusLbl.Text                  = "Status: Token not set"
-    statusLbl.TextColor3            = Color3.fromRGB(150, 150, 150)
-    statusLbl.Font                  = Enum.Font.Gotham
-    statusLbl.TextSize              = 11
+    statusLbl.Text                  = "Status: Paste Token in CONFIG"
+    statusLbl.TextColor3            = Color3.fromRGB(120, 120, 140)
+    statusLbl.Font                  = Enum.Font.Code
+    statusLbl.TextSize              = 10
     statusLbl.TextXAlignment        = Enum.TextXAlignment.Left
     statusLbl.LayoutOrder           = 2
-    statusLbl.Parent                = tab
+    statusLbl.Parent                = leftCol
 
-    MkButton(tab, "Connect Spotify", 3, function()
-        if CONFIG.ACCESS_TOKEN == "" then
-            statusLbl.Text      = "Set ACCESS_TOKEN in Spotify_Handler.lua"
-            statusLbl.TextColor3 = Color3.fromRGB(255, 80, 80)
-            return
-        end
+    MkButton(leftCol, "[ Connect Playback API ]", 3, function()
         buildBillboard()
         startPolling()
-        statusLbl.Text       = "Connected"
-        statusLbl.TextColor3 = Color3.fromRGB(30, 215, 96)
+        statusLbl.Text = "Status: Polling Spotify Active"
+        statusLbl.TextColor3 = Color3.fromRGB(0, 160, 60)
     end)
 
-    MkButton(tab, "Previous Track", 4, function()
-        spotifyRequest("/previous", "POST")
+    MkToggle(leftCol, "Head Billboard Display", "SpotifyBillboard", 4, function(state)
+        if state then buildBillboard(); startPolling() else if billboard then billboard:Destroy(); billboard = nil end end
     end)
 
-    MkButton(tab, "Play / Pause", 5, function()
-        local track = getCurrentTrack()
-        if track and track.isPlaying then
-            spotifyRequest("/pause", "PUT")
-        else
-            spotifyRequest("/play", "PUT")
-        end
+    -- RIGHT COLUMN: PLAYBACK CONTROLS
+    MkSection(rightCol, "Track Controls", 1)
+    MkButton(rightCol, "⏮  Previous Track", 2, function() spotifyRequest("/previous", "POST") end)
+    MkButton(rightCol, "⏯  Play / Pause", 3, function()
+        local t = getCurrentTrack()
+        spotifyRequest(t and t.isPlaying and "/pause" or "/play", t and t.isPlaying and "PUT" or "PUT")
     end)
+    MkButton(rightCol, "⏭  Next Track", 4, function() spotifyRequest("/next", "POST") end)
 
-    MkButton(tab, "Next Track", 6, function()
-        spotifyRequest("/next", "POST")
-    end)
-
-    MkToggle(tab, "Billboard Above Head", "SpotifyBillboard", 7, function(state)
-        if state then
-            buildBillboard()
-            startPolling()
-        else
-            if pollConn then pollConn:Disconnect(); pollConn = nil end
-            if billboard then billboard:Destroy(); billboard = nil end
-        end
-    end)
-
-    Player.CharacterAdded:Connect(function()
-        task.wait(1)
-        Shared.HumanoidRP = Shared.Character and Shared.Character:WaitForChild("HumanoidRootPart")
-        if Shared.Flags["SpotifyBillboard"] then
-            buildBillboard()
-        end
-    end)
-
-    print("[Spotify_Handler] Loaded -- set CONFIG.ACCESS_TOKEN to connect")
+    print("[Spotify_Handler] Loaded -- Spotify Quad panel ready")
 end

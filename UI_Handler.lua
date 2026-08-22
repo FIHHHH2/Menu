@@ -1,16 +1,17 @@
 -- UI_Handler.lua
--- Internet Explorer 7 / Windows XP themed Modular UI
--- Strict sharp cube geometry (zero UICorners), centered sidebar tabs, animated dropdown drawer for settings/configs
+-- Internet Explorer 7 / Windows XP Modular UI
+-- Quad 2-Column Side-to-Side Grid layout, Keybinds system, Stacking & Dropping popup notification system, Strict Cube geometry
 
 return function(Shared)
-    Shared.Tabs        = {}
-    Shared.GUI         = nil
-    Shared.MakeSection = function() end
-    Shared.MakeToggle  = function() return Instance.new("Frame"), function() end end
-    Shared.MakeSlider  = function() return Instance.new("Frame") end
-    Shared.MakeButton  = function() return Instance.new("TextButton") end
-    Shared.SwitchTab   = function() end
+    Shared.Tabs         = {}
+    Shared.GUI          = nil
+    Shared.MakeSection  = function() end
+    Shared.MakeToggle   = function() return Instance.new("Frame"), function() end end
+    Shared.MakeSlider   = function() return Instance.new("Frame") end
+    Shared.MakeButton   = function() return Instance.new("TextButton") end
+    Shared.SwitchTab    = function() end
     Shared.ToggleDrawer = function() end
+    Shared.Notify       = function() end
 
     local TweenService = Shared.Services.TweenService
     local UserInput    = Shared.Services.UserInput
@@ -51,10 +52,101 @@ return function(Shared)
         RowBg         = Color3.fromRGB(248, 248, 252),
         RowBorder     = Color3.fromRGB(190, 195, 210),
         Accent        = Color3.fromRGB(0, 100, 220),
+        AccentActive  = Color3.fromRGB(0, 150, 60),
         DrawerBg      = Color3.fromRGB(244, 246, 250),
+        NotifyBg      = Color3.fromRGB(250, 250, 255),
+        NotifyBorder  = Color3.fromRGB(58, 110, 165),
     }
 
-    local WIN_W, WIN_H = 640, 380
+    -- ============================================================
+    -- NOTIFICATION STACK SYSTEM (Drops down when previous expires)
+    -- ============================================================
+    local NotifyHolder = Instance.new("Frame")
+    NotifyHolder.Name             = "NotifyHolder"
+    NotifyHolder.Size             = UDim2.new(0, 240, 1, -20)
+    NotifyHolder.Position         = UDim2.new(1, -250, 0, 10)
+    NotifyHolder.BackgroundTransparency = 1
+    NotifyHolder.ZIndex           = 100
+    NotifyHolder.Parent           = ScreenGui
+
+    local NotifyLayout = Instance.new("UIListLayout")
+    NotifyLayout.SortOrder            = Enum.SortOrder.LayoutOrder
+    NotifyLayout.HorizontalAlignment  = Enum.HorizontalAlignment.Right
+    NotifyLayout.VerticalAlignment    = Enum.VerticalAlignment.Bottom
+    NotifyLayout.Padding              = UDim.new(0, 6)
+    NotifyLayout.Parent               = NotifyHolder
+
+    local notifyCounter = 0
+    local function sendNotification(title, message, isEnabled)
+        notifyCounter = notifyCounter + 1
+        local order = notifyCounter
+
+        local toast = Instance.new("Frame")
+        toast.Name             = "Toast_" .. tostring(order)
+        toast.Size             = UDim2.new(1, 0, 0, 46)
+        toast.BackgroundColor3 = C.NotifyBg
+        toast.BorderSizePixel  = 2
+        toast.BorderColor3     = isEnabled == true and Color3.fromRGB(0, 160, 60) or (isEnabled == false and Color3.fromRGB(200, 40, 40) or C.NotifyBorder)
+        toast.LayoutOrder      = order
+        toast.ZIndex           = 101
+        toast.BackgroundTransparency = 1
+        toast.Parent           = NotifyHolder
+
+        -- Header tag
+        local headerBar = Instance.new("Frame")
+        headerBar.Size             = UDim2.new(1, 0, 0, 18)
+        headerBar.BackgroundColor3 = isEnabled == true and Color3.fromRGB(225, 255, 230) or (isEnabled == false and Color3.fromRGB(255, 230, 230) or C.SectionBg)
+        headerBar.BorderSizePixel  = 0
+        headerBar.ZIndex           = 102
+        headerBar.Parent           = toast
+
+        local titleLbl = Instance.new("TextLabel")
+        titleLbl.Size                  = UDim2.new(1, -8, 1, 0)
+        titleLbl.Position              = UDim2.new(0, 6, 0, 0)
+        titleLbl.BackgroundTransparency = 1
+        titleLbl.Text                  = (isEnabled == true and "[✔] " or (isEnabled == false and "[✖] " or "[i] ")) .. title
+        titleLbl.TextColor3            = isEnabled == true and Color3.fromRGB(0, 120, 40) or (isEnabled == false and Color3.fromRGB(180, 20, 20) or C.SectionText)
+        titleLbl.Font                  = Enum.Font.Code
+        titleLbl.TextSize              = 11
+        titleLbl.TextXAlignment        = Enum.TextXAlignment.Left
+        titleLbl.ZIndex                = 103
+        titleLbl.Parent                = headerBar
+
+        local descLbl = Instance.new("TextLabel")
+        descLbl.Size                  = UDim2.new(1, -12, 0, 24)
+        descLbl.Position              = UDim2.new(0, 6, 0, 20)
+        descLbl.BackgroundTransparency = 1
+        descLbl.Text                  = message
+        descLbl.TextColor3            = Color3.fromRGB(30, 30, 50)
+        descLbl.Font                  = Enum.Font.Code
+        descLbl.TextSize              = 11
+        descLbl.TextXAlignment        = Enum.TextXAlignment.Left
+        descLbl.ZIndex                = 102
+        descLbl.Parent                = toast
+
+        -- Fade in & slide
+        TweenService:Create(toast, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { BackgroundTransparency = 0 }):Play()
+
+        -- Auto expire & drop stack
+        task.delay(2.8, function()
+            if toast and toast.Parent then
+                local fade = TweenService:Create(toast, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
+                    Size = UDim2.new(1, 0, 0, 0),
+                    BackgroundTransparency = 1
+                })
+                fade:Play()
+                fade.Completed:Connect(function()
+                    toast:Destroy()
+                end)
+            end
+        end)
+    end
+    Shared.Notify = sendNotification
+
+    -- ============================================================
+    -- MAIN WINDOW (Cube geometry)
+    -- ============================================================
+    local WIN_W, WIN_H = 680, 400
     local Window = Instance.new("Frame")
     Window.Name             = "Window"
     Window.Size             = UDim2.new(0, WIN_W, 0, WIN_H)
@@ -143,9 +235,7 @@ return function(Shared)
         local drag, ds, sp = false, nil, nil
         TitleBar.InputBegan:Connect(function(i)
             if i.UserInputType == Enum.UserInputType.MouseButton1 then
-                drag = true
-                ds   = i.Position
-                sp   = Window.Position
+                drag = true; ds = i.Position; sp = Window.Position
             end
         end)
         TitleBar.InputEnded:Connect(function(i)
@@ -245,7 +335,7 @@ return function(Shared)
         return btn
     end
 
-    local settingsLink = makeHyperlink("settings", function()
+    makeHyperlink("settings", function()
         Shared.ToggleDrawer("settings")
     end)
 
@@ -258,14 +348,14 @@ return function(Shared)
     divider.TextSize              = 11
     divider.Parent                = NavLinksContainer
 
-    local configsLink = makeHyperlink("configs", function()
+    makeHyperlink("configs", function()
         Shared.ToggleDrawer("configs")
     end)
 
     -- BODY
     local BODY_Y    = TITLE_H + NAV_H
     local BODY_H    = WIN_H - BODY_Y
-    local SIDEBAR_W = 84
+    local SIDEBAR_W = 88
 
     local Body = Instance.new("Frame")
     Body.Name             = "Body"
@@ -325,7 +415,7 @@ return function(Shared)
     TabPad.PaddingTop = UDim.new(0, 8)
     TabPad.Parent     = TabContainer
 
-    -- CONTENT AREA
+    -- CONTENT AREA (Holds quad column views)
     local ContentArea = Instance.new("ScrollingFrame")
     ContentArea.Name                 = "ContentArea"
     ContentArea.Size                 = UDim2.new(1, -SIDEBAR_W, 1, 0)
@@ -338,18 +428,14 @@ return function(Shared)
     ContentArea.AutomaticCanvasSize  = Enum.AutomaticSize.Y
     ContentArea.Parent               = Body
 
-    local ContentLayout = Instance.new("UIListLayout")
-    ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    ContentLayout.Padding   = UDim.new(0, 6)
-    ContentLayout.Parent    = ContentArea
-
     local ContentPad = Instance.new("UIPadding")
-    ContentPad.PaddingTop   = UDim.new(0, 8)
-    ContentPad.PaddingLeft  = UDim.new(0, 10)
-    ContentPad.PaddingRight = UDim.new(0, 10)
-    ContentPad.Parent       = ContentArea
+    ContentPad.PaddingTop    = UDim.new(0, 8)
+    ContentPad.PaddingLeft   = UDim.new(0, 10)
+    ContentPad.PaddingRight  = UDim.new(0, 10)
+    ContentPad.PaddingBottom = UDim.new(0, 10)
+    ContentPad.Parent        = ContentArea
 
-    -- DROPDOWN DRAWER (Settings / Configs from top to bottom)
+    -- DROPDOWN DRAWER (Settings & Configs from top to bottom)
     local Drawer = Instance.new("Frame")
     Drawer.Name             = "Drawer"
     Drawer.Size             = UDim2.new(1, -SIDEBAR_W, 1, 0)
@@ -427,7 +513,7 @@ return function(Shared)
         drawerOpen = not drawerOpen
         if drawerOpen then
             Drawer.Visible = true
-            DrawerTitle.Text = mode == "configs" and "Configuration Manager" or "Settings & Controls"
+            DrawerTitle.Text = mode == "configs" and "Configuration Manager" or "Settings & Audio Controls"
             Drawer:TweenPosition(
                 UDim2.new(0, SIDEBAR_W, 0, 0),
                 Enum.EasingDirection.Out,
@@ -455,15 +541,19 @@ return function(Shared)
     Shared.ToggleDrawer  = toggleDrawer
     Shared.DrawerContent = DrawerScroll
 
-    -- TABS
+    -- ============================================================
+    -- TABS CREATION (Including Keybinds Tab)
+    -- ============================================================
     local Tabs      = {}
     local TabBtns   = {}
+    local QuadCols  = {} -- [tabName] = { Left = frame, Right = frame }
     local activeTab = nil
 
     local tabDefs = {
-        { name = "Main",    order = 1 },
-        { name = "MM2",     order = 2 },
-        { name = "Spotify", order = 3 },
+        { name = "Main",     order = 1 },
+        { name = "MM2",      order = 2 },
+        { name = "Spotify",  order = 3 },
+        { name = "Keybinds", order = 4 },
     }
 
     local function switchTab(name)
@@ -488,7 +578,7 @@ return function(Shared)
     for _, def in ipairs(tabDefs) do
         local btn = Instance.new("TextButton")
         btn.Name             = "TabBtn_" .. def.name
-        btn.Size             = UDim2.new(0, 72, 0, 24)
+        btn.Size             = UDim2.new(0, 76, 0, 24)
         btn.BackgroundColor3 = C.BtnBg
         btn.Text             = def.name
         btn.TextColor3       = C.BtnText
@@ -507,68 +597,108 @@ return function(Shared)
             if activeTab ~= def.name then btn.BackgroundColor3 = C.BtnBg end
         end)
 
+        -- Tab Base Container (Vertical stack of banners / quad columns)
         local tabFrame = Instance.new("Frame")
         tabFrame.Name                 = "Tab_" .. def.name
-        tabFrame.Size                 = UDim2.new(1, 0, 1, 0)
+        tabFrame.Size                 = UDim2.new(1, 0, 0, 0)
+        tabFrame.AutomaticSize        = Enum.AutomaticSize.Y
         tabFrame.BackgroundTransparency = 1
         tabFrame.Visible              = false
         tabFrame.LayoutOrder          = def.order
         tabFrame.Parent               = ContentArea
 
-        local tabLayout = Instance.new("UIListLayout")
-        tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        tabLayout.Padding   = UDim.new(0, 6)
-        tabLayout.Parent    = tabFrame
+        local tabMainLayout = Instance.new("UIListLayout")
+        tabMainLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        tabMainLayout.Padding   = UDim.new(0, 8)
+        tabMainLayout.Parent    = tabFrame
 
-        Tabs[def.name]    = tabFrame
-        TabBtns[def.name] = btn
+        -- Quad 2-Column Container (Side to side, then below)
+        local quadFrame = Instance.new("Frame")
+        quadFrame.Name                 = "QuadGrid"
+        quadFrame.Size                 = UDim2.new(1, 0, 0, 0)
+        quadFrame.AutomaticSize        = Enum.AutomaticSize.Y
+        quadFrame.BackgroundTransparency = 1
+        quadFrame.LayoutOrder          = 2
+        quadFrame.Parent               = tabFrame
+
+        local leftCol = Instance.new("Frame")
+        leftCol.Name                 = "LeftCol"
+        leftCol.Size                 = UDim2.new(0.5, -4, 0, 0)
+        leftCol.Position             = UDim2.new(0, 0, 0, 0)
+        leftCol.AutomaticSize        = Enum.AutomaticSize.Y
+        leftCol.BackgroundTransparency = 1
+        leftCol.Parent               = quadFrame
+
+        local leftLayout = Instance.new("UIListLayout")
+        leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        leftLayout.Padding   = UDim.new(0, 6)
+        leftLayout.Parent    = leftCol
+
+        local rightCol = Instance.new("Frame")
+        rightCol.Name                 = "RightCol"
+        rightCol.Size                 = UDim2.new(0.5, -4, 0, 0)
+        rightCol.Position             = UDim2.new(0.5, 4, 0, 0)
+        rightCol.AutomaticSize        = Enum.AutomaticSize.Y
+        rightCol.BackgroundTransparency = 1
+        rightCol.Parent               = quadFrame
+
+        local rightLayout = Instance.new("UIListLayout")
+        rightLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        rightLayout.Padding   = UDim.new(0, 6)
+        rightLayout.Parent    = rightCol
+
+        Tabs[def.name]     = tabFrame
+        TabBtns[def.name]  = btn
+        QuadCols[def.name] = { Left = leftCol, Right = rightCol }
 
         btn.MouseButton1Click:Connect(function()
             switchTab(def.name)
         end)
     end
 
-    -- MAIN TAB: Fih Ui LOGO (ArimoBold)
+    -- MAIN TAB: Fih Ui Banner (ArimoBold)
     local mainTab = Tabs["Main"]
-
     local logoBox = Instance.new("Frame")
     logoBox.Name             = "LogoBox"
-    logoBox.Size             = UDim2.new(1, -4, 0, 100)
+    logoBox.Size             = UDim2.new(1, 0, 0, 95)
     logoBox.BackgroundColor3 = Color3.fromRGB(248, 250, 255)
     logoBox.BorderSizePixel  = 1
     logoBox.BorderColor3     = C.WinBorder
-    logoBox.LayoutOrder      = 0
+    logoBox.LayoutOrder      = 1
     logoBox.Parent           = mainTab
 
     local logoText = Instance.new("TextLabel")
     logoText.Name                  = "LogoText"
-    logoText.Size                  = UDim2.new(1, 0, 0, 60)
-    logoText.Position              = UDim2.new(0, 0, 0, 8)
+    logoText.Size                  = UDim2.new(1, 0, 0, 56)
+    logoText.Position              = UDim2.new(0, 0, 0, 6)
     logoText.BackgroundTransparency = 1
     logoText.Text                  = "Fih Ui"
     logoText.TextColor3            = Color3.fromRGB(15, 30, 80)
     logoText.Font                  = Enum.Font.ArimoBold
-    logoText.TextSize              = 52
+    logoText.TextSize              = 48
     logoText.TextXAlignment        = Enum.TextXAlignment.Center
     logoText.Parent                = logoBox
 
     local logoSub = Instance.new("TextLabel")
     logoSub.Name                  = "LogoSub"
     logoSub.Size                  = UDim2.new(1, 0, 0, 20)
-    logoSub.Position              = UDim2.new(0, 0, 0, 72)
+    logoSub.Position              = UDim2.new(0, 0, 0, 66)
     logoSub.BackgroundTransparency = 1
-    logoSub.Text                  = "Modular Execution Framework  |  RightShift to Toggle"
+    logoSub.Text                  = "Quad Layout Framework  |  RightShift: Toggle Menu"
     logoSub.TextColor3            = Color3.fromRGB(90, 110, 150)
     logoSub.Font                  = Enum.Font.Code
     logoSub.TextSize              = 11
     logoSub.TextXAlignment        = Enum.TextXAlignment.Center
     logoSub.Parent                = logoBox
 
-    -- FACTORY BUILDERS (STRICT CUBES)
+    -- ============================================================
+    -- FACTORY BUILDERS (QUAD FORM FACTOR & NOTIFICATIONS)
+    -- ============================================================
+
     local function makeSection(parent, labelText, order)
         local lbl = Instance.new("TextLabel")
         lbl.Name                  = "Sec_" .. labelText
-        lbl.Size                  = UDim2.new(1, -4, 0, 20)
+        lbl.Size                  = UDim2.new(1, 0, 0, 20)
         lbl.BackgroundColor3      = C.SectionBg
         lbl.TextColor3            = C.SectionText
         lbl.Font                  = Enum.Font.Code
@@ -585,7 +715,7 @@ return function(Shared)
     local function makeToggle(parent, labelText, flagKey, order, callback)
         local row = Instance.new("Frame")
         row.Name             = "Toggle_" .. flagKey
-        row.Size             = UDim2.new(1, -4, 0, 26)
+        row.Size             = UDim2.new(1, 0, 0, 26)
         row.BackgroundColor3 = C.RowBg
         row.BorderSizePixel  = 1
         row.BorderColor3     = C.RowBorder
@@ -593,20 +723,21 @@ return function(Shared)
         row.Parent           = parent
 
         local lbl = Instance.new("TextLabel")
-        lbl.Size                  = UDim2.new(1, -46, 1, 0)
-        lbl.Position              = UDim2.new(0, 8, 0, 0)
+        lbl.Size                  = UDim2.new(1, -44, 1, 0)
+        lbl.Position              = UDim2.new(0, 6, 0, 0)
         lbl.BackgroundTransparency = 1
         lbl.Text                  = labelText
         lbl.TextColor3            = C.BtnText
         lbl.Font                  = Enum.Font.Code
         lbl.TextSize              = 11
         lbl.TextXAlignment        = Enum.TextXAlignment.Left
+        lbl.TextTruncate          = Enum.TextTruncate.AtEnd
         lbl.Parent                = row
 
         local box = Instance.new("TextButton")
         box.Name             = "CheckBox"
         box.Size             = UDim2.new(0, 18, 0, 18)
-        box.Position         = UDim2.new(1, -26, 0.5, -9)
+        box.Position         = UDim2.new(1, -24, 0.5, -9)
         box.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         box.BorderSizePixel  = 1
         box.BorderColor3     = Color3.fromRGB(100, 100, 100)
@@ -618,11 +749,14 @@ return function(Shared)
 
         Shared.Flags[flagKey] = false
 
-        local function setToggle(state)
+        local function setToggle(state, suppressNotify)
             Shared.Flags[flagKey] = state
             box.Text = state and "X" or ""
             box.BackgroundColor3 = state and Color3.fromRGB(220, 235, 255) or Color3.fromRGB(255, 255, 255)
             if callback then callback(state) end
+            if not suppressNotify then
+                sendNotification(labelText, state and "ENABLED" or "DISABLED", state)
+            end
         end
 
         local clickOverlay = Instance.new("TextButton")
@@ -637,13 +771,20 @@ return function(Shared)
             setToggle(not Shared.Flags[flagKey])
         end)
 
+        -- Register in toggle registry for keybind assignment
+        Shared.Toggles[flagKey] = {
+            Name      = labelText,
+            SetToggle = setToggle,
+            Key       = nil
+        }
+
         return row, setToggle
     end
 
     local function makeSlider(parent, labelText, flagKey, minVal, maxVal, defaultVal, order, callback)
         local row = Instance.new("Frame")
         row.Name             = "Slider_" .. flagKey
-        row.Size             = UDim2.new(1, -4, 0, 36)
+        row.Size             = UDim2.new(1, 0, 0, 36)
         row.BackgroundColor3 = C.RowBg
         row.BorderSizePixel  = 1
         row.BorderColor3     = C.RowBorder
@@ -651,19 +792,20 @@ return function(Shared)
         row.Parent           = parent
 
         local lbl = Instance.new("TextLabel")
-        lbl.Size                  = UDim2.new(1, -60, 0, 16)
-        lbl.Position              = UDim2.new(0, 8, 0, 2)
+        lbl.Size                  = UDim2.new(1, -55, 0, 16)
+        lbl.Position              = UDim2.new(0, 6, 0, 2)
         lbl.BackgroundTransparency = 1
         lbl.Text                  = labelText
         lbl.TextColor3            = C.BtnText
         lbl.Font                  = Enum.Font.Code
         lbl.TextSize              = 11
         lbl.TextXAlignment        = Enum.TextXAlignment.Left
+        lbl.TextTruncate          = Enum.TextTruncate.AtEnd
         lbl.Parent                = row
 
         local valLbl = Instance.new("TextLabel")
-        valLbl.Size                  = UDim2.new(0, 50, 0, 16)
-        valLbl.Position              = UDim2.new(1, -58, 0, 2)
+        valLbl.Size                  = UDim2.new(0, 48, 0, 16)
+        valLbl.Position              = UDim2.new(1, -52, 0, 2)
         valLbl.BackgroundTransparency = 1
         valLbl.Text                  = tostring(defaultVal)
         valLbl.TextColor3            = Color3.fromRGB(0, 50, 180)
@@ -674,8 +816,8 @@ return function(Shared)
 
         local track = Instance.new("Frame")
         track.Name             = "Track"
-        track.Size             = UDim2.new(1, -16, 0, 8)
-        track.Position         = UDim2.new(0, 8, 0, 22)
+        track.Size             = UDim2.new(1, -12, 0, 8)
+        track.Position         = UDim2.new(0, 6, 0, 22)
         track.BackgroundColor3 = Color3.fromRGB(215, 218, 225)
         track.BorderSizePixel  = 1
         track.BorderColor3     = Color3.fromRGB(150, 160, 180)
@@ -719,7 +861,7 @@ return function(Shared)
     local function makeButton(parent, labelText, order, callback)
         local btn = Instance.new("TextButton")
         btn.Name             = "Btn_" .. labelText:gsub("%s+", "_")
-        btn.Size             = UDim2.new(1, -4, 0, 26)
+        btn.Size             = UDim2.new(1, 0, 0, 26)
         btn.BackgroundColor3 = C.BtnBg
         btn.Text             = labelText
         btn.TextColor3       = C.BtnText
@@ -741,22 +883,117 @@ return function(Shared)
         return btn
     end
 
-    -- SETTINGS DRAWER POPULATION
-    makeSection(DrawerScroll, "General & Shortcuts", 1)
+    -- ============================================================
+    -- KEYBINDS TAB POPULATION & LISTENER
+    -- ============================================================
+    local keybindsTab = Tabs["Keybinds"]
+    local keybindCols = QuadCols["Keybinds"]
 
+    local function buildKeybindsUI()
+        for _, c in ipairs(keybindCols.Left:GetChildren()) do if not c:IsA("UIListLayout") then c:Destroy() end end
+        for _, c in ipairs(keybindCols.Right:GetChildren()) do if not c:IsA("UIListLayout") then c:Destroy() end end
+
+        makeSection(keybindCols.Left, "Features (A-M)", 1)
+        makeSection(keybindCols.Right, "Features (N-Z)", 1)
+
+        local toggleList = {}
+        for fKey, info in pairs(Shared.Toggles) do
+            table.insert(toggleList, { Key = fKey, Info = info })
+        end
+        table.sort(toggleList, function(a, b) return a.Info.Name < b.Info.Name end)
+
+        local listeningKeyFor = nil
+
+        for idx, item in ipairs(toggleList) do
+            local parentCol = (idx % 2 == 1) and keybindCols.Left or keybindCols.Right
+            local fKey = item.Key
+            local info = item.Info
+
+            local row = Instance.new("Frame")
+            row.Name             = "KeybindRow_" .. fKey
+            row.Size             = UDim2.new(1, 0, 0, 26)
+            row.BackgroundColor3 = C.RowBg
+            row.BorderSizePixel  = 1
+            row.BorderColor3     = C.RowBorder
+            row.LayoutOrder      = idx + 1
+            row.Parent           = parentCol
+
+            local lbl = Instance.new("TextLabel")
+            lbl.Size                  = UDim2.new(1, -70, 1, 0)
+            lbl.Position              = UDim2.new(0, 6, 0, 0)
+            lbl.BackgroundTransparency = 1
+            lbl.Text                  = info.Name
+            lbl.TextColor3            = C.BtnText
+            lbl.Font                  = Enum.Font.Code
+            lbl.TextSize              = 11
+            lbl.TextXAlignment        = Enum.TextXAlignment.Left
+            lbl.TextTruncate          = Enum.TextTruncate.AtEnd
+            lbl.Parent                = row
+
+            local bindBtn = Instance.new("TextButton")
+            bindBtn.Name             = "BindBtn"
+            bindBtn.Size             = UDim2.new(0, 60, 0, 20)
+            bindBtn.Position         = UDim2.new(1, -64, 0.5, -10)
+            bindBtn.BackgroundColor3 = C.BtnBg
+            bindBtn.BorderSizePixel  = 1
+            bindBtn.BorderColor3     = C.BtnBorder
+            bindBtn.Text             = info.Key and ("[" .. info.Key.Name .. "]") or "[ None ]"
+            bindBtn.TextColor3       = info.Key and Color3.fromRGB(0, 60, 180) or Color3.fromRGB(120, 120, 120)
+            bindBtn.Font             = Enum.Font.Code
+            bindBtn.TextSize         = 10
+            bindBtn.Parent           = row
+
+            bindBtn.MouseButton1Click:Connect(function()
+                listeningKeyFor = fKey
+                bindBtn.Text = "[ ... ]"
+                bindBtn.TextColor3 = Color3.fromRGB(220, 80, 0)
+            end)
+        end
+
+        -- Keybind Input Listener
+        if Shared._KeybindConn then Shared._KeybindConn:Disconnect() end
+        Shared._KeybindConn = UserInput.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                if listeningKeyFor then
+                    local target = listeningKeyFor
+                    listeningKeyFor = nil
+                    if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace then
+                        Shared.Toggles[target].Key = nil
+                        sendNotification(Shared.Toggles[target].Name, "Keybind Cleared", nil)
+                    else
+                        Shared.Toggles[target].Key = input.KeyCode
+                        sendNotification(Shared.Toggles[target].Name, "Bound to [" .. input.KeyCode.Name .. "]", true)
+                    end
+                    buildKeybindsUI()
+                else
+                    -- Execute assigned keybind
+                    for fKey, info in pairs(Shared.Toggles) do
+                        if info.Key and info.Key == input.KeyCode then
+                            info.SetToggle(not Shared.Flags[fKey])
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
+    -- Delay keybinds UI build slightly so all modules have registered their toggles
+    task.delay(0.5, buildKeybindsUI)
+
+    -- SETTINGS DRAWER
+    makeSection(DrawerScroll, "General Controls", 1)
     makeButton(DrawerScroll, "Unload / Force Close Menu", 2, function()
         if Shared.GUI then Shared.GUI:Destroy() end
         for k in pairs(Shared.Flags) do Shared.Flags[k] = false end
     end)
 
     makeSection(DrawerScroll, "Audio & Performance", 10)
-
     makeSlider(DrawerScroll, "Master Volume", "MasterVolume", 0, 100, 50, 11, function(val)
         for _, s in ipairs(workspace:GetDescendants()) do
             if s:IsA("Sound") then s.Volume = val / 100 end
         end
     end)
-
     makeToggle(DrawerScroll, "Disable VFX (FPS Boost)", "NoVFX_Setting", 12, function(state)
         for _, obj in ipairs(workspace:GetDescendants()) do
             if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
@@ -765,7 +1002,6 @@ return function(Shared)
         end
         workspace.Terrain.Decoration = not state
     end)
-
     makeToggle(DrawerScroll, "Remove Textures (FPS Boost)", "NoTex_Setting", 13, function(state)
         for _, obj in ipairs(workspace:GetDescendants()) do
             if obj:IsA("Decal") or obj:IsA("Texture") then
@@ -774,23 +1010,17 @@ return function(Shared)
         end
     end)
 
-    makeSection(DrawerScroll, "Config Manager", 20)
-    makeButton(DrawerScroll, "[Save Current Settings]", 21, function()
-        print("[Menu] Settings saved to local cache")
-    end)
-    makeButton(DrawerScroll, "[Restore Defaults]", 22, function()
-        print("[Menu] Default settings restored")
-    end)
-
     -- EXPOSE API
     Shared.GUI         = ScreenGui
     Shared.Tabs        = Tabs
+    Shared.QuadCols    = QuadCols
     Shared.MakeSection = makeSection
     Shared.MakeToggle  = makeToggle
     Shared.MakeSlider  = makeSlider
     Shared.MakeButton  = makeButton
     Shared.SwitchTab   = switchTab
+    Shared.RebuildKeybinds = buildKeybindsUI
 
     switchTab("Main")
-    print("[UI_Handler] Loaded -- Cube theme, centered tabs, drawer ready")
+    print("[UI_Handler] Loaded -- Quad layout, keybinds engine & popup stack active")
 end

@@ -1,4 +1,5 @@
 -- init.lua
+-- Modular Loadstring Entry Point
 -- Usage: loadstring(game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu/main/init.lua"))()
 
 local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/main"
@@ -6,18 +7,14 @@ local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/main"
 local function loadModule(name)
     local url = BASE_URL .. "/" .. name .. ".lua"
 
-    -- Step 1: fetch source
     local ok, src = pcall(function() return game:HttpGet(url) end)
     if not ok or type(src) ~= "string" or #src == 0 then
         warn("[Menu] HttpGet failed: " .. name .. " -> " .. tostring(src))
         return function() end
     end
 
-    -- Step 2: compile
-    -- Use rawget to grab loadstring from env in case executor shadows it
     local ls = rawget(getfenv and getfenv(0) or _G, "loadstring") or loadstring
     if type(ls) ~= "function" then
-        -- fallback: some executors expose it differently
         ls = _G["loadstring"]
     end
     local chunk, cerr = ls(src)
@@ -26,7 +23,6 @@ local function loadModule(name)
         return function() end
     end
 
-    -- Step 3: execute chunk (returns the module's function(Shared) wrapper)
     local ok2, mod = pcall(chunk)
     if not ok2 then
         warn("[Menu] Exec error: " .. name .. " -> " .. tostring(mod))
@@ -54,9 +50,11 @@ local Shared = {
         Http         = game:GetService("HttpService"),
         CoreGui      = game:GetService("CoreGui"),
     },
-    Flags   = {},
-    GUI     = nil,
-    Version = "1.0.0",
+    Flags        = {},
+    Keybinds     = {}, -- [flagKey] = { Name = "...", Key = Enum.KeyCode, SetToggle = func }
+    Toggles      = {}, -- [flagKey] = { Name = "...", SetToggle = func, State = bool }
+    GUI          = nil,
+    Version      = "2.0.0",
 }
 
 Shared.Character  = Shared.Player.Character or Shared.Player.CharacterAdded:Wait()
@@ -67,7 +65,7 @@ Shared.Player.CharacterAdded:Connect(function(char)
     Shared.HumanoidRP = char:WaitForChild("HumanoidRootPart")
 end)
 
--- Load order matters
+-- Load order
 loadModule("UI_Handler")(Shared)
 loadModule("Main_Functions")(Shared)
 loadModule("MM2_Functions")(Shared)

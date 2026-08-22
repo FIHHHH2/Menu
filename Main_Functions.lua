@@ -1,39 +1,42 @@
 -- Main_Functions.lua
--- General Movement, Teleports, and Utility
--- Infinite Jump, WASD Flight, Noclip, Speed/Jump Height, Click TP, Volume
+-- General Movement, Multipliers, Teleports in Quad 2-Column Format
 
 return function(Shared)
     local Players    = Shared.Services.Players
     local RunService = Shared.Services.RunService
     local UserInput  = Shared.Services.UserInput
     local TweenSvc   = Shared.Services.TweenService
-    local SoundSvc   = Shared.Services.SoundService
 
     local Player     = Shared.Player
     local Tabs       = Shared.Tabs or {}
+    local QuadCols   = Shared.QuadCols or {}
     local MkSection  = Shared.MakeSection or function() end
     local MkToggle   = Shared.MakeToggle  or function() return Instance.new("Frame"), function() end end
     local MkSlider   = Shared.MakeSlider  or function() return Instance.new("Frame") end
     local MkButton   = Shared.MakeButton  or function() return Instance.new("TextButton") end
 
     local tab = Tabs["Main"]
-    if not tab then
-        warn("[Main_Functions] Tab 'Main' not found")
+    local cols = QuadCols["Main"]
+    if not tab or not cols then
+        warn("[Main_Functions] Quad columns not found")
         return
     end
+
+    local leftCol  = cols.Left
+    local rightCol = cols.Right
 
     local function getChar()  return Shared.Character or (Player and Player.Character) end
     local function getHRP()   return Shared.HumanoidRP or (getChar() and getChar():FindFirstChild("HumanoidRootPart")) end
     local function getHuman() return getChar() and getChar():FindFirstChildOfClass("Humanoid") end
 
     -- ============================================================
-    -- MOVEMENT
+    -- LEFT COLUMN: MOVEMENT & TELEPORTS
     -- ============================================================
-    MkSection(tab, "Player Movement", 1)
+    MkSection(leftCol, "Movement & Physics", 1)
 
     -- Infinite Jump
     local infJumpConn
-    MkToggle(tab, "Infinite Jump", "InfiniteJump", 2, function(state)
+    MkToggle(leftCol, "Infinite Jump", "InfiniteJump", 2, function(state)
         if infJumpConn then infJumpConn:Disconnect(); infJumpConn = nil end
         if state then
             infJumpConn = UserInput.JumpRequest:Connect(function()
@@ -46,7 +49,7 @@ return function(Shared)
     -- Flight
     local flightBV, flightConn
     local FLIGHT_SPEED = 65
-    MkToggle(tab, "Flight (WASD + Space / Ctrl)", "Flight", 3, function(state)
+    MkToggle(leftCol, "Flight (WASD+Space)", "Flight", 3, function(state)
         local hrp = getHRP()
         if not hrp then return end
         if state then
@@ -76,16 +79,14 @@ return function(Shared)
 
     -- Noclip
     local noclipConn
-    MkToggle(tab, "Noclip", "Noclip", 4, function(state)
+    MkToggle(leftCol, "Noclip (Walk Through Walls)", "Noclip", 4, function(state)
         if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
         if state then
             noclipConn = RunService.Stepped:Connect(function()
                 local char = getChar()
                 if not char then return end
                 for _, part in ipairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.CanCollide = false
-                    end
+                    if part:IsA("BasePart") then part.CanCollide = false end
                 end
             end)
         else
@@ -98,35 +99,9 @@ return function(Shared)
         end
     end)
 
-    -- ============================================================
-    -- STATS & SPEED
-    -- ============================================================
-    MkSection(tab, "Stat Multipliers", 10)
-
-    MkSlider(tab, "Walk Speed", "WalkSpeed", 16, 250, 16, 11, function(val)
-        local hum = getHuman()
-        if hum then hum.WalkSpeed = val end
-    end)
-
-    MkSlider(tab, "Jump Height", "JumpHeight", 7, 250, 7, 12, function(val)
-        local hum = getHuman()
-        if hum then hum.JumpHeight = val end
-    end)
-
-    Player.CharacterAdded:Connect(function(char)
-        local hum = char:WaitForChild("Humanoid")
-        task.wait(0.1)
-        hum.WalkSpeed  = Shared.Flags["WalkSpeed"]  or 16
-        hum.JumpHeight = Shared.Flags["JumpHeight"] or 7
-    end)
-
-    -- ============================================================
-    -- TELEPORT
-    -- ============================================================
-    MkSection(tab, "Teleportation", 20)
-
+    -- Click TP
     local clickTPConn
-    MkToggle(tab, "Click TP (Mouse Click)", "ClickTP", 21, function(state)
+    MkToggle(leftCol, "Click TP (Left Click)", "ClickTP", 5, function(state)
         if clickTPConn then clickTPConn:Disconnect(); clickTPConn = nil end
         if state then
             clickTPConn = UserInput.InputBegan:Connect(function(input, gpe)
@@ -147,5 +122,46 @@ return function(Shared)
         end
     end)
 
-    print("[Main_Functions] Loaded -- General movement & utility online")
+    -- ============================================================
+    -- RIGHT COLUMN: MULTIPLIERS & RENDERING
+    -- ============================================================
+    MkSection(rightCol, "Stat Multipliers", 10)
+
+    MkSlider(rightCol, "Walk Speed", "WalkSpeed", 16, 250, 16, 11, function(val)
+        local hum = getHuman()
+        if hum then hum.WalkSpeed = val end
+    end)
+
+    MkSlider(rightCol, "Jump Height", "JumpHeight", 7, 250, 7, 12, function(val)
+        local hum = getHuman()
+        if hum then hum.JumpHeight = val end
+    end)
+
+    Player.CharacterAdded:Connect(function(char)
+        local hum = char:WaitForChild("Humanoid")
+        task.wait(0.1)
+        hum.WalkSpeed  = Shared.Flags["WalkSpeed"]  or 16
+        hum.JumpHeight = Shared.Flags["JumpHeight"] or 7
+    end)
+
+    MkSection(rightCol, "Graphics Optimization", 20)
+
+    MkToggle(rightCol, "Disable VFX", "NoVFX", 21, function(state)
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+                obj.Enabled = not state
+            end
+        end
+        workspace.Terrain.Decoration = not state
+    end)
+
+    MkToggle(rightCol, "Remove Textures", "NoTextures", 22, function(state)
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("Decal") or obj:IsA("Texture") then
+                obj.Transparency = state and 1 or 0
+            end
+        end
+    end)
+
+    print("[Main_Functions] Loaded -- Quad 2-column layout online")
 end

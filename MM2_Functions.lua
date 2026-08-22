@@ -1,6 +1,5 @@
 -- MM2_Functions.lua
--- Comprehensive MM2 Combat & Visuals
--- Silent Aim (Sheriff), Knife Prediction, Accurate Role ESP, Grab Gun / Auto Grab Gun, Auto Kill Murderer, Auto Kill All
+-- Murder Mystery 2 Combat & ESP formatted into Quad Side-by-Side Columns
 
 return function(Shared)
     local Players      = Shared.Services.Players
@@ -11,19 +10,21 @@ return function(Shared)
 
     local Player       = Shared.Player
     local Tabs         = Shared.Tabs or {}
+    local QuadCols     = Shared.QuadCols or {}
     local MkSection    = Shared.MakeSection or function() end
     local MkToggle     = Shared.MakeToggle  or function() return Instance.new("Frame"), function() end end
     local MkButton     = Shared.MakeButton  or function() return Instance.new("TextButton") end
 
     local tab = Tabs["MM2"]
-    if not tab then
-        warn("[MM2_Functions] Tab 'MM2' not found")
+    local cols = QuadCols["MM2"]
+    if not tab or not cols then
+        warn("[MM2_Functions] Quad columns not found")
         return
     end
 
-    -- ============================================================
-    -- MM2 GAME ENGINE HELPERS
-    -- ============================================================
+    local leftCol  = cols.Left
+    local rightCol = cols.Right
+
     local function getRole(plr)
         if not plr then return "Innocent" end
         local bp = plr:FindFirstChild("Backpack")
@@ -37,18 +38,14 @@ return function(Shared)
 
     local function getMurderer()
         for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= Player and getRole(plr) == "Murderer" then
-                return plr
-            end
+            if plr ~= Player and getRole(plr) == "Murderer" then return plr end
         end
         return nil
     end
 
     local function getSheriff()
         for _, plr in ipairs(Players:GetPlayers()) do
-            if getRole(plr) == "Sheriff" then
-                return plr
-            end
+            if getRole(plr) == "Sheriff" then return plr end
         end
         return nil
     end
@@ -71,42 +68,18 @@ return function(Shared)
     end
 
     -- ============================================================
-    -- 1. SILENT AIM (SHERIFF)
+    -- LEFT COLUMN: SHERIFF COMBAT & GUN GRABBER
     -- ============================================================
-    MkSection(tab, "Sheriff & Aim", 1)
+    MkSection(leftCol, "Sheriff Weaponry", 1)
 
-    local silentAimConn
-    local hookedOldIndex = nil
     local hookedOldNamecall = nil
-
-    MkToggle(tab, "Silent Aim (Locks Gun to Murderer)", "SilentAim", 2, function(state)
+    MkToggle(leftCol, "Silent Aim (Sheriff)", "SilentAim", 2, function(state)
         if state then
-            -- Use Heartbeat / LookVector correction & metatable redirection
-            if silentAimConn then silentAimConn:Disconnect() end
-            silentAimConn = RunService.RenderStepped:Connect(function()
-                if not Shared.Flags["SilentAim"] then return end
-                local myGun = getMyGun()
-                if not myGun or myGun.Parent ~= Shared.Character then return end
-                local murd = getMurderer()
-                if not murd or not murd.Character then return end
-                local mHRP = getHRP(murd)
-                local myHRP = getHRP()
-                if not mHRP or not myHRP then return end
-
-                -- Point camera / gun origin toward target if aiming
-                local mouse = Player:GetMouse()
-                if mouse then
-                    -- Soft aim assistance
-                end
-            end)
-
-            -- Hook raycasting functions if environment permits
             pcall(function()
                 local mt = getrawmetatable(game)
                 if mt and setreadonly then
                     setreadonly(mt, false)
-                    local oldNC = mt.__namecall
-                    hookedOldNamecall = oldNC
+                    hookedOldNamecall = mt.__namecall
                     mt.__namecall = newcclosure(function(self, ...)
                         local method = getnamecallmethod()
                         local args = {...}
@@ -118,20 +91,19 @@ return function(Shared)
                                     if method == "Raycast" then
                                         local origin = args[1]
                                         args[2] = (targetPart.Position - origin).Unit * 1000
-                                        return oldNC(self, unpack(args))
+                                        return hookedOldNamecall(self, unpack(args))
                                     elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
                                         return targetPart, targetPart.Position, Vector3.new(0, 1, 0), Enum.Material.Plastic
                                     end
                                 end
                             end
                         end
-                        return oldNC(self, ...)
+                        return hookedOldNamecall(self, ...)
                     end)
                     setreadonly(mt, true)
                 end
             end)
         else
-            if silentAimConn then silentAimConn:Disconnect(); silentAimConn = nil end
             pcall(function()
                 local mt = getrawmetatable(game)
                 if mt and setreadonly and hookedOldNamecall then
@@ -143,10 +115,7 @@ return function(Shared)
         end
     end)
 
-    -- Auto Kill Murderer (Sheriff)
-    MkToggle(tab, "Auto Kill Murderer (Trigger Shoot)", "AutoKillMurd", 3, function(state)
-        -- Continuous loop
-    end)
+    MkToggle(leftCol, "Auto Shoot Murderer", "AutoKillMurd", 3, function(state) end)
 
     RunService.Heartbeat:Connect(function()
         if not Shared.Flags["AutoKillMurd"] then return end
@@ -162,22 +131,65 @@ return function(Shared)
             if hum then hum:EquipTool(gun) end
         end
 
-        local shootRemote = gun:FindFirstChildWhichIsA("RemoteEvent") or gun:FindFirstChildWhichIsA("RemoteFunction")
-        if shootRemote and shootRemote:IsA("RemoteEvent") then
+        local shootRemote = gun:FindFirstChildWhichIsA("RemoteEvent")
+        if shootRemote then
             shootRemote:FireServer(mHRP.Position)
         else
             gun:Activate()
         end
     end)
 
-    -- ============================================================
-    -- 2. MURDERER COMBAT
-    -- ============================================================
-    MkSection(tab, "Murderer Combat", 10)
+    MkSection(leftCol, "Dropped Gun", 10)
 
-    -- Murderer Knife Prediction Line
+    local function findGunDrop()
+        for _, obj in ipairs(Workspace:GetChildren()) do
+            if obj.Name == "GunDrop" or (obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver")) then
+                return obj
+            end
+        end
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj.Name == "GunDrop" then return obj end
+        end
+        return nil
+    end
+
+    local function grabGunNow()
+        local drop = findGunDrop()
+        local myHRP = getHRP()
+        if not drop or not myHRP then return false end
+        local targetPart = drop:IsA("BasePart") and drop or drop:FindFirstChildWhichIsA("BasePart") or drop.PrimaryPart
+        if targetPart then
+            myHRP.CFrame = targetPart.CFrame
+            task.wait(0.08)
+            pcall(function()
+                if firetouchinterest then
+                    firetouchinterest(myHRP, targetPart, 0)
+                    firetouchinterest(myHRP, targetPart, 1)
+                end
+            end)
+            return true
+        end
+        return false
+    end
+
+    MkButton(leftCol, "[ Instant Grab Gun ]", 11, function()
+        grabGunNow()
+    end)
+
+    MkToggle(leftCol, "Auto Grab Gun", "AutoGrabGun", 12, function(state) end)
+    RunService.Heartbeat:Connect(function()
+        if not Shared.Flags["AutoGrabGun"] then return end
+        if getRole(Player) == "Innocent" then grabGunNow() end
+    end)
+
+    -- ============================================================
+    -- RIGHT COLUMN: MURDERER COMBAT & ROLE ESP
+    -- ============================================================
+    MkSection(rightCol, "Murderer Combat", 1)
+
+    -- Knife Prediction
     local predBeam, predAttachment0, predAttachment1
-    MkToggle(tab, "Murderer Knife Prediction", "KnifePred", 11, function(state)
+    MkToggle(rightCol, "Knife Trajectory Prediction", "KnifePred", 2, function(state)
         if not state then
             if predBeam then predBeam:Destroy(); predBeam = nil end
             if predAttachment0 then predAttachment0:Destroy(); predAttachment0 = nil end
@@ -198,16 +210,12 @@ return function(Shared)
         if not predBeam or not predBeam.Parent then
             local p0 = Instance.new("Part")
             p0.Size = Vector3.new(0.2, 0.2, 0.2)
-            p0.Transparency = 1
-            p0.Anchored = true
-            p0.CanCollide = false
+            p0.Transparency = 1; p0.Anchored = true; p0.CanCollide = false
             p0.Parent = Workspace
 
             local p1 = Instance.new("Part")
             p1.Size = Vector3.new(0.2, 0.2, 0.2)
-            p1.Transparency = 1
-            p1.Anchored = true
-            p1.CanCollide = false
+            p1.Transparency = 1; p1.Anchored = true; p1.CanCollide = false
             p1.Parent = Workspace
 
             predAttachment0 = Instance.new("Attachment", p0)
@@ -230,9 +238,9 @@ return function(Shared)
         predAttachment1.Parent.Position = mHRP.Position + (look * 25) + (vel * 0.3)
     end)
 
-    -- Auto Kill All (Murderer)
+    -- Auto Kill All
     local autoKillLoop = false
-    MkToggle(tab, "Auto Kill All (Murderer)", "AutoKillAll", 12, function(state)
+    MkToggle(rightCol, "Auto Kill All (Murderer)", "AutoKillAll", 3, function(state)
         autoKillLoop = state
         if state then
             task.spawn(function()
@@ -244,15 +252,12 @@ return function(Shared)
                             if hum then hum:EquipTool(knife) end
                             task.wait(0.1)
                         end
-
                         local myHRP = getHRP()
                         for _, plr in ipairs(Players:GetPlayers()) do
                             if not autoKillLoop then break end
                             if plr ~= Player and plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
                                 local targetHRP = getHRP(plr)
                                 if targetHRP and myHRP then
-                                    -- Quick teleport & attack
-                                    local oldPos = myHRP.CFrame
                                     myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 1.2)
                                     knife:Activate()
                                     local stabRemote = knife:FindFirstChildWhichIsA("RemoteEvent")
@@ -268,77 +273,13 @@ return function(Shared)
         end
     end)
 
-    -- ============================================================
-    -- 3. GUN GRABBER
-    -- ============================================================
-    MkSection(tab, "Gun Dropped & Grab", 20)
-
-    local function findGunDrop()
-        for _, obj in ipairs(Workspace:GetChildren()) do
-            if obj.Name == "GunDrop" or (obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver")) then
-                return obj
-            end
-        end
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj.Name == "GunDrop" then
-                return obj
-            end
-        end
-        return nil
-    end
-
-    local function grabGunNow()
-        local drop = findGunDrop()
-        local myHRP = getHRP()
-        if not drop or not myHRP then return false end
-
-        local targetPart = drop:IsA("BasePart") and drop or drop:FindFirstChildWhichIsA("BasePart") or drop.PrimaryPart
-        if targetPart then
-            local oldCF = myHRP.CFrame
-            -- Teleport to gun
-            myHRP.CFrame = targetPart.CFrame
-            task.wait(0.08)
-            -- Touch transmitter if present
-            pcall(function()
-                if firetouchinterest then
-                    firetouchinterest(myHRP, targetPart, 0)
-                    firetouchinterest(myHRP, targetPart, 1)
-                end
-            end)
-            return true
-        end
-        return false
-    end
-
-    MkButton(tab, "[ Instant Grab Dropped Gun ]", 21, function()
-        local success = grabGunNow()
-        if not success then
-            print("[MM2] No dropped gun found in map right now")
-        end
-    end)
-
-    MkToggle(tab, "Auto Grab Gun (Loop)", "AutoGrabGun", 22, function(state)
-        -- Handled in loop
-    end)
-
-    RunService.Heartbeat:Connect(function()
-        if not Shared.Flags["AutoGrabGun"] then return end
-        if getRole(Player) == "Innocent" then
-            grabGunNow()
-        end
-    end)
-
-    -- ============================================================
-    -- 4. ROLE ESP (ACCURATE MM2 COLOR-CODED CUBES)
-    -- ============================================================
-    MkSection(tab, "Visuals & ESP", 30)
+    MkSection(rightCol, "Visual ESP", 10)
 
     local espFolder = Instance.new("Folder")
     espFolder.Name   = "MM2_ESP_Holder"
     espFolder.Parent = Shared.GUI or CoreGui
 
     local espCache = {}
-
     local roleTheme = {
         Murderer = { Color = Color3.fromRGB(255, 35, 35),  Tag = "[MURDERER]" },
         Sheriff  = { Color = Color3.fromRGB(0, 150, 255),  Tag = "[SHERIFF]" },
@@ -353,10 +294,8 @@ return function(Shared)
         espCache = {}
     end
 
-    MkToggle(tab, "Role ESP (Color Highlights & Tags)", "RoleESP", 31, function(state)
-        if not state then
-            clearESP()
-        end
+    MkToggle(rightCol, "Role ESP", "RoleESP", 11, function(state)
+        if not state then clearESP() end
     end)
 
     RunService.RenderStepped:Connect(function()
@@ -385,7 +324,7 @@ return function(Shared)
 
                         local bb = Instance.new("BillboardGui")
                         bb.Name = "BB_" .. plr.Name
-                        bb.Size = UDim2.new(0, 140, 0, 40)
+                        bb.Size = UDim2.new(0, 140, 0, 36)
                         bb.StudsOffset = Vector3.new(0, 3.2, 0)
                         bb.AlwaysOnTop = true
                         bb.Adornee = hrp
@@ -400,24 +339,24 @@ return function(Shared)
                         tagFrame.Parent = bb
 
                         local nameLbl = Instance.new("TextLabel")
-                        nameLbl.Size = UDim2.new(1, 0, 0, 20)
-                        nameLbl.Position = UDim2.new(0, 0, 0, 2)
+                        nameLbl.Size                  = UDim2.new(1, 0, 0, 18)
+                        nameLbl.Position              = UDim2.new(0, 0, 0, 2)
                         nameLbl.BackgroundTransparency = 1
-                        nameLbl.Text = plr.DisplayName .. " (@" .. plr.Name .. ")"
-                        nameLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-                        nameLbl.Font = Enum.Font.Code
-                        nameLbl.TextSize = 10
-                        nameLbl.Parent = tagFrame
+                        nameLbl.Text                  = plr.DisplayName .. " (@" .. plr.Name .. ")"
+                        nameLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
+                        nameLbl.Font                  = Enum.Font.Code
+                        nameLbl.TextSize              = 10
+                        nameLbl.Parent                = tagFrame
 
                         local roleLbl = Instance.new("TextLabel")
-                        roleLbl.Size = UDim2.new(1, 0, 0, 16)
-                        roleLbl.Position = UDim2.new(0, 0, 0, 20)
+                        roleLbl.Size                  = UDim2.new(1, 0, 0, 14)
+                        roleLbl.Position              = UDim2.new(0, 0, 0, 18)
                         roleLbl.BackgroundTransparency = 1
-                        roleLbl.Text = theme.Tag .. " [" .. tostring(dist) .. "m]"
-                        roleLbl.TextColor3 = theme.Color
-                        roleLbl.Font = Enum.Font.Code
-                        roleLbl.TextSize = 10
-                        roleLbl.Parent = tagFrame
+                        roleLbl.Text                  = theme.Tag .. " [" .. tostring(dist) .. "m]"
+                        roleLbl.TextColor3            = theme.Color
+                        roleLbl.Font                  = Enum.Font.Code
+                        roleLbl.TextSize              = 10
+                        roleLbl.Parent                = tagFrame
 
                         data = { Highlight = h, Billboard = bb, NameLabel = nameLbl, RoleLabel = roleLbl, Frame = tagFrame }
                         espCache[plr.Name] = data
@@ -449,5 +388,5 @@ return function(Shared)
         end
     end)
 
-    print("[MM2_Functions] Loaded -- Combat, visual predictor, and role ESP active")
+    print("[MM2_Functions] Loaded -- Quad layout combat active")
 end
