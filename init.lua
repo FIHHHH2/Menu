@@ -51,10 +51,16 @@ local Shared = {
         CoreGui      = game:GetService("CoreGui"),
     },
     Flags        = {},
-    Keybinds     = {}, -- [flagKey] = { Name = "...", Key = Enum.KeyCode, SetToggle = func }
-    Toggles      = {}, -- [flagKey] = { Name = "...", SetToggle = func, State = bool }
+    Keybinds     = {},
+    Toggles      = {},
+    Config       = {
+        SpotifyToken = "",
+        LastFMUser   = "",
+        Keybinds     = {},
+        Flags        = {},
+    },
     GUI          = nil,
-    Version      = "2.0.0",
+    Version      = "3.0.0",
 }
 
 Shared.Character  = Shared.Player.Character or Shared.Player.CharacterAdded:Wait()
@@ -69,4 +75,5 @@ end)
 loadModule("UI_Handler")(Shared)
 loadModule("Main_Functions")(Shared)
 loadModule("MM2_Functions")(Shared)
-loadModule("Spotify_Handler")(Shared)
+loadModule("Troll_Functions")(Shared)
+loadModule("Music_Handler")(Shared)

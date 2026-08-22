@@ -1,6 +1,6 @@
 -- UI_Handler.lua
 -- Internet Explorer 7 / Windows XP Modular UI
--- Fixed topbar alignment, removed configs link, fully contained scrolling, smooth sliders, strict cube styling
+-- Pixel-perfect cube geometry, topbar "Fih Ui" header (no rainbow), Settings drawer, Auto config save/load, Notification stack
 
 return function(Shared)
     Shared.Tabs         = {}
@@ -12,10 +12,13 @@ return function(Shared)
     Shared.SwitchTab    = function() end
     Shared.ToggleDrawer = function() end
     Shared.Notify       = function() end
+    Shared.SaveConfig   = function() end
+    Shared.LoadConfig   = function() end
 
     local TweenService = Shared.Services.TweenService
     local UserInput    = Shared.Services.UserInput
     local CoreGui      = Shared.Services.CoreGui
+    local Http         = Shared.Services.Http
 
     if CoreGui:FindFirstChild("IE7_Menu") then
         CoreGui:FindFirstChild("IE7_Menu"):Destroy()
@@ -31,7 +34,7 @@ return function(Shared)
     local C = {
         WinBorder     = Color3.fromRGB(58, 110, 165),
         TitleBar      = Color3.fromRGB(212, 208, 200),
-        TitleText     = Color3.fromRGB(0, 0, 0),
+        TitleText     = Color3.fromRGB(10, 20, 60),
         NavBar        = Color3.fromRGB(188, 199, 220),
         NavText       = Color3.fromRGB(10, 20, 80),
         NavLink       = Color3.fromRGB(0, 0, 180),
@@ -58,7 +61,67 @@ return function(Shared)
     }
 
     -- ============================================================
-    -- NOTIFICATION STACK (Drops down on expire)
+    -- CONFIG PERSISTENCE (Saves on Change, On Leave, Loads on Init)
+    -- ============================================================
+    local CONFIG_FILE = "FihUi_Config.json"
+
+    local function saveConfig()
+        pcall(function()
+            if writefile then
+                local data = {
+                    Flags        = Shared.Flags,
+                    SpotifyToken = Shared.Config.SpotifyToken or "",
+                    LastFMUser   = Shared.Config.LastFMUser or "",
+                    Keybinds     = {},
+                }
+                for fKey, item in pairs(Shared.Toggles) do
+                    if item.Key then
+                        data.Keybinds[fKey] = item.Key.Name
+                    end
+                end
+                writefile(CONFIG_FILE, Http:JSONEncode(data))
+            end
+        end)
+    end
+    Shared.SaveConfig = saveConfig
+
+    local function loadConfig()
+        pcall(function()
+            if isfile and readfile and isfile(CONFIG_FILE) then
+                local raw = readfile(CONFIG_FILE)
+                local data = Http:JSONDecode(raw)
+                if data then
+                    Shared.Config.SpotifyToken = data.SpotifyToken or ""
+                    Shared.Config.LastFMUser   = data.LastFMUser or ""
+                    if data.Flags then
+                        for k, v in pairs(data.Flags) do
+                            Shared.Flags[k] = v
+                        end
+                    end
+                    if data.Keybinds then
+                        for fKey, kName in pairs(data.Keybinds) do
+                            local code = Enum.KeyCode[kName]
+                            if code and Shared.Toggles[fKey] then
+                                Shared.Toggles[fKey].Key = code
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end
+    Shared.LoadConfig = loadConfig
+
+    -- Auto save on player leaving
+    Shared.Services.Players.PlayerRemoving:Connect(function(plr)
+        if plr == Shared.Player then saveConfig() end
+    end)
+    game:BindToClose(function()
+        saveConfig()
+    end)
+
+    -- ============================================================
+    -- NOTIFICATION STACK (Smooth stack & drop on expire)
     -- ============================================================
     local NotifyHolder = Instance.new("Frame")
     NotifyHolder.Name             = "NotifyHolder"
@@ -142,7 +205,7 @@ return function(Shared)
     -- ============================================================
     -- MAIN WINDOW
     -- ============================================================
-    local WIN_W, WIN_H = 680, 420
+    local WIN_W, WIN_H = 680, 430
     local Window = Instance.new("Frame")
     Window.Name             = "Window"
     Window.Size             = UDim2.new(0, WIN_W, 0, WIN_H)
@@ -154,7 +217,7 @@ return function(Shared)
     Window.Parent           = ScreenGui
 
     -- ============================================================
-    -- TOPBAR & WINDOW CONTROLS
+    -- TOPBAR ("Fih Ui" header, no rainbow)
     -- ============================================================
     local TITLE_H = 28
     local TitleBar = Instance.new("Frame")
@@ -167,38 +230,17 @@ return function(Shared)
     TitleBar.Parent           = Window
 
     local TitleText = Instance.new("TextLabel")
-    TitleText.Size                  = UDim2.new(0, 145, 1, 0)
-    TitleText.Position              = UDim2.new(0, 8, 0, 0)
+    TitleText.Name                  = "TitleText"
+    TitleText.Size                  = UDim2.new(0, 200, 1, 0)
+    TitleText.Position              = UDim2.new(0, 10, 0, 0)
     TitleText.BackgroundTransparency = 1
-    TitleText.Text                  = "Internet Explorer 7"
+    TitleText.Text                  = "Fih Ui"
     TitleText.TextColor3            = C.TitleText
     TitleText.Font                  = Enum.Font.Code
-    TitleText.TextSize              = 12
+    TitleText.TextSize              = 13
     TitleText.TextXAlignment        = Enum.TextXAlignment.Left
     TitleText.Parent                = TitleBar
 
-    -- Rainbow bar centered between title text and buttons
-    local RainbowBar = Instance.new("Frame")
-    RainbowBar.Name             = "RainbowBar"
-    RainbowBar.Size             = UDim2.new(1, -260, 0, 18)
-    RainbowBar.Position         = UDim2.new(0, 150, 0.5, -9)
-    RainbowBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    RainbowBar.BorderSizePixel  = 1
-    RainbowBar.BorderColor3     = Color3.fromRGB(160, 160, 160)
-    RainbowBar.Parent           = TitleBar
-
-    local RainbowGrad = Instance.new("UIGradient")
-    RainbowGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0,    Color3.fromRGB(34, 177, 76)),
-        ColorSequenceKeypoint.new(0.25, Color3.fromRGB(0, 162, 232)),
-        ColorSequenceKeypoint.new(0.5,  Color3.fromRGB(63, 72, 204)),
-        ColorSequenceKeypoint.new(0.75, Color3.fromRGB(163, 73, 164)),
-        ColorSequenceKeypoint.new(1,    Color3.fromRGB(237, 28, 36)),
-    })
-    RainbowGrad.Rotation = 0
-    RainbowGrad.Parent   = RainbowBar
-
-    -- Window control buttons [-] [ ] [X]
     local btnDefs = {
         { id = "min",   label = "[-]", x = -88 },
         { id = "max",   label = "[ ]", x = -58 },
@@ -249,7 +291,7 @@ return function(Shared)
         end)
     end
 
-    -- OPEN / CLOSE ANIMATIONS
+    -- WINDOW TOGGLE
     local isOpen = true
     local function animClose()
         Window:TweenSize(UDim2.new(0, WIN_W, 0, 0), Enum.EasingDirection.In, Enum.EasingStyle.Quad, 0.2, true, function()
@@ -282,7 +324,7 @@ return function(Shared)
     end)
 
     -- ============================================================
-    -- NAV STRIP (Settings link only)
+    -- NAV STRIP
     -- ============================================================
     local NAV_H = 26
     local NavBar = Instance.new("Frame")
@@ -328,7 +370,6 @@ return function(Shared)
     -- BODY CONTAINER
     -- ============================================================
     local BODY_Y    = TITLE_H + NAV_H
-    local BODY_H    = WIN_H - BODY_Y
     local SIDEBAR_W = 88
 
     local Body = Instance.new("Frame")
@@ -351,8 +392,8 @@ return function(Shared)
     Sidebar.Parent           = Body
 
     local CELL = 9
-    for r = 0, math.ceil(BODY_H / CELL) + 2 do
-        for c = 0, math.ceil(SIDEBAR_W / CELL) + 1 do
+    for r = 0, 45 do
+        for c = 0, 10 do
             local cell = Instance.new("Frame")
             cell.Size             = UDim2.new(0, CELL, 0, CELL)
             cell.Position         = UDim2.new(0, c * CELL, 0, r * CELL)
@@ -413,7 +454,7 @@ return function(Shared)
     ContentPad.Parent        = ContentArea
 
     -- ============================================================
-    -- DROPDOWN DRAWER (Settings from top to bottom)
+    -- DROPDOWN DRAWER (Settings)
     -- ============================================================
     local Drawer = Instance.new("Frame")
     Drawer.Name             = "Drawer"
@@ -441,7 +482,7 @@ return function(Shared)
     DrawerTitle.Size                  = UDim2.new(1, -85, 1, 0)
     DrawerTitle.Position              = UDim2.new(0, 8, 0, 0)
     DrawerTitle.BackgroundTransparency = 1
-    DrawerTitle.Text                  = "Settings & Audio Controls"
+    DrawerTitle.Text                  = "Settings & Configuration"
     DrawerTitle.TextColor3            = C.SectionText
     DrawerTitle.Font                  = Enum.Font.Code
     DrawerTitle.TextSize              = 11
@@ -522,7 +563,7 @@ return function(Shared)
     Shared.DrawerContent = DrawerScroll
 
     -- ============================================================
-    -- TABS CREATION (Including Keybinds Tab)
+    -- TABS CREATION (Main, MM2, Music, Troll, Keybinds)
     -- ============================================================
     local Tabs      = {}
     local TabBtns   = {}
@@ -532,8 +573,9 @@ return function(Shared)
     local tabDefs = {
         { name = "Main",     order = 1 },
         { name = "MM2",      order = 2 },
-        { name = "Spotify",  order = 3 },
-        { name = "Keybinds", order = 4 },
+        { name = "Music",    order = 3 },
+        { name = "Troll",    order = 4 },
+        { name = "Keybinds", order = 5 },
     }
 
     local function switchTab(name)
@@ -662,7 +704,7 @@ return function(Shared)
     logoSub.Size                  = UDim2.new(1, 0, 0, 18)
     logoSub.Position              = UDim2.new(0, 0, 0, 58)
     logoSub.BackgroundTransparency = 1
-    logoSub.Text                  = "Modular Execution Framework  |  RightShift to Toggle"
+    logoSub.Text                  = "Windows XP / IE7 Modular Engine  |  RightShift to Toggle"
     logoSub.TextColor3            = Color3.fromRGB(90, 110, 150)
     logoSub.Font                  = Enum.Font.Code
     logoSub.TextSize              = 11
@@ -735,6 +777,7 @@ return function(Shared)
             if not suppressNotify then
                 sendNotification(labelText, state and "ENABLED" or "DISABLED", state)
             end
+            saveConfig()
         end
 
         local clickOverlay = Instance.new("TextButton")
@@ -758,7 +801,6 @@ return function(Shared)
         return row, setToggle
     end
 
-    -- Smooth responsive slider
     local function makeSlider(parent, labelText, flagKey, minVal, maxVal, defaultVal, order, callback)
         local row = Instance.new("Frame")
         row.Name             = "Slider_" .. flagKey
@@ -820,6 +862,7 @@ return function(Shared)
             fill.Size = UDim2.new(pct, 0, 1, 0)
             valLbl.Text = tostring(val)
             if callback then callback(val) end
+            saveConfig()
         end
 
         local sliderBtn = Instance.new("TextButton")
@@ -955,6 +998,7 @@ return function(Shared)
                         Shared.Toggles[target].Key = input.KeyCode
                         sendNotification(Shared.Toggles[target].Name, "Bound to [" .. input.KeyCode.Name .. "]", true)
                     end
+                    saveConfig()
                     buildKeybindsUI()
                 else
                     for fKey, info in pairs(Shared.Toggles) do
@@ -967,11 +1011,19 @@ return function(Shared)
         end)
     end
 
-    task.delay(0.5, buildKeybindsUI)
+    task.delay(0.6, function()
+        loadConfig()
+        buildKeybindsUI()
+    end)
 
     -- SETTINGS DRAWER POPULATION
-    makeSection(DrawerScroll, "General & Keybinds", 1)
-    makeButton(DrawerScroll, "Unload / Force Close Menu", 2, function()
+    makeSection(DrawerScroll, "General & Engine", 1)
+    makeButton(DrawerScroll, "Save Config File (Manual)", 2, function()
+        saveConfig()
+        sendNotification("Config Manager", "Saved to FihUi_Config.json", true)
+    end)
+    makeButton(DrawerScroll, "Unload / Force Close Menu", 3, function()
+        saveConfig()
         if Shared.GUI then Shared.GUI:Destroy() end
         for k in pairs(Shared.Flags) do Shared.Flags[k] = false end
     end)
@@ -982,11 +1034,11 @@ return function(Shared)
             if s:IsA("Sound") then s.Volume = val / 100 end
         end
     end)
-    makeSlider(DrawerScroll, "Field of View", "FieldOfView", 70, 120, 70, 12, function(val)
+    makeSlider(DrawerScroll, "Field of View (FOV)", "FieldOfView", 70, 120, 70, 12, function(val)
         if workspace.CurrentCamera then workspace.CurrentCamera.FieldOfView = val end
     end)
 
-    makeSection(DrawerScroll, "Performance Boost", 20)
+    makeSection(DrawerScroll, "Graphics Optimization", 20)
     makeToggle(DrawerScroll, "Disable VFX (FPS Boost)", "NoVFX_Setting", 21, function(state)
         for _, obj in ipairs(workspace:GetDescendants()) do
             if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
@@ -1015,5 +1067,5 @@ return function(Shared)
     Shared.RebuildKeybinds = buildKeybindsUI
 
     switchTab("Main")
-    print("[UI_Handler] Loaded -- UI Polish and Full Option Sliders Active")
+    print("[UI_Handler] Loaded -- Fih Ui header, persistence, clean bounds")
 end

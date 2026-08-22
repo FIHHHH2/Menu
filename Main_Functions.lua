@@ -16,10 +16,7 @@ return function(Shared)
 
     local tab = Tabs["Main"]
     local cols = QuadCols["Main"]
-    if not tab or not cols then
-        warn("[Main_Functions] Quad columns not found")
-        return
-    end
+    if not tab or not cols then return end
 
     local leftCol  = cols.Left
     local rightCol = cols.Right
@@ -28,12 +25,9 @@ return function(Shared)
     local function getHRP()   return Shared.HumanoidRP or (getChar() and getChar():FindFirstChild("HumanoidRootPart")) end
     local function getHuman() return getChar() and getChar():FindFirstChildOfClass("Humanoid") end
 
-    -- ============================================================
     -- LEFT COLUMN: MOVEMENT & TELEPORTS
-    -- ============================================================
     MkSection(leftCol, "Movement & Physics", 1)
 
-    -- Infinite Jump
     local infJumpConn
     MkToggle(leftCol, "Infinite Jump", "InfiniteJump", 2, function(state)
         if infJumpConn then infJumpConn:Disconnect(); infJumpConn = nil end
@@ -45,7 +39,6 @@ return function(Shared)
         end
     end)
 
-    -- Flight
     local flightBV, flightConn
     MkToggle(leftCol, "Flight", "Flight", 3, function(state)
         local hrp = getHRP()
@@ -76,14 +69,12 @@ return function(Shared)
         end
     end)
 
-    -- Flight Speed Slider
     MkSlider(leftCol, "Flight Speed", "FlightSpeed", 20, 250, 65, 4, function(val)
         Shared.Flags["FlightSpeed"] = val
     end)
 
-    -- Noclip
     local noclipConn
-    MkToggle(leftCol, "Noclip (Phase Walls)", "Noclip", 5, function(state)
+    MkToggle(leftCol, "Noclip", "Noclip", 5, function(state)
         if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
         if state then
             noclipConn = RunService.Stepped:Connect(function()
@@ -103,7 +94,6 @@ return function(Shared)
         end
     end)
 
-    -- Click TP
     local clickTPConn
     MkToggle(leftCol, "Click TP (Mouse Click)", "ClickTP", 6, function(state)
         if clickTPConn then clickTPConn:Disconnect(); clickTPConn = nil end
@@ -126,9 +116,7 @@ return function(Shared)
         end
     end)
 
-    -- ============================================================
     -- RIGHT COLUMN: MULTIPLIERS & RENDERING
-    -- ============================================================
     MkSection(rightCol, "Stat Multipliers", 10)
 
     MkSlider(rightCol, "Walk Speed", "WalkSpeed", 16, 250, 16, 11, function(val)
@@ -150,7 +138,7 @@ return function(Shared)
 
     MkSection(rightCol, "Graphics Optimization", 20)
 
-    MkToggle(rightCol, "Disable VFX (FPS Boost)", "NoVFX", 21, function(state)
+    MkToggle(rightCol, "Disable VFX", "NoVFX", 21, function(state)
         for _, obj in ipairs(workspace:GetDescendants()) do
             if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
                 obj.Enabled = not state
@@ -159,7 +147,7 @@ return function(Shared)
         workspace.Terrain.Decoration = not state
     end)
 
-    MkToggle(rightCol, "Remove Textures (FPS Boost)", "NoTextures", 22, function(state)
+    MkToggle(rightCol, "Remove Textures", "NoTextures", 22, function(state)
         for _, obj in ipairs(workspace:GetDescendants()) do
             if obj:IsA("Decal") or obj:IsA("Texture") then
                 obj.Transparency = state and 1 or 0

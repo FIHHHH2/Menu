@@ -1,5 +1,5 @@
 -- MM2_Functions.lua
--- Murder Mystery 2 Combat & ESP formatted into Quad Side-by-Side Columns
+-- Murder Mystery 2 Combat, Kill Aura with Bounding Box Visualizer, Role ESP, Silent Aim
 
 return function(Shared)
     local Players      = Shared.Services.Players
@@ -13,14 +13,12 @@ return function(Shared)
     local QuadCols     = Shared.QuadCols or {}
     local MkSection    = Shared.MakeSection or function() end
     local MkToggle     = Shared.MakeToggle  or function() return Instance.new("Frame"), function() end end
+    local MkSlider     = Shared.MakeSlider  or function() return Instance.new("Frame") end
     local MkButton     = Shared.MakeButton  or function() return Instance.new("TextButton") end
 
     local tab = Tabs["MM2"]
     local cols = QuadCols["MM2"]
-    if not tab or not cols then
-        warn("[MM2_Functions] Quad columns not found")
-        return
-    end
+    if not tab or not cols then return end
 
     local leftCol  = cols.Left
     local rightCol = cols.Right
@@ -68,12 +66,102 @@ return function(Shared)
     end
 
     -- ============================================================
-    -- LEFT COLUMN: SHERIFF COMBAT & GUN GRABBER
+    -- LEFT COLUMN: KILL AURA & SHERIFF
     -- ============================================================
-    MkSection(leftCol, "Sheriff Weaponry", 1)
+    MkSection(leftCol, "Kill Aura Engine", 1)
+
+    local auraBoxPart = nil
+    local auraSelection = nil
+
+    MkToggle(leftCol, "Kill Aura", "KillAura", 2, function(state)
+        if not state then
+            if auraBoxPart then auraBoxPart:Destroy(); auraBoxPart = nil end
+            if auraSelection then auraSelection:Destroy(); auraSelection = nil end
+        end
+    end)
+
+    MkSlider(leftCol, "Kill Aura Range", "KillAuraRange", 5, 50, 18, 3, function(val)
+        Shared.Flags["KillAuraRange"] = val
+    end)
+
+    MkToggle(leftCol, "Show Aura Bounding Box", "ShowAuraBox", 4, function(state)
+        if not state then
+            if auraBoxPart then auraBoxPart:Destroy(); auraBoxPart = nil end
+            if auraSelection then auraSelection:Destroy(); auraSelection = nil end
+        end
+    end)
+
+    -- Kill Aura Loop + Bounding Box visualizer
+    RunService.Heartbeat:Connect(function()
+        local range = Shared.Flags["KillAuraRange"] or 18
+        local myHRP = getHRP()
+
+        -- Bounding box renderer
+        if Shared.Flags["ShowAuraBox"] and myHRP then
+            if not auraBoxPart or not auraBoxPart.Parent then
+                auraBoxPart = Instance.new("Part")
+                auraBoxPart.Name = "AuraVisualBox"
+                auraBoxPart.Anchored = true
+                auraBoxPart.CanCollide = false
+                auraBoxPart.Transparency = 1
+                auraBoxPart.Parent = Workspace
+
+                auraSelection = Instance.new("SelectionBox")
+                auraSelection.Name = "AuraSelection"
+                auraSelection.Color3 = Color3.fromRGB(255, 30, 80)
+                auraSelection.SurfaceColor3 = Color3.fromRGB(255, 0, 50)
+                auraSelection.SurfaceTransparency = 0.85
+                auraSelection.Adornee = auraBoxPart
+                auraSelection.Parent = auraBoxPart
+            end
+            auraBoxPart.Size = Vector3.new(range * 2, range * 2, range * 2)
+            auraBoxPart.CFrame = myHRP.CFrame
+        else
+            if auraBoxPart then auraBoxPart:Destroy(); auraBoxPart = nil end
+        end
+
+        -- Kill Aura Attack execution
+        if Shared.Flags["KillAura"] and myHRP then
+            local knife = getMyKnife()
+            local gun   = getMyGun()
+
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= Player and plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
+                    local targetHRP = getHRP(plr)
+                    if targetHRP then
+                        local dist = (targetHRP.Position - myHRP.Position).Magnitude
+                        if dist <= range then
+                            -- If we are Murderer: stab targets in range
+                            if knife then
+                                if knife.Parent ~= Shared.Character then
+                                    local hum = Shared.Character and Shared.Character:FindFirstChild("Humanoid")
+                                    if hum then hum:EquipTool(knife) end
+                                end
+                                knife:Activate()
+                                local stab = knife:FindFirstChildWhichIsA("RemoteEvent")
+                                if stab then stab:FireServer(targetHRP) end
+                            end
+
+                            -- If we are Sheriff: auto fire at Murderer in range
+                            if gun and getRole(plr) == "Murderer" then
+                                if gun.Parent ~= Shared.Character then
+                                    local hum = Shared.Character and Shared.Character:FindFirstChild("Humanoid")
+                                    if hum then hum:EquipTool(gun) end
+                                end
+                                local shoot = gun:FindFirstChildWhichIsA("RemoteEvent")
+                                if shoot then shoot:FireServer(targetHRP.Position) else gun:Activate() end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    MkSection(leftCol, "Sheriff Weaponry", 10)
 
     local hookedOldNamecall = nil
-    MkToggle(leftCol, "Silent Aim (Sheriff)", "SilentAim", 2, function(state)
+    MkToggle(leftCol, "Silent Aim (Sheriff)", "SilentAim", 11, function(state)
         if state then
             pcall(function()
                 local mt = getrawmetatable(game)
@@ -115,8 +203,7 @@ return function(Shared)
         end
     end)
 
-    MkToggle(leftCol, "Auto Shoot Murderer", "AutoKillMurd", 3, function(state) end)
-
+    MkToggle(leftCol, "Auto Shoot Murderer", "AutoKillMurd", 12, function(state) end)
     RunService.Heartbeat:Connect(function()
         if not Shared.Flags["AutoKillMurd"] then return end
         local gun = getMyGun()
@@ -125,21 +212,18 @@ return function(Shared)
         if not murd or not murd.Character then return end
         local mHRP = getHRP(murd)
         if not mHRP then return end
-
         if gun.Parent ~= Shared.Character then
             local hum = Shared.Character and Shared.Character:FindFirstChild("Humanoid")
             if hum then hum:EquipTool(gun) end
         end
-
         local shootRemote = gun:FindFirstChildWhichIsA("RemoteEvent")
-        if shootRemote then
-            shootRemote:FireServer(mHRP.Position)
-        else
-            gun:Activate()
-        end
+        if shootRemote then shootRemote:FireServer(mHRP.Position) else gun:Activate() end
     end)
 
-    MkSection(leftCol, "Dropped Gun", 10)
+    -- ============================================================
+    -- RIGHT COLUMN: GUN GRABBER & VISUALS
+    -- ============================================================
+    MkSection(rightCol, "Dropped Gun", 1)
 
     local function findGunDrop()
         for _, obj in ipairs(Workspace:GetChildren()) do
@@ -172,24 +256,18 @@ return function(Shared)
         return false
     end
 
-    MkButton(leftCol, "[ Instant Grab Gun ]", 11, function()
-        grabGunNow()
-    end)
-
-    MkToggle(leftCol, "Auto Grab Gun", "AutoGrabGun", 12, function(state) end)
+    MkButton(rightCol, "[ Instant Grab Gun ]", 2, function() grabGunNow() end)
+    MkToggle(rightCol, "Auto Grab Gun", "AutoGrabGun", 3, function(state) end)
     RunService.Heartbeat:Connect(function()
         if not Shared.Flags["AutoGrabGun"] then return end
         if getRole(Player) == "Innocent" then grabGunNow() end
     end)
 
-    -- ============================================================
-    -- RIGHT COLUMN: MURDERER COMBAT & ROLE ESP
-    -- ============================================================
-    MkSection(rightCol, "Murderer Combat", 1)
+    MkSection(rightCol, "Murderer Trajectory & ESP", 10)
 
     -- Knife Prediction
     local predBeam, predAttachment0, predAttachment1
-    MkToggle(rightCol, "Knife Trajectory Prediction", "KnifePred", 2, function(state)
+    MkToggle(rightCol, "Knife Trajectory Prediction", "KnifePred", 11, function(state)
         if not state then
             if predBeam then predBeam:Destroy(); predBeam = nil end
             if predAttachment0 then predAttachment0:Destroy(); predAttachment0 = nil end
@@ -210,17 +288,12 @@ return function(Shared)
         if not predBeam or not predBeam.Parent then
             local p0 = Instance.new("Part")
             p0.Size = Vector3.new(0.2, 0.2, 0.2)
-            p0.Transparency = 1; p0.Anchored = true; p0.CanCollide = false
-            p0.Parent = Workspace
-
+            p0.Transparency = 1; p0.Anchored = true; p0.CanCollide = false; p0.Parent = Workspace
             local p1 = Instance.new("Part")
             p1.Size = Vector3.new(0.2, 0.2, 0.2)
-            p1.Transparency = 1; p1.Anchored = true; p1.CanCollide = false
-            p1.Parent = Workspace
-
+            p1.Transparency = 1; p1.Anchored = true; p1.CanCollide = false; p1.Parent = Workspace
             predAttachment0 = Instance.new("Attachment", p0)
             predAttachment1 = Instance.new("Attachment", p1)
-
             predBeam = Instance.new("Beam")
             predBeam.Color = ColorSequence.new(Color3.fromRGB(255, 30, 30))
             predBeam.Width0 = 0.4
@@ -238,43 +311,7 @@ return function(Shared)
         predAttachment1.Parent.Position = mHRP.Position + (look * 25) + (vel * 0.3)
     end)
 
-    -- Auto Kill All
-    local autoKillLoop = false
-    MkToggle(rightCol, "Auto Kill All (Murderer)", "AutoKillAll", 3, function(state)
-        autoKillLoop = state
-        if state then
-            task.spawn(function()
-                while autoKillLoop and Shared.Flags["AutoKillAll"] do
-                    local knife = getMyKnife()
-                    if knife then
-                        if knife.Parent ~= Shared.Character then
-                            local hum = Shared.Character and Shared.Character:FindFirstChild("Humanoid")
-                            if hum then hum:EquipTool(knife) end
-                            task.wait(0.1)
-                        end
-                        local myHRP = getHRP()
-                        for _, plr in ipairs(Players:GetPlayers()) do
-                            if not autoKillLoop then break end
-                            if plr ~= Player and plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
-                                local targetHRP = getHRP(plr)
-                                if targetHRP and myHRP then
-                                    myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 1.2)
-                                    knife:Activate()
-                                    local stabRemote = knife:FindFirstChildWhichIsA("RemoteEvent")
-                                    if stabRemote then stabRemote:FireServer(targetHRP) end
-                                    task.wait(0.12)
-                                end
-                            end
-                        end
-                    end
-                    task.wait(0.3)
-                end
-            end)
-        end
-    end)
-
-    MkSection(rightCol, "Visual ESP", 10)
-
+    -- Role ESP
     local espFolder = Instance.new("Folder")
     espFolder.Name   = "MM2_ESP_Holder"
     espFolder.Parent = Shared.GUI or CoreGui
@@ -294,7 +331,7 @@ return function(Shared)
         espCache = {}
     end
 
-    MkToggle(rightCol, "Role ESP", "RoleESP", 11, function(state)
+    MkToggle(rightCol, "Role ESP (Tags & Highlights)", "RoleESP", 12, function(state)
         if not state then clearESP() end
     end)
 
@@ -388,5 +425,5 @@ return function(Shared)
         end
     end)
 
-    print("[MM2_Functions] Loaded -- Quad layout combat active")
+    print("[MM2_Functions] Loaded -- Kill Aura, Box Visualizer, Combat Online")
 end
