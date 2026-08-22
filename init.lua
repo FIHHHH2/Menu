@@ -2,7 +2,7 @@
 -- Loadstring entry: load this to bootstrap the entire menu
 -- Usage: loadstring(game:HttpGet("YOUR_RAW_URL/init.lua"))()
 
-local BASE_URL = "YOUR_RAW_URL_HERE" -- Replace with your raw GitHub URL
+local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/refs/heads/main"
 
 local function loadModule(name)
     local ok, result = pcall(function()
