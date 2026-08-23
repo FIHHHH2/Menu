@@ -201,6 +201,8 @@ return function(Shared)
             local writefile      = writefile or (getgenv and getgenv().writefile)
             local delfile        = delfile or (getgenv and getgenv().delfile)
 
+            local ContentProvider = game:GetService("ContentProvider")
+
             for _, candidateUrl in ipairs(candidates) do
                 if myToken ~= currentLoadingToken then return end
                 local imgBytes = downloadImageBytes(candidateUrl)
@@ -212,25 +214,45 @@ return function(Shared)
                         if okW then
                             local okA, newAsset = pcall(function() return getcustomasset(uniqueName) end)
                             if okA and newAsset and newAsset ~= "" then
-                                if previousCoverFile ~= "" and delfile then
-                                    pcall(function() delfile(previousCoverFile) end)
-                                end
-                                previousCoverFile = uniqueName
-                                currentCoverAsset = newAsset
-                                lastLoadedCoverUrl = candidateUrl
-
                                 if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
                                     imgLabel.Image = newAsset
+                                    imgLabel.BackgroundTransparency = 1
                                     imgLabel.Visible = true
-                                    return
+
+                                    -- Verify texture renders successfully
+                                    local loaded = true
+                                    local okPreload = pcall(function()
+                                        ContentProvider:PreloadAsync({ imgLabel })
+                                    end)
+                                    task.wait(0.05)
+                                    if imgLabel.IsLoaded == false then
+                                        loaded = false
+                                    end
+
+                                    if loaded then
+                                        if previousCoverFile ~= "" and previousCoverFile ~= uniqueName and delfile then
+                                            pcall(function() delfile(previousCoverFile) end)
+                                        end
+                                        previousCoverFile = uniqueName
+                                        currentCoverAsset = newAsset
+                                        lastLoadedCoverUrl = candidateUrl
+                                        return
+                                    else
+                                        -- Texture failed to render, try next candidate stage
+                                        if delfile then pcall(function() delfile(uniqueName) end) end
+                                    end
                                 end
                             end
                         end
                     else
                         if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
                             imgLabel.Image = candidateUrl
+                            imgLabel.BackgroundTransparency = 1
                             imgLabel.Visible = true
-                            return
+                            task.wait(0.05)
+                            if imgLabel.IsLoaded ~= false then
+                                return
+                            end
                         end
                     end
                 end
@@ -528,16 +550,34 @@ return function(Shared)
         content.ZIndex           = 51
         content.Parent           = frame
 
-        -- 1. Album Cover Art: Scales dynamically with HUD height
+        -- 1. Album Cover Art Container: Dark vinyl frame with note icon (never shows white box)
+        local coverContainer = Instance.new("Frame")
+        coverContainer.Name             = "CoverContainer"
+        coverContainer.Position         = UDim2.new(0, 6, 0, 6)
+        coverContainer.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
+        coverContainer.BorderSizePixel  = 1
+        coverContainer.BorderColor3     = C.BorderCol
+        coverContainer.ZIndex           = 52
+        coverContainer.Parent           = content
+
+        local noteIcon = Instance.new("TextLabel")
+        noteIcon.Size                   = UDim2.new(1, 0, 1, 0)
+        noteIcon.BackgroundTransparency = 1
+        noteIcon.Text                   = "🎵"
+        noteIcon.TextSize               = 22
+        noteIcon.TextColor3             = Color3.fromRGB(110, 130, 170)
+        noteIcon.TextTransparency       = 0.35
+        noteIcon.ZIndex                 = 52
+        noteIcon.Parent                 = coverContainer
+
         local cover = Instance.new("ImageLabel")
         cover.Name                = "CoverArt"
-        cover.Position            = UDim2.new(0, 6, 0, 6)
-        cover.BackgroundColor3    = C.CoverBg or Color3.fromRGB(225, 230, 240)
-        cover.BorderSizePixel     = 1
-        cover.BorderColor3        = C.BorderCol
-        cover.ScaleType           = Enum.ScaleType.Fit
-        cover.ZIndex              = 52
-        cover.Parent              = content
+        cover.Size                = UDim2.new(1, 0, 1, 0)
+        cover.BackgroundTransparency = 1
+        cover.BorderSizePixel     = 0
+        cover.ScaleType           = Enum.ScaleType.Crop
+        cover.ZIndex              = 53
+        cover.Parent              = coverContainer
         hudCoverImg = cover
 
         -- 2. Right Text Container (holds crisp text moved down so nothing clips)
@@ -620,7 +660,7 @@ return function(Shared)
         local function updateHUDLayout()
             local totalH = frame.AbsoluteSize.Y
             local coverDim = math.clamp(totalH - 34, 44, 200)
-            cover.Size = UDim2.new(0, coverDim, 0, coverDim)
+            coverContainer.Size = UDim2.new(0, coverDim, 0, coverDim)
 
             rightBox.Position = UDim2.new(0, coverDim + 14, 0, 0)
             rightBox.Size     = UDim2.new(1, -(coverDim + 22), 1, 0)
