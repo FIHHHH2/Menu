@@ -267,5 +267,147 @@ return function(Shared)
         end
     end)
 
-    print("[Main_Functions] Loaded -- Performance Suite & Stat Multipliers Active")
+    -- ── RIGHT COLUMN: SERVER & TELEPORTS ─────────────────────────
+    local TeleportService = game:GetService("TeleportService")
+    local HttpService     = game:GetService("HttpService")
+
+    MkSection(rightCol, "Server & Teleports", 40)
+
+    -- 1. Rejoin Current Server
+    MkButton(rightCol, "[ 🔄 Rejoin Current Server ]", 41, function()
+        Shared.Notify("Teleport", "Rejoining current server...", true)
+        local ok, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
+        end)
+        if not ok then
+            TeleportService:Teleport(game.PlaceId, Player)
+        end
+    end)
+
+    -- 2. Server Hop (Find different active public server)
+    MkButton(rightCol, "[ ⚡ Server Hop (New Server) ]", 42, function()
+        Shared.Notify("Server Hop", "Searching for available server...", true)
+        task.spawn(function()
+            local success, res = pcall(function()
+                return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Desc&limit=100")
+            end)
+
+            if not success or not res or #res == 0 then
+                local reqRes = Shared.HttpRequest({
+                    Url = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Desc&limit=100",
+                    Method = "GET"
+                })
+                if reqRes and reqRes.Body and #reqRes.Body > 0 then
+                    res = reqRes.Body
+                    success = true
+                end
+            end
+
+            if success and res then
+                local okD, data = pcall(function() return HttpService:JSONDecode(res) end)
+                if okD and data and data.data then
+                    local validServers = {}
+                    for _, s in ipairs(data.data) do
+                        if type(s) == "table" and s.id and s.id ~= game.JobId and s.playing and s.maxPlayers and s.playing < s.maxPlayers then
+                            table.insert(validServers, s.id)
+                        end
+                    end
+
+                    if #validServers > 0 then
+                        local chosen = validServers[math.random(1, #validServers)]
+                        Shared.Notify("Server Hop", "Connecting to server: " .. chosen:sub(1,8) .. "...", true)
+                        TeleportService:TeleportToPlaceInstance(game.PlaceId, chosen, Player)
+                        return
+                    end
+                end
+            end
+
+            -- Fallback standard teleport
+            Shared.Notify("Server Hop", "Connecting to next available server...", true)
+            TeleportService:Teleport(game.PlaceId, Player)
+        end)
+    end)
+
+    -- 3. Join Game by Place ID
+    local targetPlaceId = ""
+    local targetJobId   = ""
+
+    local placeBox = Instance.new("TextBox")
+    placeBox.Name                  = "PlaceIdInput"
+    placeBox.Size                  = UDim2.new(1, 0, 0, 24)
+    placeBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
+    placeBox.BorderSizePixel       = 1
+    placeBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
+    placeBox.Text                  = "Enter Place ID (e.g. 142823291)"
+    placeBox.TextColor3            = Color3.fromRGB(20, 20, 60)
+    placeBox.Font                  = Enum.Font.Code
+    placeBox.TextSize              = 11
+    placeBox.LayoutOrder           = 43
+    placeBox.Parent                = rightCol
+
+    placeBox.Focused:Connect(function()
+        if placeBox.Text:find("Enter Place ID") then placeBox.Text = "" end
+    end)
+    placeBox.FocusLost:Connect(function()
+        targetPlaceId = placeBox.Text:gsub("%D+", "")
+    end)
+
+    local jobBox = Instance.new("TextBox")
+    jobBox.Name                  = "JobIdInput"
+    jobBox.Size                  = UDim2.new(1, 0, 0, 24)
+    jobBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
+    jobBox.BorderSizePixel       = 1
+    jobBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
+    jobBox.Text                  = "Enter Job/Server ID (Optional)"
+    jobBox.TextColor3            = Color3.fromRGB(20, 20, 60)
+    jobBox.Font                  = Enum.Font.Code
+    jobBox.TextSize              = 11
+    jobBox.LayoutOrder           = 44
+    jobBox.Parent                = rightCol
+
+    jobBox.Focused:Connect(function()
+        if jobBox.Text:find("Enter Job") then jobBox.Text = "" end
+    end)
+    jobBox.FocusLost:Connect(function()
+        targetJobId = jobBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
+    end)
+
+    MkButton(rightCol, "[ 🚀 Teleport to Place ID ]", 45, function()
+        local pId = tonumber(targetPlaceId) or tonumber(placeBox.Text:gsub("%D+", ""))
+        if not pId or pId <= 0 then
+            Shared.Notify("Teleport", "Invalid Place ID entered", false)
+            return
+        end
+
+        local jId = (targetJobId ~= "" and not targetJobId:find("Enter Job")) and targetJobId or nil
+        Shared.Notify("Teleport", "Teleporting to Place ID: " .. tostring(pId) .. "...", true)
+
+        if jId and #jId > 10 then
+            local ok = pcall(function() TeleportService:TeleportToPlaceInstance(pId, jId, Player) end)
+            if not ok then TeleportService:Teleport(pId, Player) end
+        else
+            TeleportService:Teleport(pId, Player)
+        end
+    end)
+
+    -- 4. Auto-Rejoin on Disconnect / Kick
+    local autoRejoinConn = nil
+    MkToggle(rightCol, "Auto-Rejoin on Disconnect", "AutoRejoin", 46, function(state)
+        if autoRejoinConn then autoRejoinConn:Disconnect(); autoRejoinConn = nil end
+        if state then
+            local CoreGui = game:GetService("CoreGui")
+            local promptOverlay = CoreGui:FindFirstChild("RobloxPromptGui") and CoreGui.RobloxPromptGui:FindFirstChild("promptOverlay")
+            if promptOverlay then
+                autoRejoinConn = promptOverlay.ChildAdded:Connect(function(child)
+                    if not Shared.Flags["AutoRejoin"] then return end
+                    if child.Name == "ErrorPrompt" or child.Name:find("Prompt") then
+                        task.wait(1)
+                        TeleportService:Teleport(game.PlaceId, Player)
+                    end
+                end)
+            end
+        end
+    end)
+
+    print("[Main_Functions] Loaded -- Performance, Teleports & Server Hop Active")
 end
