@@ -599,13 +599,20 @@ return function(Shared)
     local QuadCols = {}
     local activeTab = nil
 
+    local isMM2 = (game.PlaceId == 142823291 or game.GameId == 66654135 or game.PlaceId == 335132309 or game.PlaceId == 63518381)
+    if Shared.IsMM2 ~= nil then isMM2 = Shared.IsMM2 end
+
     local tabDefs = {
         {name="Main",     order=1},
-        {name="MM2",      order=2},
-        {name="Music",    order=3},
-        {name="Troll",    order=4},
-        {name="Keybinds", order=5},
     }
+    local curOrder = 2
+    if isMM2 then
+        table.insert(tabDefs, {name="MM2", order=curOrder})
+        curOrder = curOrder + 1
+    end
+    table.insert(tabDefs, {name="Music",    order=curOrder})
+    table.insert(tabDefs, {name="Troll",    order=curOrder + 1})
+    table.insert(tabDefs, {name="Keybinds", order=curOrder + 2})
 
     local function switchTab(name)
         if activeTab == name then return end

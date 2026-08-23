@@ -378,7 +378,18 @@ return function(Shared)
     local function buildHUD()
         if hudWidget then hudWidget:Destroy(); hudWidget = nil end
 
-        local C = {
+        local isDark = (Shared.IsDark and Shared.IsDark()) or (Shared.Config and Shared.Config.DarkMode == true)
+        local C = isDark and {
+            WinBorder = Color3.fromRGB(30, 75, 130),
+            TitleBar  = Color3.fromRGB(32, 36, 46),
+            TitleText = Color3.fromRGB(220, 225, 240),
+            BodyBg    = Color3.fromRGB(16, 18, 24),
+            BorderCol = Color3.fromRGB(40, 50, 70),
+            TextDark  = Color3.fromRGB(235, 240, 250),
+            Accent    = Color3.fromRGB(60, 145, 255),
+            SubText   = Color3.fromRGB(130, 150, 180),
+            CoverBg   = Color3.fromRGB(25, 28, 38)
+        } or {
             WinBorder = Color3.fromRGB(58, 110, 165),
             TitleBar  = Color3.fromRGB(212, 208, 200),
             TitleText = Color3.fromRGB(0, 0, 0),
@@ -386,7 +397,8 @@ return function(Shared)
             BorderCol = Color3.fromRGB(180, 190, 210),
             TextDark  = Color3.fromRGB(15, 25, 60),
             Accent    = Color3.fromRGB(0, 120, 40),
-            SubText   = Color3.fromRGB(80, 95, 120)
+            SubText   = Color3.fromRGB(80, 95, 120),
+            CoverBg   = Color3.fromRGB(225, 230, 240)
         }
 
         local frame = Instance.new("Frame")
@@ -454,7 +466,7 @@ return function(Shared)
         local cover = Instance.new("ImageLabel")
         cover.Name                = "CoverArt"
         cover.Position            = UDim2.new(0, 6, 0, 6)
-        cover.BackgroundColor3    = Color3.fromRGB(225, 230, 240)
+        cover.BackgroundColor3    = C.CoverBg or Color3.fromRGB(225, 230, 240)
         cover.BorderSizePixel     = 1
         cover.BorderColor3        = C.BorderCol
         cover.ScaleType           = Enum.ScaleType.Fit

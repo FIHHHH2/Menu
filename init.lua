@@ -87,9 +87,15 @@ Shared.Player.CharacterAdded:Connect(function(char)
     Shared.HumanoidRP = char:WaitForChild("HumanoidRootPart")
 end)
 
+-- Game Environment Detection (MM2 check)
+local isMM2 = (game.PlaceId == 142823291 or game.GameId == 66654135 or game.PlaceId == 335132309 or game.PlaceId == 63518381)
+Shared.IsMM2 = isMM2
+
 -- Load order
 loadModule("UI_Handler")(Shared)
 loadModule("Main_Functions")(Shared)
-loadModule("MM2_Functions")(Shared)
+if isMM2 then
+    loadModule("MM2_Functions")(Shared)
+end
 loadModule("Troll_Functions")(Shared)
 loadModule("Music_Handler")(Shared)
