@@ -322,13 +322,89 @@ return function(Shared)
                 end
             end
 
-            -- Fallback standard teleport
             Shared.Notify("Server Hop", "Connecting to next available server...", true)
             TeleportService:Teleport(game.PlaceId, Player)
         end)
     end)
 
-    -- 3. Join Game by Place ID
+    -- 3. Join Random Roblox Game
+    local POPULAR_PLACES = {
+        142823291,   -- Murder Mystery 2
+        2753915549,  -- Blox Fruits
+        920587237,   -- Adopt Me!
+        4924922222,  -- Brookhaven RP
+        286090429,   -- Arsenal
+        189707,      -- Natural Disaster Survival
+        1962086868,  -- Tower of Hell
+        6872265039,  -- BedWars
+        6516141723,  -- Doors
+        13772394625, -- Blade Ball
+        606849621,   -- Jailbreak
+        16732694052, -- Fisch
+        1730877806,  -- The Strongest Battlegrounds
+        9872472334,  -- Evade
+        292439477,   -- Phantom Forces
+        17625359962, -- Rivals
+        155615604,   -- Prison Life
+        3956818381,  -- Ninja Legends
+        4442272183,  -- Flee the Facility
+        185655149,   -- Welcome to Bloxburg
+        8737602449,  -- Pls Donate
+        1240123653,  -- Zombie Stories
+        11131159953, -- Combat Initiation
+        12552538292, -- Pressure
+        18115804639, -- Dress To Impress
+    }
+
+    MkButton(rightCol, "[ 🎲 Join Random Game ]", 43, function()
+        Shared.Notify("Random Game", "Finding a random experience...", true)
+        task.spawn(function()
+            -- 1. Try dynamic discovery from Roblox Recommendations API
+            local livePlaces = {}
+            local success, res = pcall(function()
+                return game:HttpGet("https://games.roblox.com/v1/games/recommendations/game/" .. tostring(game.PlaceId) .. "?maxRows=50")
+            end)
+
+            if not success or not res or #res == 0 then
+                local reqRes = Shared.HttpRequest({
+                    Url = "https://games.roblox.com/v1/games/recommendations/game/" .. tostring(game.PlaceId) .. "?maxRows=50",
+                    Method = "GET"
+                })
+                if reqRes and reqRes.Body and #reqRes.Body > 0 then
+                    res = reqRes.Body
+                    success = true
+                end
+            end
+
+            if success and res then
+                local okD, data = pcall(function() return HttpService:JSONDecode(res) end)
+                if okD and data and data.games then
+                    for _, g in ipairs(data.games) do
+                        if g.placeId and g.placeId ~= game.PlaceId then
+                            table.insert(livePlaces, g.placeId)
+                        end
+                    end
+                end
+            end
+
+            -- 2. Select from dynamic list or verified popular pool
+            local chosenPlaceId = nil
+            if #livePlaces > 0 then
+                chosenPlaceId = livePlaces[math.random(1, #livePlaces)]
+            else
+                local pool = {}
+                for _, id in ipairs(POPULAR_PLACES) do
+                    if id ~= game.PlaceId then table.insert(pool, id) end
+                end
+                chosenPlaceId = pool[math.random(1, #pool)]
+            end
+
+            Shared.Notify("Random Game", "Teleporting to Place ID: " .. tostring(chosenPlaceId) .. "...", true)
+            TeleportService:Teleport(chosenPlaceId, Player)
+        end)
+    end)
+
+    -- 4. Join Game by Place ID
     local targetPlaceId = ""
     local targetJobId   = ""
 
@@ -342,7 +418,7 @@ return function(Shared)
     placeBox.TextColor3            = Color3.fromRGB(20, 20, 60)
     placeBox.Font                  = Enum.Font.Code
     placeBox.TextSize              = 11
-    placeBox.LayoutOrder           = 43
+    placeBox.LayoutOrder           = 44
     placeBox.Parent                = rightCol
 
     placeBox.Focused:Connect(function()
@@ -372,7 +448,7 @@ return function(Shared)
         targetJobId = jobBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
     end)
 
-    MkButton(rightCol, "[ 🚀 Teleport to Place ID ]", 45, function()
+    MkButton(rightCol, "[ 🚀 Teleport to Place ID ]", 46, function()
         local pId = tonumber(targetPlaceId) or tonumber(placeBox.Text:gsub("%D+", ""))
         if not pId or pId <= 0 then
             Shared.Notify("Teleport", "Invalid Place ID entered", false)
@@ -392,7 +468,7 @@ return function(Shared)
 
     -- 4. Auto-Rejoin on Disconnect / Kick
     local autoRejoinConn = nil
-    MkToggle(rightCol, "Auto-Rejoin on Disconnect", "AutoRejoin", 46, function(state)
+    MkToggle(rightCol, "Auto-Rejoin on Disconnect", "AutoRejoin", 47, function(state)
         if autoRejoinConn then autoRejoinConn:Disconnect(); autoRejoinConn = nil end
         if state then
             local CoreGui = game:GetService("CoreGui")
