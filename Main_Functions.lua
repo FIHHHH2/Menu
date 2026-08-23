@@ -311,32 +311,38 @@ return function(Shared)
     local universalESPList = {}   -- [Player] = { gui = BillboardGui, hl = Highlight, lbl = TextLabel, bg = Frame }
     local universalESPConn = nil
 
-    -- Clean filter-safe signature that does not get censored into ### by Roblox Chat
-    local BEACON_KEY = "!fih_sync!"
+    -- Silent peer sync via character StringValue — zero chat messages sent
+    local TAG_NAME = "Fih_PeerTag"
 
-    local function getBeaconPayload()
-        local curTrack = Shared.GetCurrentTrack and Shared.GetCurrentTrack() or { name = "", artist = "" }
-        local s = (curTrack.name and curTrack.name ~= "Not Playing") and curTrack.name or ""
-        local a = (curTrack.artist and curTrack.artist ~= "No Artist") and curTrack.artist or ""
-        -- Format: !fih_sync!SongName//ArtistName
-        return BEACON_KEY .. s:sub(1, 40) .. "//" .. a:sub(1, 30)
+    local function getSelfTag()
+        local char = Player.Character or Player.CharacterAdded:Wait()
+        local tag = char:FindFirstChild(TAG_NAME)
+        if not tag then
+            tag = Instance.new("StringValue")
+            tag.Name = TAG_NAME
+            tag.Parent = char
+        end
+        return tag
     end
 
     local function broadcastBeacon()
         pcall(function()
-            local payload = getBeaconPayload()
-            local tcs = game:GetService("TextChatService")
-            if tcs and tcs.ChatVersion == Enum.ChatVersion.TextChatService then
-                local genChannel = tcs:FindFirstChild("TextChannels") and tcs.TextChannels:FindFirstChild("RBXGeneral")
-                if genChannel then genChannel:SendAsync(payload) end
-            else
-                local sayReq = game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
-                            and game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
-                if sayReq then sayReq:FireServer(payload, "All") end
-            end
+            local curTrack = Shared.GetCurrentTrack and Shared.GetCurrentTrack() or { name = "", artist = "" }
+            local s = (curTrack.name and curTrack.name ~= "Not Playing") and curTrack.name or ""
+            local a = (curTrack.artist and curTrack.artist ~= "No Artist") and curTrack.artist or ""
+            local tag = getSelfTag()
+            tag.Value = s:sub(1,40) .. "//" .. a:sub(1,30)
         end)
     end
     Shared.BroadcastBeacon = broadcastBeacon
+
+    local function readPeerTag(plr)
+        if not plr.Character then return nil, nil end
+        local tag = plr.Character:FindFirstChild(TAG_NAME)
+        if not tag or tag.Value == "" then return nil, nil end
+        local s, a = tag.Value:match("^(.-)//(.*)$")
+        return (s and s ~= "") and s or nil, (a and a ~= "") and a or nil
+    end
 
     -- Create or update an AlwaysOnTop 3D Overhead Music Billboard on a Peer Player
     local function updatePeerBillboard(plr, songName, artistName)
@@ -435,82 +441,39 @@ return function(Shared)
         end
     end
 
-    local function parsePeerMessage(senderId, text)
-        if not senderId or senderId == Player.UserId or not text then return end
-
-        local songName, artistName = "", ""
-        local matched = false
-
-        if text:find(BEACON_KEY, 1, true) then
-            matched = true
-            local body = text:sub((text:find(BEACON_KEY, 1, true) or 1) + #BEACON_KEY)
-            local s, a = body:match("^(.-)//(.*)$")
-            songName   = s or body
-            artistName = a or ""
-        elseif text:find("FIH_SIG", 1, true) then
-            matched = true
-            local rawJson = text:match("FIH_SIG:(.-)\226\128\139") or text:match("FIH_SIG:(.*)")
-            if rawJson then
-                local ok, d = pcall(function() return HttpService:JSONDecode(rawJson) end)
-                if ok and d then
-                    songName   = d.s or ""
-                    artistName = d.a or ""
+    -- Silently scan all player characters for the peer tag StringValue
+    local function scanForPeers()
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= Player and plr.Character then
+                local tag = plr.Character:FindFirstChild(TAG_NAME)
+                if tag and tag.Value ~= "" then
+                    local songName, artistName = readPeerTag(plr)
+                    local isNew = not peerUsers[plr.UserId]
+                    local prevBB = peerUsers[plr.UserId] and peerUsers[plr.UserId].billboard or nil
+                    peerUsers[plr.UserId] = {
+                        isPeer    = true,
+                        song      = songName or "",
+                        artist    = artistName or "",
+                        billboard = prevBB
+                    }
+                    updatePeerBillboard(plr, songName or "", artistName or "")
+                    if isNew then
+                        local songMsg = (songName and songName ~= "") and (" (🎵 " .. songName .. ")") or ""
+                        Shared.Notify("Peer Detected", plr.DisplayName .. " is running this script!" .. songMsg, true)
+                    end
                 end
             end
         end
-
-        if not matched then return end
-
-        local isNew = not peerUsers[senderId]
-        local prevBB = peerUsers[senderId] and peerUsers[senderId].billboard or nil
-        peerUsers[senderId] = {
-            isPeer    = true,
-            song      = songName,
-            artist    = artistName,
-            billboard = prevBB
-        }
-
-        local senderPlr = Players:GetPlayerByUserId(senderId)
-        if senderPlr then
-            updatePeerBillboard(senderPlr, songName, artistName)
-        end
-
-        if isNew then
-            local name = senderPlr and senderPlr.DisplayName or ("User " .. tostring(senderId))
-            local songMsg = (songName ~= "") and (" (🎵 " .. songName .. ")") or ""
-            Shared.Notify("Peer Detected", name .. " is running this script!" .. songMsg, true)
-        end
     end
 
-    -- Peer listener (TextChatService & Legacy)
+    -- Background silent loop: update our own tag + scan others
     task.spawn(function()
-        pcall(function()
-            local tcs = game:GetService("TextChatService")
-            if tcs and tcs.ChatVersion == Enum.ChatVersion.TextChatService then
-                tcs.MessageReceived:Connect(function(msg)
-                    if msg.TextSource and msg.Text then
-                        parsePeerMessage(msg.TextSource.UserId, msg.Text)
-                    end
-                end)
-            end
-        end)
-
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= Player then
-                plr.Chatted:Connect(function(msg) parsePeerMessage(plr.UserId, msg) end)
-            end
-        end
-        Players.PlayerAdded:Connect(function(plr)
-            if plr ~= Player then
-                plr.Chatted:Connect(function(msg) parsePeerMessage(plr.UserId, msg) end)
-            end
-        end)
-
         while true do
+            task.wait(6)
             if Shared.Flags["PeerDetect"] or Shared.Flags["UniversalESP"] then
                 broadcastBeacon()
+                scanForPeers()
             end
-            task.wait(8)
         end
     end)
 
@@ -649,10 +612,7 @@ return function(Shared)
         end
     end)
 
-    MkButton(rightCol, "[ 📡 Ping / Handshake Now ]", 38, function()
-        broadcastBeacon()
-        Shared.Notify("Peer Radar", "Handshake ping broadcasted to server", true)
-    end)
+
 
     -- ── RIGHT COLUMN: SERVER & TELEPORTS ─────────────────────────
     local TeleportService = game:GetService("TeleportService")
