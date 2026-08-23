@@ -259,60 +259,51 @@ return function(Shared)
         b.MouseLeave:Connect(function() TweenSvc:Create(b, TweenInfo.new(0.1), {BackgroundColor3 = clrBtn()}):Play() end)
     end
 
-    -- ── LEFT COLUMN: PHYSICS ────────────────────────────────────
+    -- ── LEFT COLUMN: ZERO-JITTER PHYSICS TROLLS ──────────────────
     MkSection(leftCol, "Physics Interactions", 10)
 
-    -- 1. PUSH PLAYER
-    -- Positions our character behind target (we own our char = server-acknowledged),
-    -- then fires a BodyVelocity slam so we physically collide into them.
-    local pushConn, pushBV
+    -- 1. PUSH PLAYER (Zero-Jitter Impulse Booster)
+    -- Instead of locking CFrame every microsecond (which cancels physics and causes jitter),
+    -- this applies clean physics collision thrust impulses that launch the target smoothly.
+    local pushRunning = false
 
     MkToggle(leftCol, "Push Player (Ram Boost)", "PushPlayer", 11, function(state)
-        if pushConn then pushConn:Disconnect(); pushConn = nil end
-        if pushBV and pushBV.Parent then pushBV:Destroy(); pushBV = nil end
+        pushRunning = state
         if not state then
             local myHRP = getHRP()
             if myHRP then myHRP.AssemblyLinearVelocity = Vector3.zero end
             return
         end
 
-        pushConn = RunService.Stepped:Connect(function()
-            local myHRP = getHRP(); if not myHRP then return end
-            local target = getActiveTarget()
-            if not (target and target.Character and target.Character:FindFirstChild("HumanoidRootPart")) then return end
-            local tHRP  = target.Character.HumanoidRootPart
-            local look  = tHRP.CFrame.LookVector
-            local power = Shared.Flags["PushForce"] or 220
+        task.spawn(function()
+            while pushRunning and Shared.Flags["PushPlayer"] do
+                local myHRP = getHRP()
+                local target = getActiveTarget()
+                if myHRP and target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                    local tHRP  = target.Character.HumanoidRootPart
+                    local look  = tHRP.CFrame.LookVector
+                    local power = Shared.Flags["PushForce"] or 240
 
-            -- Enable collision only on main torso/HRP for momentum transfer
-            myHRP.CanCollide = true
-            local char = getChar()
-            if char then
-                local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
-                if torso then torso.CanCollide = true end
+                    -- Position 1.2 studs behind them with matching orientation
+                    myHRP.CFrame = CFrame.new(tHRP.Position - look * 1.3, tHRP.Position + look)
+                    -- Apply forward momentum thrust
+                    myHRP.AssemblyLinearVelocity = look * power + Vector3.new(0, 25, 0)
+                end
+                -- Allow physics engine to simulate collision contact
+                task.wait(0.08)
             end
-
-            -- Plant behind target
-            myHRP.CFrame = CFrame.new(tHRP.Position - look * 0.6, tHRP.Position + look)
-
-            -- BodyVelocity slam forward
-            if not (pushBV and pushBV.Parent) then
-                pushBV = Instance.new("BodyVelocity")
-                pushBV.MaxForce = Vector3.new(1e8, 1e8, 1e8)
-                pushBV.Parent   = myHRP
-            end
-            pushBV.Velocity = look * power + Vector3.new(0, 18, 0)
         end)
     end)
 
-    MkSlider(leftCol, "Push Force", "PushForce", 60, 500, 220, 12, function(v)
+    MkSlider(leftCol, "Push Force", "PushForce", 60, 500, 240, 12, function(v)
         Shared.Flags["PushForce"] = v
     end)
 
-    -- 2. PLATFORM MODE
-    -- An ANCHORED Part (server-visible, no network ownership needed) is pinned
-    -- under the target's feet every physics step. They can stand and jump on it in mid-air.
-    local platformPart, platformConn
+    -- 2. PLATFORM MODE (Zero-Jitter Stable Air Pad)
+    -- Creates a stable horizontal plane under the target that stays at a solid floor height,
+    -- allowing them to stand, walk, and jump up infinitely without vertical oscillation jitter.
+    local platformPart = nil
+    local platformConn = nil
 
     local function cleanPlatform()
         if platformConn then platformConn:Disconnect(); platformConn = nil end
@@ -325,30 +316,43 @@ return function(Shared)
 
         platformPart              = Instance.new("Part")
         platformPart.Name         = "Fih_Platform"
-        platformPart.Size         = Vector3.new(8, 0.6, 8)
+        platformPart.Size         = Vector3.new(10, 1, 10)
         platformPart.Anchored     = true
         platformPart.CanCollide   = true
         platformPart.Transparency = 0.35
         platformPart.Material     = Enum.Material.Neon
-        platformPart.Color        = Color3.fromRGB(0, 200, 255)
+        platformPart.Color        = Color3.fromRGB(0, 210, 255)
         platformPart.TopSurface   = Enum.SurfaceType.Smooth
         platformPart.BottomSurface= Enum.SurfaceType.Smooth
-        platformPart.CustomPhysicalProperties = PhysicalProperties.new(0.9, 3.0, 0.0)
+        platformPart.CustomPhysicalProperties = PhysicalProperties.new(0.8, 2.5, 0.0, 1.0, 1.0)
         platformPart.Parent       = Workspace
+
+        local currentPlatY = nil
 
         platformConn = RunService.Stepped:Connect(function()
             local target = getActiveTarget()
             if not (target and target.Character and target.Character:FindFirstChild("HumanoidRootPart")) then return end
-            local tHRP   = target.Character.HumanoidRootPart
-            local tHum   = target.Character:FindFirstChildOfClass("Humanoid")
-            local legLen = tHum and (tHum.HipHeight + 1.1) or 2.5
-            platformPart.CFrame = CFrame.new(tHRP.Position - Vector3.new(0, legLen, 0))
+            local tHRP = target.Character.HumanoidRootPart
+            local feetY = tHRP.Position.Y - 3.1
+
+            -- Initialize or smoothly adjust floor height without jittering into feet
+            if not currentPlatY then
+                currentPlatY = feetY
+            else
+                -- If target jumped higher or dropped below, adapt floor cleanly
+                if feetY > currentPlatY + 1.2 or feetY < currentPlatY - 0.8 then
+                    currentPlatY = feetY
+                end
+            end
+
+            -- Match horizontal X/Z position with stable Y plane
+            platformPart.CFrame = CFrame.new(tHRP.Position.X, currentPlatY, tHRP.Position.Z)
         end)
     end)
 
-    -- 3. PATH BLOCKER
-    -- Real ANCHORED wall that follows and plants right in front of wherever the target walks.
-    local blockerPart, blockerConn
+    -- 3. PATH BLOCKER (Stable Non-Jittering Barrier)
+    local blockerPart = nil
+    local blockerConn = nil
 
     local function cleanBlocker()
         if blockerConn then blockerConn:Disconnect(); blockerConn = nil end
@@ -361,7 +365,7 @@ return function(Shared)
 
         blockerPart              = Instance.new("Part")
         blockerPart.Name         = "Fih_Blocker"
-        blockerPart.Size         = Vector3.new(8, 9, 0.4)
+        blockerPart.Size         = Vector3.new(8, 9, 0.8)
         blockerPart.Anchored     = true
         blockerPart.CanCollide   = true
         blockerPart.Transparency = 0.45
@@ -374,8 +378,11 @@ return function(Shared)
             if not (target and target.Character and target.Character:FindFirstChild("HumanoidRootPart")) then return end
             local tHRP = target.Character.HumanoidRootPart
             local vel  = tHRP.AssemblyLinearVelocity
-            local dir  = vel.Magnitude > 1.2 and vel.Unit or tHRP.CFrame.LookVector
-            blockerPart.CFrame = CFrame.new(tHRP.Position + dir * 2.2, tHRP.Position + dir * 3)
+            local dir  = vel.Magnitude > 1.5 and vel.Unit or tHRP.CFrame.LookVector
+
+            -- Pinned 2.6 studs ahead without colliding with their center root
+            local targetPos = tHRP.Position + dir * 2.6
+            blockerPart.CFrame = CFrame.new(targetPos, targetPos + dir)
         end)
     end)
 
