@@ -1,6 +1,6 @@
 -- UI_Handler.lua
 -- Internet Explorer 7 / Windows XP Modular UI
--- Pixel-perfect quad alignment, VerticalScrollBarInset, strict contained borders, zero clipping
+-- Wide 820px Layout, Strictly Contained Quad Columns, Zero Edge Overhang
 
 return function(Shared)
     Shared.Tabs         = {}
@@ -202,9 +202,9 @@ return function(Shared)
     Shared.Notify = sendNotification
 
     -- ============================================================
-    -- MAIN WINDOW (Clean proportions)
+    -- MAIN WINDOW (Widened to 820px for ample horizontal space)
     -- ============================================================
-    local WIN_W, WIN_H = 700, 430
+    local WIN_W, WIN_H = 820, 440
     local Window = Instance.new("Frame")
     Window.Name             = "Window"
     Window.Size             = UDim2.new(0, WIN_W, 0, WIN_H)
@@ -369,7 +369,7 @@ return function(Shared)
     -- BODY CONTAINER
     -- ============================================================
     local BODY_Y    = TITLE_H + NAV_H
-    local SIDEBAR_W = 88
+    local SIDEBAR_W = 92
 
     local Body = Instance.new("Frame")
     Body.Name             = "Body"
@@ -380,7 +380,7 @@ return function(Shared)
     Body.ClipsDescendants = true
     Body.Parent           = Window
 
-    -- SIDEBAR (Centered tabs)
+    -- SIDEBAR
     local Sidebar = Instance.new("Frame")
     Sidebar.Name             = "Sidebar"
     Sidebar.Size             = UDim2.new(0, SIDEBAR_W, 1, 0)
@@ -392,7 +392,7 @@ return function(Shared)
 
     local CELL = 9
     for r = 0, 45 do
-        for c = 0, 10 do
+        for c = 0, 11 do
             local cell = Instance.new("Frame")
             cell.Size             = UDim2.new(0, CELL, 0, CELL)
             cell.Position         = UDim2.new(0, c * CELL, 0, r * CELL)
@@ -430,7 +430,7 @@ return function(Shared)
     TabPad.Parent     = TabContainer
 
     -- ============================================================
-    -- CONTENT AREA (VerticalScrollBarInset ensures NO RIGHT CLIPPING)
+    -- CONTENT AREA (Contained with 14px scrollbar space)
     -- ============================================================
     local ContentArea = Instance.new("ScrollingFrame")
     ContentArea.Name                 = "ContentArea"
@@ -440,22 +440,12 @@ return function(Shared)
     ContentArea.BorderSizePixel      = 0
     ContentArea.ScrollBarThickness   = 6
     ContentArea.ScrollBarImageColor3 = Color3.fromRGB(140, 160, 200)
-    ContentArea.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
     ContentArea.CanvasSize           = UDim2.new(0, 0, 0, 0)
     ContentArea.AutomaticCanvasSize  = Enum.AutomaticSize.Y
     ContentArea.ClipsDescendants     = true
     ContentArea.Parent               = Body
 
-    local ContentPad = Instance.new("UIPadding")
-    ContentPad.PaddingTop    = UDim.new(0, 8)
-    ContentPad.PaddingLeft   = UDim.new(0, 8)
-    ContentPad.PaddingRight  = UDim.new(0, 8)
-    ContentPad.PaddingBottom = UDim.new(0, 14)
-    ContentPad.Parent        = ContentArea
-
-    -- ============================================================
-    -- DROPDOWN DRAWER (Settings)
-    -- ============================================================
+    -- DROPDOWN DRAWER
     local Drawer = Instance.new("Frame")
     Drawer.Name             = "Drawer"
     Drawer.Size             = UDim2.new(1, -SIDEBAR_W, 1, 0)
@@ -512,7 +502,6 @@ return function(Shared)
     DrawerScroll.BorderSizePixel      = 0
     DrawerScroll.ScrollBarThickness   = 6
     DrawerScroll.ScrollBarImageColor3 = Color3.fromRGB(140, 160, 200)
-    DrawerScroll.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
     DrawerScroll.CanvasSize           = UDim2.new(0, 0, 0, 0)
     DrawerScroll.AutomaticCanvasSize  = Enum.AutomaticSize.Y
     DrawerScroll.ClipsDescendants     = true
@@ -526,8 +515,8 @@ return function(Shared)
 
     local DrawerPad = Instance.new("UIPadding")
     DrawerPad.PaddingTop    = UDim.new(0, 8)
-    DrawerPad.PaddingLeft   = UDim.new(0, 8)
-    DrawerPad.PaddingRight  = UDim.new(0, 8)
+    DrawerPad.PaddingLeft   = UDim.new(0, 10)
+    DrawerPad.PaddingRight  = UDim.new(0, 16)
     DrawerPad.PaddingBottom = UDim.new(0, 14)
     DrawerPad.Parent        = DrawerScroll
 
@@ -564,7 +553,7 @@ return function(Shared)
     Shared.DrawerContent = DrawerScroll
 
     -- ============================================================
-    -- TABS CREATION (Main, MM2, Music, Troll, Keybinds)
+    -- TABS CREATION
     -- ============================================================
     local Tabs      = {}
     local TabBtns   = {}
@@ -601,7 +590,7 @@ return function(Shared)
     for _, def in ipairs(tabDefs) do
         local btn = Instance.new("TextButton")
         btn.Name             = "TabBtn_" .. def.name
-        btn.Size             = UDim2.new(0, 76, 0, 24)
+        btn.Size             = UDim2.new(0, 80, 0, 24)
         btn.BackgroundColor3 = C.BtnBg
         btn.Text             = def.name
         btn.TextColor3       = C.BtnText
@@ -620,9 +609,11 @@ return function(Shared)
             if activeTab ~= def.name then btn.BackgroundColor3 = C.BtnBg end
         end)
 
+        -- Tab Content Wrapper (leaves 14px on right for scrollbar)
         local tabFrame = Instance.new("Frame")
         tabFrame.Name                 = "Tab_" .. def.name
-        tabFrame.Size                 = UDim2.new(1, 0, 0, 0)
+        tabFrame.Size                 = UDim2.new(1, -14, 0, 0)
+        tabFrame.Position             = UDim2.new(0, 6, 0, 6)
         tabFrame.AutomaticSize        = Enum.AutomaticSize.Y
         tabFrame.BackgroundTransparency = 1
         tabFrame.Visible              = false
@@ -634,6 +625,7 @@ return function(Shared)
         tabMainLayout.Padding   = UDim.new(0, 6)
         tabMainLayout.Parent    = tabFrame
 
+        -- Quad 2-column container
         local quadFrame = Instance.new("Frame")
         quadFrame.Name                 = "QuadGrid"
         quadFrame.Size                 = UDim2.new(1, 0, 0, 0)
@@ -677,11 +669,11 @@ return function(Shared)
         end)
     end
 
-    -- MAIN TAB BANNER (Contained, clean padding)
+    -- MAIN TAB BANNER
     local mainTab = Tabs["Main"]
     local logoBox = Instance.new("Frame")
     logoBox.Name             = "LogoBox"
-    logoBox.Size             = UDim2.new(1, 0, 0, 78)
+    logoBox.Size             = UDim2.new(1, 0, 0, 76)
     logoBox.BackgroundColor3 = Color3.fromRGB(248, 250, 255)
     logoBox.BorderSizePixel  = 1
     logoBox.BorderColor3     = C.WinBorder
@@ -703,7 +695,7 @@ return function(Shared)
     local logoSub = Instance.new("TextLabel")
     logoSub.Name                  = "LogoSub"
     logoSub.Size                  = UDim2.new(1, 0, 0, 18)
-    logoSub.Position              = UDim2.new(0, 0, 0, 52)
+    logoSub.Position              = UDim2.new(0, 0, 0, 50)
     logoSub.BackgroundTransparency = 1
     logoSub.Text                  = "Windows XP / IE7 Modular Engine  |  RightShift to Toggle"
     logoSub.TextColor3            = Color3.fromRGB(90, 110, 150)
@@ -713,7 +705,7 @@ return function(Shared)
     logoSub.Parent                = logoBox
 
     -- ============================================================
-    -- FACTORY BUILDERS (Pixel-perfect width constraints)
+    -- FACTORY BUILDERS
     -- ============================================================
 
     local function makeSection(parent, labelText, order)
@@ -1068,5 +1060,5 @@ return function(Shared)
     Shared.RebuildKeybinds = buildKeybindsUI
 
     switchTab("Main")
-    print("[UI_Handler] Loaded -- Pixel-perfect quad bounds active")
+    print("[UI_Handler] Loaded -- 820px wide layout active")
 end
