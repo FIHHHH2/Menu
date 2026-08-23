@@ -23,7 +23,7 @@ return function(Shared)
     local billboard    = nil
     local pollConn     = nil
 
-    -- SPOTIFY API (Uses executor request function with custom Bearer Authorization header)
+    -- SPOTIFY API
     local function spotifyRequest(endpoint, method, body)
         local token = Shared.Config.SpotifyToken
         if not token or token == "" then return nil end
@@ -53,7 +53,7 @@ return function(Shared)
         }
     end
 
-    -- LAST.FM API (Public Scrobble API - Requires only Username)
+    -- LAST.FM API
     local function getLastFMTrack()
         local user = Shared.Config.LastFMUser
         if not user or user == "" then return nil end
@@ -144,7 +144,6 @@ return function(Shared)
     -- LEFT COLUMN: LAST.FM SCROBBLER & HEAD BILLBOARD
     MkSection(leftCol, "Last.fm Scrobbler (Easiest)", 1)
 
-    -- Text input for Last.fm username
     local lfmBox = Instance.new("TextBox")
     lfmBox.Name                  = "LastFMInput"
     lfmBox.Size                  = UDim2.new(1, 0, 0, 24)
@@ -160,8 +159,7 @@ return function(Shared)
 
     lfmBox.FocusLost:Connect(function()
         Shared.Config.LastFMUser = lfmBox.Text
-        Shared.SaveConfig()
-        Shared.Notify("Last.fm", "Saved username: " .. lfmBox.Text, true)
+        Shared.Notify("Last.fm", "Set username: " .. lfmBox.Text, true)
     end)
 
     MkButton(leftCol, "[ Sync Last.fm Track ]", 3, function()
@@ -200,9 +198,8 @@ return function(Shared)
     spotBox.FocusLost:Connect(function()
         if spotBox.Text ~= "" and not spotBox.Text:find("Token: Set") then
             Shared.Config.SpotifyToken = spotBox.Text
-            Shared.SaveConfig()
             spotBox.Text = "Token: Set (Click to change)"
-            Shared.Notify("Spotify", "OAuth Token saved", true)
+            Shared.Notify("Spotify", "OAuth Token active", true)
         end
     end)
 
