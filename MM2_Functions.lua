@@ -247,6 +247,12 @@ return function(Shared)
 
     MkSection(leftCol, "Silent Aim (Direct Bullet Redirection)", 10)
 
+    -- Resolved GunBeam remote path (the actual MM2 gun fire remote)
+    local GUN_BEAM_REMOTE = nil
+    pcall(function()
+        GUN_BEAM_REMOTE = game:GetService("ReplicatedStorage").WeaponEvents.GunBeam
+    end)
+
     local hooksInstalled = false
     local function installSilentAimHooks()
         if hooksInstalled then return end
@@ -260,6 +266,7 @@ return function(Shared)
 
         setreadonly(mt, false)
 
+        -- Hook Mouse.Hit / Mouse.Target / Mouse.UnitRay (for crosshair visual only)
         rawset(mt, "__index", function(self, key)
             if Shared.Flags["SilentAim"] and typeof(self) == "Instance" and self:IsA("Mouse") then
                 local target = getSilentAimTarget()
@@ -281,24 +288,33 @@ return function(Shared)
         end)
 
         rawset(mt, "__namecall", function(self, ...)
+            local method = getnamecallmethod()
+
             if Shared.Flags["SilentAim"] then
-                local method = getnamecallmethod()
-                local args   = {...}
+                local args = {...}
 
-                if method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "findPartOnRay" then
-                    local target = getSilentAimTarget()
-                    if target then
-                        local origin = args[1]
-                        if typeof(origin) == "Vector3" then
-                            args[2] = (target.Position - origin).Unit * 1000
-                        end
+                -- Primary: intercept GunBeam FireServer specifically
+                if (method == "FireServer" or method == "InvokeServer") then
+                    local isGunRemote = (
+                        self == GUN_BEAM_REMOTE
+                        or self.Name == "GunBeam"
+                        or self.Name == "GunFired"
+                        or self.Name == "ShootGun"
+                        or self.Name == "BulletHit"
+                        or self.Name == "Shoot"
+                    )
+
+                    if not isGunRemote then
+                        -- Fallback: check by path fragments
+                        local fullPath = self:GetFullName():lower()
+                        isGunRemote = (
+                            fullPath:find("gunbeam") or fullPath:find("gunfired") or
+                            fullPath:find("shoot") or fullPath:find("bullethi") or
+                            fullPath:find("weaponevent")
+                        )
                     end
-                    return oldNamecall(self, table.unpack(args))
-                end
 
-                if method == "FireServer" or method == "InvokeServer" then
-                    local n = self.Name:lower()
-                    if n:find("gun") or n:find("shoot") or n:find("bullet") or n:find("beam") then
+                    if isGunRemote then
                         local target = getSilentAimTarget()
                         if target then
                             for i, v in ipairs(args) do
@@ -306,13 +322,35 @@ return function(Shared)
                                     args[i] = target.Position
                                 elseif typeof(v) == "CFrame" then
                                     args[i] = target.CFrame
+                                elseif typeof(v) == "Instance" and v:IsA("BasePart") then
+                                    -- Replace target part reference with murderer HRP
+                                    args[i] = target
                                 end
                             end
+                        end
+                        return oldNamecall(self, table.unpack(args))
+                    end
+
+                    -- Secondary: Raycast redirection (workspace-level gun physics)
+                    return oldNamecall(self, table.unpack(args))
+                end
+
+                -- Workspace:Raycast / FindPartOnRay direction override
+                if method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
+                    local target = getSilentAimTarget()
+                    if target then
+                        local origin = args[1]
+                        if typeof(origin) == "Vector3" then
+                            args[2] = (target.Position - origin).Unit * 1000
+                        elseif typeof(args[1]) == "Ray" then
+                            local ray = args[1]
+                            args[1] = Ray.new(ray.Origin, (target.Position - ray.Origin).Unit * 1000)
                         end
                     end
                     return oldNamecall(self, table.unpack(args))
                 end
             end
+
             return oldNamecall(self, ...)
         end)
 
@@ -322,6 +360,7 @@ return function(Shared)
     MkToggle(leftCol, "Silent Aim (Auto Hit Murderer)", "SilentAim", 11, function(state)
         if state then
             installSilentAimHooks()
+            Shared.Notify("Silent Aim", "Hooks active — targeting Murderer", true)
         end
     end)
 

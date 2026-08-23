@@ -109,6 +109,11 @@ return function(Shared)
         table.insert(themeRegistry, { inst = instance, props = propMap })
     end
 
+    local themeCallbacks = {}     -- other modules register here to be notified on theme change
+    Shared.RegisterThemeCallback = function(fn) table.insert(themeCallbacks, fn) end
+    Shared.IsDark = function() return isDark end
+    Shared.GetTheme = function() return C end
+
     local function applyThemeTransition(targetTheme)
         C = targetTheme
         isDark = targetTheme.IsDark
@@ -124,6 +129,11 @@ return function(Shared)
                 end
                 TweenService:Create(item.inst, TweenInfo.new(0.25, Enum.EasingStyle.Quad), goal):Play()
             end
+        end
+
+        -- Notify external modules (Music_Handler HUD, Billboard, etc.)
+        for _, cb in ipairs(themeCallbacks) do
+            pcall(cb, targetTheme, isDark)
         end
     end
 
@@ -383,7 +393,7 @@ return function(Shared)
     winBtns["max"].MouseButton1Click:Connect(function() if isOpen then animClose() else animOpen() end end)
     UserInput.InputBegan:Connect(function(i, gpe)
         if gpe then return end
-        if i.KeyCode == Enum.KeyCode.RightShift then if isOpen then animClose() else animOpen() end end
+        if i.KeyCode == Enum.KeyCode.RightBracket then if isOpen then animClose() else animOpen() end end
     end)
 
     -- NAV STRIP
@@ -702,7 +712,7 @@ return function(Shared)
     local logoSub = Instance.new("TextLabel")
     logoSub.Size = UDim2.new(1,0,0,18); logoSub.Position = UDim2.new(0,0,0,50)
     logoSub.BackgroundTransparency = 1
-    logoSub.Text = "Windows XP / IE7 Modular Engine  |  RightShift to Toggle"
+    logoSub.Text = "Windows XP / IE7 Modular Engine  |  ] to Toggle"
     logoSub.TextColor3 = C.BannerSub; logoSub.Font = Enum.Font.Code
     logoSub.TextSize = 11; logoSub.TextXAlignment = Enum.TextXAlignment.Center; logoSub.Parent = logoBox
     registerThemed(logoSub, { TextColor3 = "BannerSub" })

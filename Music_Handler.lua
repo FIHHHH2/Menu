@@ -681,5 +681,57 @@ return function(Shared)
         Shared.Notify("Spotify", "Next track command sent", true)
     end)
 
+    -- ── DARK MODE THEME CALLBACK ──────────────────────────────────
+    -- Rebuilds the HUD with the correct colour palette when the user switches theme
+    if Shared.RegisterThemeCallback then
+        Shared.RegisterThemeCallback(function(theme, darkMode)
+            -- Update bottom-left HUD colours
+            if hudWidget and hudWidget.Parent then
+                local tBar = hudWidget:FindFirstChildOfClass("Frame")
+                if tBar then
+                    TweenSvc:Create(tBar, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
+                        BackgroundColor3 = darkMode and Color3.fromRGB(32, 36, 46) or Color3.fromRGB(212, 208, 200)
+                    }):Play()
+                    local tLbl = tBar:FindFirstChildOfClass("TextLabel")
+                    if tLbl then
+                        TweenSvc:Create(tLbl, TweenInfo.new(0.25), {
+                            TextColor3 = darkMode and Color3.fromRGB(220, 225, 240) or Color3.fromRGB(0, 0, 0)
+                        }):Play()
+                    end
+                end
+                TweenSvc:Create(hudWidget, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
+                    BackgroundColor3 = darkMode and Color3.fromRGB(16, 18, 24) or Color3.fromRGB(248, 250, 255),
+                    BorderColor3     = darkMode and Color3.fromRGB(30, 75, 130) or Color3.fromRGB(58, 110, 165)
+                }):Play()
+                local content = hudWidget:FindFirstChild("HUDContent")
+                if content then
+                    local rightBox = content:FindFirstChild("TextContainer")
+                    if rightBox then
+                        for _, lbl in ipairs(rightBox:GetChildren()) do
+                            if lbl:IsA("TextLabel") then
+                                local isDimText = lbl.Name == "PlaceLbl" or lbl.Name == "UserLbl" or lbl.Position.Y.Offset > 44
+                                if isDimText then
+                                    TweenSvc:Create(lbl, TweenInfo.new(0.25), {
+                                        TextColor3 = darkMode and Color3.fromRGB(130, 150, 180) or Color3.fromRGB(80, 95, 120)
+                                    }):Play()
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            -- Update billboard (over-head) background
+            if billboard and billboard.Parent then
+                local bg = billboard:FindFirstChildOfClass("Frame")
+                if bg then
+                    TweenSvc:Create(bg, TweenInfo.new(0.25), {
+                        BackgroundColor3 = darkMode and Color3.fromRGB(10, 12, 18) or Color3.fromRGB(15, 18, 24),
+                        BorderColor3     = darkMode and Color3.fromRGB(0, 120, 220) or Color3.fromRGB(0, 160, 255)
+                    }):Play()
+                end
+            end
+        end)
+    end
+
     print("[Music_Handler] Loaded -- Dynamic Covers, Scaled HUD, Clean Typography Online")
 end
