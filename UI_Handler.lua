@@ -1,6 +1,6 @@
 -- UI_Handler.lua
 -- Internet Explorer 7 / Windows XP Modular UI
--- Pixel-perfect cube geometry, Topbar "Fih Ui" header, Settings drawer, Auto config save/load (Client-safe, zero BindToClose)
+-- Pixel-perfect quad alignment, VerticalScrollBarInset, strict contained borders, zero clipping
 
 return function(Shared)
     Shared.Tabs         = {}
@@ -61,7 +61,7 @@ return function(Shared)
     }
 
     -- ============================================================
-    -- CLIENT-SIDE CONFIG PERSISTENCE (Safe writefile, zero BindToClose)
+    -- CONFIG PERSISTENCE
     -- ============================================================
     local CONFIG_FILE = "FihUi_Config.json"
 
@@ -96,7 +96,6 @@ return function(Shared)
                     if data.Flags then
                         for k, v in pairs(data.Flags) do
                             Shared.Flags[k] = v
-                            -- Update active toggles if already registered
                             if Shared.Toggles[k] and Shared.Toggles[k].SetToggle and type(v) == "boolean" then
                                 Shared.Toggles[k].SetToggle(v, true)
                             end
@@ -116,7 +115,6 @@ return function(Shared)
     end
     Shared.LoadConfig = loadConfig
 
-    -- Client-side exit hook (fires when local player leaves)
     Shared.Services.Players.PlayerRemoving:Connect(function(plr)
         if plr == Shared.Player then saveConfig() end
     end)
@@ -204,9 +202,9 @@ return function(Shared)
     Shared.Notify = sendNotification
 
     -- ============================================================
-    -- MAIN WINDOW
+    -- MAIN WINDOW (Clean proportions)
     -- ============================================================
-    local WIN_W, WIN_H = 680, 420
+    local WIN_W, WIN_H = 700, 430
     local Window = Instance.new("Frame")
     Window.Name             = "Window"
     Window.Size             = UDim2.new(0, WIN_W, 0, WIN_H)
@@ -218,7 +216,7 @@ return function(Shared)
     Window.Parent           = ScreenGui
 
     -- ============================================================
-    -- TOPBAR ("Fih Ui" header, no rainbow)
+    -- TOPBAR
     -- ============================================================
     local TITLE_H = 28
     local TitleBar = Instance.new("Frame")
@@ -432,7 +430,7 @@ return function(Shared)
     TabPad.Parent     = TabContainer
 
     -- ============================================================
-    -- CONTENT AREA (Contained scrolling, all options reachable)
+    -- CONTENT AREA (VerticalScrollBarInset ensures NO RIGHT CLIPPING)
     -- ============================================================
     local ContentArea = Instance.new("ScrollingFrame")
     ContentArea.Name                 = "ContentArea"
@@ -442,6 +440,7 @@ return function(Shared)
     ContentArea.BorderSizePixel      = 0
     ContentArea.ScrollBarThickness   = 6
     ContentArea.ScrollBarImageColor3 = Color3.fromRGB(140, 160, 200)
+    ContentArea.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
     ContentArea.CanvasSize           = UDim2.new(0, 0, 0, 0)
     ContentArea.AutomaticCanvasSize  = Enum.AutomaticSize.Y
     ContentArea.ClipsDescendants     = true
@@ -450,8 +449,8 @@ return function(Shared)
     local ContentPad = Instance.new("UIPadding")
     ContentPad.PaddingTop    = UDim.new(0, 8)
     ContentPad.PaddingLeft   = UDim.new(0, 8)
-    ContentPad.PaddingRight  = UDim.new(0, 10)
-    ContentPad.PaddingBottom = UDim.new(0, 16)
+    ContentPad.PaddingRight  = UDim.new(0, 8)
+    ContentPad.PaddingBottom = UDim.new(0, 14)
     ContentPad.Parent        = ContentArea
 
     -- ============================================================
@@ -513,6 +512,7 @@ return function(Shared)
     DrawerScroll.BorderSizePixel      = 0
     DrawerScroll.ScrollBarThickness   = 6
     DrawerScroll.ScrollBarImageColor3 = Color3.fromRGB(140, 160, 200)
+    DrawerScroll.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
     DrawerScroll.CanvasSize           = UDim2.new(0, 0, 0, 0)
     DrawerScroll.AutomaticCanvasSize  = Enum.AutomaticSize.Y
     DrawerScroll.ClipsDescendants     = true
@@ -526,8 +526,8 @@ return function(Shared)
 
     local DrawerPad = Instance.new("UIPadding")
     DrawerPad.PaddingTop    = UDim.new(0, 8)
-    DrawerPad.PaddingLeft   = UDim.new(0, 10)
-    DrawerPad.PaddingRight  = UDim.new(0, 10)
+    DrawerPad.PaddingLeft   = UDim.new(0, 8)
+    DrawerPad.PaddingRight  = UDim.new(0, 8)
     DrawerPad.PaddingBottom = UDim.new(0, 14)
     DrawerPad.Parent        = DrawerScroll
 
@@ -631,7 +631,7 @@ return function(Shared)
 
         local tabMainLayout = Instance.new("UIListLayout")
         tabMainLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        tabMainLayout.Padding   = UDim.new(0, 8)
+        tabMainLayout.Padding   = UDim.new(0, 6)
         tabMainLayout.Parent    = tabFrame
 
         local quadFrame = Instance.new("Frame")
@@ -677,11 +677,11 @@ return function(Shared)
         end)
     end
 
-    -- MAIN TAB BANNER
+    -- MAIN TAB BANNER (Contained, clean padding)
     local mainTab = Tabs["Main"]
     local logoBox = Instance.new("Frame")
     logoBox.Name             = "LogoBox"
-    logoBox.Size             = UDim2.new(1, 0, 0, 85)
+    logoBox.Size             = UDim2.new(1, 0, 0, 78)
     logoBox.BackgroundColor3 = Color3.fromRGB(248, 250, 255)
     logoBox.BorderSizePixel  = 1
     logoBox.BorderColor3     = C.WinBorder
@@ -690,20 +690,20 @@ return function(Shared)
 
     local logoText = Instance.new("TextLabel")
     logoText.Name                  = "LogoText"
-    logoText.Size                  = UDim2.new(1, 0, 0, 50)
-    logoText.Position              = UDim2.new(0, 0, 0, 6)
+    logoText.Size                  = UDim2.new(1, 0, 0, 46)
+    logoText.Position              = UDim2.new(0, 0, 0, 4)
     logoText.BackgroundTransparency = 1
     logoText.Text                  = "Fih Ui"
     logoText.TextColor3            = Color3.fromRGB(15, 30, 80)
     logoText.Font                  = Enum.Font.ArimoBold
-    logoText.TextSize              = 44
+    logoText.TextSize              = 40
     logoText.TextXAlignment        = Enum.TextXAlignment.Center
     logoText.Parent                = logoBox
 
     local logoSub = Instance.new("TextLabel")
     logoSub.Name                  = "LogoSub"
     logoSub.Size                  = UDim2.new(1, 0, 0, 18)
-    logoSub.Position              = UDim2.new(0, 0, 0, 58)
+    logoSub.Position              = UDim2.new(0, 0, 0, 52)
     logoSub.BackgroundTransparency = 1
     logoSub.Text                  = "Windows XP / IE7 Modular Engine  |  RightShift to Toggle"
     logoSub.TextColor3            = Color3.fromRGB(90, 110, 150)
@@ -713,7 +713,7 @@ return function(Shared)
     logoSub.Parent                = logoBox
 
     -- ============================================================
-    -- FACTORY BUILDERS
+    -- FACTORY BUILDERS (Pixel-perfect width constraints)
     -- ============================================================
 
     local function makeSection(parent, labelText, order)
@@ -744,7 +744,7 @@ return function(Shared)
         row.Parent           = parent
 
         local lbl = Instance.new("TextLabel")
-        lbl.Size                  = UDim2.new(1, -44, 1, 0)
+        lbl.Size                  = UDim2.new(1, -34, 1, 0)
         lbl.Position              = UDim2.new(0, 6, 0, 0)
         lbl.BackgroundTransparency = 1
         lbl.Text                  = labelText
@@ -813,7 +813,7 @@ return function(Shared)
         row.Parent           = parent
 
         local lbl = Instance.new("TextLabel")
-        lbl.Size                  = UDim2.new(1, -55, 0, 16)
+        lbl.Size                  = UDim2.new(1, -45, 0, 16)
         lbl.Position              = UDim2.new(0, 6, 0, 2)
         lbl.BackgroundTransparency = 1
         lbl.Text                  = labelText
@@ -825,8 +825,8 @@ return function(Shared)
         lbl.Parent                = row
 
         local valLbl = Instance.new("TextLabel")
-        valLbl.Size                  = UDim2.new(0, 48, 0, 16)
-        valLbl.Position              = UDim2.new(1, -52, 0, 2)
+        valLbl.Size                  = UDim2.new(0, 38, 0, 16)
+        valLbl.Position              = UDim2.new(1, -42, 0, 2)
         valLbl.BackgroundTransparency = 1
         valLbl.Text                  = tostring(defaultVal)
         valLbl.TextColor3            = Color3.fromRGB(0, 50, 180)
@@ -954,7 +954,7 @@ return function(Shared)
             row.Parent           = parentCol
 
             local lbl = Instance.new("TextLabel")
-            lbl.Size                  = UDim2.new(1, -70, 1, 0)
+            lbl.Size                  = UDim2.new(1, -66, 1, 0)
             lbl.Position              = UDim2.new(0, 6, 0, 0)
             lbl.BackgroundTransparency = 1
             lbl.Text                  = info.Name
@@ -967,8 +967,8 @@ return function(Shared)
 
             local bindBtn = Instance.new("TextButton")
             bindBtn.Name             = "BindBtn"
-            bindBtn.Size             = UDim2.new(0, 60, 0, 20)
-            bindBtn.Position         = UDim2.new(1, -64, 0.5, -10)
+            bindBtn.Size             = UDim2.new(0, 58, 0, 20)
+            bindBtn.Position         = UDim2.new(1, -62, 0.5, -10)
             bindBtn.BackgroundColor3 = C.BtnBg
             bindBtn.BorderSizePixel  = 1
             bindBtn.BorderColor3     = C.BtnBorder
@@ -1068,5 +1068,5 @@ return function(Shared)
     Shared.RebuildKeybinds = buildKeybindsUI
 
     switchTab("Main")
-    print("[UI_Handler] Loaded -- Fih Ui header, client persistence (zero BindToClose)")
+    print("[UI_Handler] Loaded -- Pixel-perfect quad bounds active")
 end
