@@ -1,31 +1,31 @@
 -- Main_Functions.lua
--- General Movement, Multipliers, Flight Speed, Click TP in Quad 2-Column Format
+-- Movement, Multipliers, Anti-Ragdoll, Reach Extend, Gravity, Respawn
 
 return function(Shared)
     local Players    = Shared.Services.Players
     local RunService = Shared.Services.RunService
     local UserInput  = Shared.Services.UserInput
 
-    local Player     = Shared.Player
-    local Tabs       = Shared.Tabs or {}
-    local QuadCols   = Shared.QuadCols or {}
-    local MkSection  = Shared.MakeSection or function() end
-    local MkToggle   = Shared.MakeToggle  or function() return Instance.new("Frame"), function() end end
-    local MkSlider   = Shared.MakeSlider  or function() return Instance.new("Frame") end
-    local MkButton   = Shared.MakeButton  or function() return Instance.new("TextButton") end
+    local Player    = Shared.Player
+    local Tabs      = Shared.Tabs or {}
+    local QuadCols  = Shared.QuadCols or {}
+    local MkSection = Shared.MakeSection or function() end
+    local MkToggle  = Shared.MakeToggle  or function() return Instance.new("Frame"), function() end end
+    local MkSlider  = Shared.MakeSlider  or function() return Instance.new("Frame") end
+    local MkButton  = Shared.MakeButton  or function() return Instance.new("TextButton") end
 
-    local tab = Tabs["Main"]
+    local tab  = Tabs["Main"]
     local cols = QuadCols["Main"]
     if not tab or not cols then return end
 
     local leftCol  = cols.Left
     local rightCol = cols.Right
 
-    local function getChar()  return Shared.Character or (Player and Player.Character) end
+    local function getChar()  return Shared.Character or Player.Character end
     local function getHRP()   return Shared.HumanoidRP or (getChar() and getChar():FindFirstChild("HumanoidRootPart")) end
     local function getHuman() return getChar() and getChar():FindFirstChildOfClass("Humanoid") end
 
-    -- LEFT COLUMN: MOVEMENT & TELEPORTS
+    -- ── LEFT COLUMN: MOVEMENT & PHYSICS ──────────────────────────
     MkSection(leftCol, "Movement & Physics", 1)
 
     local infJumpConn
@@ -33,63 +33,49 @@ return function(Shared)
         if infJumpConn then infJumpConn:Disconnect(); infJumpConn = nil end
         if state then
             infJumpConn = UserInput.JumpRequest:Connect(function()
-                local hum = getHuman()
-                if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+                local hum = getHuman(); if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
             end)
         end
     end)
 
     local flightBV, flightConn
     MkToggle(leftCol, "Flight", "Flight", 3, function(state)
-        local hrp = getHRP()
-        if not hrp then return end
+        local hrp = getHRP(); if not hrp then return end
         if state then
             hrp.Velocity = Vector3.zero
             flightBV = Instance.new("BodyVelocity")
-            flightBV.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-            flightBV.Velocity = Vector3.zero
-            flightBV.Parent   = hrp
-
+            flightBV.MaxForce = Vector3.new(1e5,1e5,1e5); flightBV.Velocity = Vector3.zero; flightBV.Parent = hrp
             local cam = workspace.CurrentCamera
             flightConn = RunService.Heartbeat:Connect(function()
                 if not Shared.Flags["Flight"] then return end
-                local speed = Shared.Flags["FlightSpeed"] or 65
-                local dir = Vector3.zero
+                local speed = Shared.Flags["FlightSpeed"] or 65; local dir = Vector3.zero
                 if UserInput:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.CFrame.LookVector end
                 if UserInput:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.CFrame.LookVector end
                 if UserInput:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.CFrame.RightVector end
                 if UserInput:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.CFrame.RightVector end
-                if UserInput:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0, 1, 0) end
-                if UserInput:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3.new(0, 1, 0) end
+                if UserInput:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0,1,0) end
+                if UserInput:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3.new(0,1,0) end
                 flightBV.Velocity = dir.Magnitude > 0 and (dir.Unit * speed) or Vector3.zero
             end)
         else
             if flightConn then flightConn:Disconnect(); flightConn = nil end
-            if flightBV then flightBV:Destroy(); flightBV = nil end
+            if flightBV   then flightBV:Destroy();     flightBV   = nil end
         end
     end)
 
-    MkSlider(leftCol, "Flight Speed", "FlightSpeed", 20, 250, 65, 4, function(val)
-        Shared.Flags["FlightSpeed"] = val
-    end)
+    MkSlider(leftCol, "Flight Speed", "FlightSpeed", 20, 300, 65, 4, function(val) Shared.Flags["FlightSpeed"] = val end)
 
     local noclipConn
     MkToggle(leftCol, "Noclip", "Noclip", 5, function(state)
         if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
         if state then
             noclipConn = RunService.Stepped:Connect(function()
-                local char = getChar()
-                if not char then return end
-                for _, part in ipairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then part.CanCollide = false end
-                end
+                local char = getChar(); if not char then return end
+                for _, p in ipairs(char:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end
             end)
         else
-            local char = getChar()
-            if char then
-                for _, part in ipairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then part.CanCollide = true end
-                end
+            local char = getChar(); if char then
+                for _, p in ipairs(char:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end
             end
         end
     end)
@@ -101,57 +87,88 @@ return function(Shared)
             clickTPConn = UserInput.InputBegan:Connect(function(input, gpe)
                 if gpe then return end
                 if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    local hrp = getHRP()
-                    if not hrp then return end
+                    local hrp = getHRP(); if not hrp then return end
                     local ray = workspace.CurrentCamera:ScreenPointToRay(input.Position.X, input.Position.Y)
                     local params = RaycastParams.new()
-                    params.FilterDescendantsInstances = { getChar() }
-                    params.FilterType = Enum.RaycastFilterType.Exclude
+                    params.FilterDescendantsInstances = {getChar()}; params.FilterType = Enum.RaycastFilterType.Exclude
                     local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
-                    if result then
-                        hrp.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
-                    end
+                    if result then hrp.CFrame = CFrame.new(result.Position + Vector3.new(0,3,0)) end
                 end
             end)
         end
     end)
 
-    -- RIGHT COLUMN: MULTIPLIERS & RENDERING
+    -- Anti-Ragdoll: prevents death animation ragdoll from kicking in
+    MkToggle(leftCol, "Anti-Ragdoll", "AntiRagdoll", 7, function(state)
+        local char = getChar(); if not char then return end
+        for _, obj in ipairs(char:GetDescendants()) do
+            if obj:IsA("BallSocketConstraint") or obj:IsA("HingeConstraint") then
+                obj.Enabled = not state
+            end
+        end
+    end)
+
+    -- Respawn button
+    MkButton(leftCol, "[ Force Respawn ]", 8, function()
+        Player:LoadCharacter()
+    end)
+
+    -- ── RIGHT COLUMN: MULTIPLIERS & WORLD ────────────────────────
     MkSection(rightCol, "Stat Multipliers", 10)
 
     MkSlider(rightCol, "Walk Speed", "WalkSpeed", 16, 250, 16, 11, function(val)
-        local hum = getHuman()
-        if hum then hum.WalkSpeed = val end
+        local hum = getHuman(); if hum then hum.WalkSpeed = val end
     end)
-
     MkSlider(rightCol, "Jump Height", "JumpHeight", 7, 250, 7, 12, function(val)
-        local hum = getHuman()
-        if hum then hum.JumpHeight = val end
+        local hum = getHuman(); if hum then hum.JumpHeight = val end
     end)
 
     Player.CharacterAdded:Connect(function(char)
-        local hum = char:WaitForChild("Humanoid")
-        task.wait(0.1)
+        local hum = char:WaitForChild("Humanoid"); task.wait(0.1)
         hum.WalkSpeed  = Shared.Flags["WalkSpeed"]  or 16
         hum.JumpHeight = Shared.Flags["JumpHeight"] or 7
     end)
 
-    MkSection(rightCol, "Graphics Optimization", 20)
+    MkSection(rightCol, "World Modifiers", 20)
 
-    MkToggle(rightCol, "Disable VFX", "NoVFX", 21, function(state)
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-                obj.Enabled = not state
-            end
-        end
-        workspace.Terrain.Decoration = not state
+    MkSlider(rightCol, "Gravity", "Gravity", 10, 200, 196, 21, function(val)
+        workspace.Gravity = val
     end)
 
-    MkToggle(rightCol, "Remove Textures", "NoTextures", 22, function(state)
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("Decal") or obj:IsA("Texture") then
-                obj.Transparency = state and 1 or 0
-            end
+    -- Reach Extender: scales HRP hitbox size for extended melee reach
+    MkSlider(rightCol, "Reach Extender", "Reach", 4, 60, 4, 22, function(val)
+        local hrp = getHRP()
+        if hrp then hrp.Size = Vector3.new(val, hrp.Size.Y, val) end
+    end)
+
+    -- Anti-Aim: spins HRP to confuse targeting
+    local antiAimConn
+    MkToggle(rightCol, "Anti-Aim (Spin HRP)", "AntiAim", 23, function(state)
+        if antiAimConn then antiAimConn:Disconnect(); antiAimConn = nil end
+        if state then
+            local t = 0
+            antiAimConn = RunService.RenderStepped:Connect(function(dt)
+                t = t + dt * 10
+                local hrp = getHRP(); if not hrp then return end
+                hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(t*15), 0)
+            end)
+        end
+    end)
+
+    MkSection(rightCol, "Camera & View", 30)
+
+    MkSlider(rightCol, "FOV", "FOV", 70, 120, 70, 31, function(val)
+        if workspace.CurrentCamera then workspace.CurrentCamera.FieldOfView = val end
+    end)
+
+    MkToggle(rightCol, "Full Bright", "FullBright", 32, function(state)
+        local Lighting = game:GetService("Lighting")
+        if state then
+            Lighting.Brightness = 2; Lighting.ClockTime = 14
+            Lighting.FogEnd = 1e6; Lighting.GlobalShadows = false
+        else
+            Lighting.Brightness = 1; Lighting.ClockTime = 14
+            Lighting.FogEnd = 1e6; Lighting.GlobalShadows = true
         end
     end)
 
