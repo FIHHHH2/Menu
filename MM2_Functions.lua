@@ -1,6 +1,6 @@
 -- MM2_Functions.lua
--- Unrestricted Kill Aura, Non-Intrusive Silent Aim Targeting Murderer, Knife Prediction,
--- Lobby-Safe Auto Grab, Role ESP, and Dedicated Sheriff Gun & Dropped Gun ESP
+-- Optimized Zero-Lag Combat Engine: Unrestricted Kill Aura, Non-Intrusive Silent Aim,
+-- Throttled Gun Drop Scanner, Knife Prediction, and Role ESP
 
 return function(Shared)
     local Players    = Shared.Services.Players
@@ -108,6 +108,33 @@ return function(Shared)
         end
         return best
     end
+
+    -- ── Cached Gun Drop Scanner (Zero Lag) ─────────────────────────
+    local cachedGunDrop = nil
+    task.spawn(function()
+        while true do
+            if Shared.Flags["AutoGrabGun"] or Shared.Flags["GunESP"] then
+                local found = nil
+                for _, obj in ipairs(Workspace:GetChildren()) do
+                    if (obj.Name == "GunDrop" or (obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver")))
+                    and obj.Parent ~= Player.Backpack and (not getChar() or obj.Parent ~= getChar()) then
+                        found = obj:FindFirstChildOfClass("BasePart") or (obj:IsA("BasePart") and obj)
+                        if found then break end
+                    end
+                end
+                if not found then
+                    for _, obj in ipairs(Workspace:GetDescendants()) do
+                        if obj.Name == "GunDrop" then
+                            found = obj:FindFirstChildOfClass("BasePart") or (obj:IsA("BasePart") and obj)
+                            if found then break end
+                        end
+                    end
+                end
+                cachedGunDrop = found
+            end
+            task.wait(0.35)
+        end
+    end)
 
     -- ── LEFT COLUMN: KILL AURA & SILENT AIM ───────────────────────
     MkSection(leftCol, "Kill Aura Engine", 1)
@@ -276,17 +303,12 @@ return function(Shared)
                 if not selfAliveInRound() then return end
                 if getMyGun() then return end
                 local myHRP = getHRP(); if not myHRP then return end
-                for _, obj in ipairs(Workspace:GetDescendants()) do
-                    if (obj.Name == "GunDrop" or (obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver")))
-                    and obj.Parent ~= Player.Backpack and obj.Parent ~= (getChar()) then
-                        local part = obj:FindFirstChildOfClass("BasePart") or obj
-                        if part and part:IsA("BasePart") then
-                            local dist = (part.Position - myHRP.Position).Magnitude
-                            if dist < 40 then
-                                pcall(function() firetouchinterest(myHRP, part, 0) end)
-                                pcall(function() firetouchinterest(myHRP, part, 1) end)
-                            end
-                        end
+                local part = cachedGunDrop
+                if part and part.Parent then
+                    local dist = (part.Position - myHRP.Position).Magnitude
+                    if dist < 40 then
+                        pcall(function() firetouchinterest(myHRP, part, 0) end)
+                        pcall(function() firetouchinterest(myHRP, part, 1) end)
                     end
                 end
             end)
@@ -407,7 +429,6 @@ return function(Shared)
         end)
     end)
 
-    -- Dedicated Sheriff & Dropped Gun ESP
     local gunEspHighlights = {}
     local gunEspConn
     MkToggle(rightCol, "Sheriff & Gun Drop ESP", "GunESP", 12, function(state)
@@ -418,7 +439,6 @@ return function(Shared)
 
         gunEspConn = RunService.Heartbeat:Connect(function()
             local myHRP = getHRP()
-            -- 1. Sheriff Player ESP
             local sheriff = getSheriff()
             if sheriff and sheriff.Character and sheriff.Character:FindFirstChild("HumanoidRootPart") then
                 local sHRP = sheriff.Character.HumanoidRootPart
@@ -442,20 +462,8 @@ return function(Shared)
                 gunEspHighlights["Sheriff"] = nil
             end
 
-            -- 2. Dropped Gun on Floor ESP
-            local foundDrop = nil
-            for _, obj in ipairs(Workspace:GetDescendants()) do
-                if (obj.Name == "GunDrop" or (obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver")))
-                and obj.Parent ~= Player.Backpack and (not getChar() or obj.Parent ~= getChar()) then
-                    local part = obj:FindFirstChildOfClass("BasePart") or (obj:IsA("BasePart") and obj)
-                    if part then
-                        foundDrop = part
-                        break
-                    end
-                end
-            end
-
-            if foundDrop then
+            local foundDrop = cachedGunDrop
+            if foundDrop and foundDrop.Parent then
                 if not gunEspHighlights["GunDrop"] then
                     local bb = Instance.new("BillboardGui")
                     bb.Name = "GunDropESP"; bb.Size = UDim2.new(0, 110, 0, 28)
@@ -525,5 +533,5 @@ return function(Shared)
         end
     end)
 
-    print("[MM2_Functions] Loaded -- Gun ESP, Silent Aim & Combat Online")
+    print("[MM2_Functions] Loaded -- Optimized Zero-Lag Combat Online")
 end

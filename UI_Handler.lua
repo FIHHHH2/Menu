@@ -1,5 +1,6 @@
 -- UI_Handler.lua
--- IE7/XP Modular UI -- 820x440, Resizable Window with Corner Grip & Auto-Scaling Columns
+-- IE7/XP Modular UI -- Dark Mode Engine (Sun/Moon), Smooth Tab Transitions,
+-- Full Hover/Leave Interactions, Resizable Window, and Zero-Lag Debounced Saving
 
 return function(Shared)
     Shared.Tabs         = {}
@@ -30,7 +31,8 @@ return function(Shared)
     ScreenGui.IgnoreGuiInset = true
     ScreenGui.Parent         = CoreGui
 
-    local C = {
+    -- ── THEME PALETTES ───────────────────────────────────────────
+    local LightTheme = {
         WinBorder     = Color3.fromRGB(58, 110, 165),
         TitleBar      = Color3.fromRGB(212, 208, 200),
         TitleText     = Color3.fromRGB(0, 0, 0),
@@ -53,21 +55,90 @@ return function(Shared)
         SectionText   = Color3.fromRGB(10, 20, 80),
         RowBg         = Color3.fromRGB(248, 248, 252),
         RowBorder     = Color3.fromRGB(190, 195, 210),
+        RowHover      = Color3.fromRGB(232, 238, 252),
         Accent        = Color3.fromRGB(0, 100, 220),
         DrawerBg      = Color3.fromRGB(244, 246, 250),
         NotifyBg      = Color3.fromRGB(250, 250, 255),
         NotifyBorder  = Color3.fromRGB(58, 110, 165),
+        BannerBg      = Color3.fromRGB(248, 250, 255),
+        BannerTitle   = Color3.fromRGB(15, 30, 80),
+        BannerSub     = Color3.fromRGB(90, 110, 150),
+        IsDark        = false
     }
 
-    -- ── CONFIG PERSISTENCE ──────────────────────────────────────
+    local DarkTheme = {
+        WinBorder     = Color3.fromRGB(30, 75, 130),
+        TitleBar      = Color3.fromRGB(32, 36, 46),
+        TitleText     = Color3.fromRGB(240, 240, 245),
+        NavBar        = Color3.fromRGB(24, 28, 38),
+        NavText       = Color3.fromRGB(190, 210, 245),
+        NavLink       = Color3.fromRGB(100, 175, 255),
+        NavLinkHover  = Color3.fromRGB(255, 110, 110),
+        BodyBg        = Color3.fromRGB(16, 18, 24),
+        SidebarCellA  = Color3.fromRGB(22, 26, 34),
+        SidebarCellB  = Color3.fromRGB(28, 32, 42),
+        SidebarBorder = Color3.fromRGB(40, 50, 70),
+        BtnBg         = Color3.fromRGB(34, 38, 50),
+        BtnBorder     = Color3.fromRGB(55, 65, 85),
+        BtnHover      = Color3.fromRGB(48, 58, 78),
+        BtnDown       = Color3.fromRGB(26, 30, 40),
+        BtnText       = Color3.fromRGB(235, 240, 250),
+        TabActiveBg   = Color3.fromRGB(16, 18, 24),
+        TabActiveText = Color3.fromRGB(80, 170, 255),
+        SectionBg     = Color3.fromRGB(26, 32, 46),
+        SectionText   = Color3.fromRGB(175, 205, 250),
+        RowBg         = Color3.fromRGB(22, 25, 34),
+        RowBorder     = Color3.fromRGB(40, 48, 64),
+        RowHover      = Color3.fromRGB(32, 38, 52),
+        Accent        = Color3.fromRGB(30, 130, 245),
+        DrawerBg      = Color3.fromRGB(20, 23, 32),
+        NotifyBg      = Color3.fromRGB(20, 24, 34),
+        NotifyBorder  = Color3.fromRGB(40, 90, 155),
+        BannerBg      = Color3.fromRGB(22, 26, 36),
+        BannerTitle   = Color3.fromRGB(210, 230, 255),
+        BannerSub     = Color3.fromRGB(130, 150, 180),
+        IsDark        = true
+    }
+
+    local isDark = false
+    local C = LightTheme
+
+    -- Theme Registry: elements register to automatically update on theme transitions
+    local themeRegistry = {}
+    local function registerThemed(instance, propMap)
+        table.insert(themeRegistry, { inst = instance, props = propMap })
+    end
+
+    local function applyThemeTransition(targetTheme)
+        C = targetTheme
+        isDark = targetTheme.IsDark
+        Shared.Config.DarkMode = isDark
+
+        for _, item in ipairs(themeRegistry) do
+            if item.inst and item.inst.Parent then
+                local goal = {}
+                for propName, themeKey in pairs(item.props) do
+                    if C[themeKey] then
+                        goal[propName] = C[themeKey]
+                    end
+                end
+                TweenService:Create(item.inst, TweenInfo.new(0.25, Enum.EasingStyle.Quad), goal):Play()
+            end
+        end
+    end
+
+    -- ── ZERO-LAG DEBOUNCED CONFIG SAVING ────────────────────────
     local CONFIG_FILE = "FihUi_Config.json"
-    local function saveConfig()
+    local saveDebounce = false
+
+    local function saveConfigDirect()
         pcall(function()
             if writefile then
                 local data = {
                     Flags        = Shared.Flags,
                     SpotifyToken = Shared.Config.SpotifyToken or "",
                     LastFMUser   = Shared.Config.LastFMUser or "",
+                    DarkMode     = isDark,
                     Keybinds     = {}
                 }
                 for fKey, item in pairs(Shared.Toggles) do
@@ -77,7 +148,16 @@ return function(Shared)
             end
         end)
     end
-    Shared.SaveConfig = saveConfig
+
+    local function saveConfigDebounced()
+        if saveDebounce then return end
+        saveDebounce = true
+        task.delay(0.6, function()
+            saveDebounce = false
+            saveConfigDirect()
+        end)
+    end
+    Shared.SaveConfig = saveConfigDebounced
 
     local function loadConfig()
         pcall(function()
@@ -86,6 +166,9 @@ return function(Shared)
                 if data then
                     Shared.Config.SpotifyToken = data.SpotifyToken or ""
                     Shared.Config.LastFMUser   = data.LastFMUser or ""
+                    if data.DarkMode == true then
+                        applyThemeTransition(DarkTheme)
+                    end
                     if data.Flags then
                         for k, v in pairs(data.Flags) do
                             Shared.Flags[k] = v
@@ -109,7 +192,7 @@ return function(Shared)
     Shared.LoadConfig = loadConfig
 
     Shared.Services.Players.PlayerRemoving:Connect(function(plr)
-        if plr == Shared.Player then saveConfig() end
+        if plr == Shared.Player then saveConfigDirect() end
     end)
 
     -- ── NOTIFICATION STACK ──────────────────────────────────────
@@ -159,7 +242,7 @@ return function(Shared)
         local dLbl = Instance.new("TextLabel")
         dLbl.Size                   = UDim2.new(1,-12,0,24); dLbl.Position = UDim2.new(0,6,0,20)
         dLbl.BackgroundTransparency = 1; dLbl.Text = message
-        dLbl.TextColor3             = Color3.fromRGB(30,30,50)
+        dLbl.TextColor3             = isDark and Color3.fromRGB(210,220,240) or Color3.fromRGB(30,30,50)
         dLbl.Font                   = Enum.Font.Code; dLbl.TextSize = 11
         dLbl.TextXAlignment         = Enum.TextXAlignment.Left; dLbl.ZIndex = 102; dLbl.Parent = toast
 
@@ -182,6 +265,7 @@ return function(Shared)
     Window.BackgroundColor3 = C.BodyBg
     Window.BorderSizePixel  = 2; Window.BorderColor3 = C.WinBorder
     Window.ClipsDescendants = true; Window.Parent = ScreenGui
+    registerThemed(Window, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
 
     -- TOPBAR
     local TITLE_H = 28
@@ -189,6 +273,7 @@ return function(Shared)
     TitleBar.Name             = "TitleBar"; TitleBar.Size = UDim2.new(1,0,0,TITLE_H)
     TitleBar.BackgroundColor3 = C.TitleBar; TitleBar.BorderSizePixel = 1
     TitleBar.BorderColor3     = Color3.fromRGB(140,140,140); TitleBar.Parent = Window
+    registerThemed(TitleBar, { BackgroundColor3 = "TitleBar" })
 
     local TitleText = Instance.new("TextLabel")
     TitleText.Size = UDim2.new(0,200,1,0); TitleText.Position = UDim2.new(0,10,0,0)
@@ -196,6 +281,7 @@ return function(Shared)
     TitleText.TextColor3 = C.TitleText; TitleText.Font = Enum.Font.Code
     TitleText.TextSize = 13; TitleText.TextXAlignment = Enum.TextXAlignment.Left
     TitleText.Parent = TitleBar
+    registerThemed(TitleText, { TextColor3 = "TitleText" })
 
     local winBtns = {}
     for _, def in ipairs({{id="min",label="[-]",x=-88},{id="max",label="[ ]",x=-58},{id="close",label="[X]",x=-28}}) do
@@ -206,11 +292,17 @@ return function(Shared)
         b.TextColor3 = C.BtnText; b.Font = Enum.Font.Code
         b.TextSize = 11; b.BorderSizePixel = 1; b.BorderColor3 = C.BtnBorder
         b.Parent = TitleBar
+        registerThemed(b, { BackgroundColor3 = "BtnBg", TextColor3 = "BtnText", BorderColor3 = "BtnBorder" })
+
         b.MouseEnter:Connect(function()
-            b.BackgroundColor3 = def.id == "close" and Color3.fromRGB(232,17,35) or C.BtnHover
+            local hCol = def.id == "close" and Color3.fromRGB(232,17,35) or C.BtnHover
+            TweenService:Create(b, TweenInfo.new(0.12), { BackgroundColor3 = hCol }):Play()
             if def.id == "close" then b.TextColor3 = Color3.fromRGB(255,255,255) end
         end)
-        b.MouseLeave:Connect(function() b.BackgroundColor3 = C.BtnBg; b.TextColor3 = C.BtnText end)
+        b.MouseLeave:Connect(function()
+            TweenService:Create(b, TweenInfo.new(0.12), { BackgroundColor3 = C.BtnBg }):Play()
+            b.TextColor3 = C.BtnText
+        end)
         winBtns[def.id] = b
     end
 
@@ -299,6 +391,7 @@ return function(Shared)
     NavBar.Size = UDim2.new(1,0,0,NAV_H); NavBar.Position = UDim2.new(0,0,0,TITLE_H)
     NavBar.BackgroundColor3 = C.NavBar; NavBar.BorderSizePixel = 1
     NavBar.BorderColor3 = Color3.fromRGB(140,160,200); NavBar.Parent = Window
+    registerThemed(NavBar, { BackgroundColor3 = "NavBar" })
 
     local NavTabLabel = Instance.new("TextLabel")
     NavTabLabel.Size = UDim2.new(0.5,0,1,0); NavTabLabel.Position = UDim2.new(0,10,0,0)
@@ -306,14 +399,56 @@ return function(Shared)
     NavTabLabel.TextColor3 = C.NavText; NavTabLabel.Font = Enum.Font.Code
     NavTabLabel.TextSize = 12; NavTabLabel.TextXAlignment = Enum.TextXAlignment.Left
     NavTabLabel.Parent = NavBar
+    registerThemed(NavTabLabel, { TextColor3 = "NavText" })
+
+    -- ── THEME SWITCHER BUTTON (Sun / Moon) ───────────────────────
+    local themeBtn = Instance.new("TextButton")
+    themeBtn.Name                   = "ThemeToggleBtn"
+    themeBtn.Size                   = UDim2.new(0, 32, 0, 20)
+    themeBtn.Position               = UDim2.new(1, -125, 0.5, -10)
+    themeBtn.BackgroundColor3       = C.BtnBg
+    themeBtn.BorderSizePixel        = 1
+    themeBtn.BorderColor3           = C.BtnBorder
+    themeBtn.Text                   = "🌙"
+    themeBtn.TextColor3             = C.BtnText
+    themeBtn.Font                   = Enum.Font.Code
+    themeBtn.TextSize               = 12
+    themeBtn.Parent                 = NavBar
+    registerThemed(themeBtn, { BackgroundColor3 = "BtnBg", TextColor3 = "BtnText", BorderColor3 = "BtnBorder" })
+
+    themeBtn.MouseEnter:Connect(function()
+        TweenService:Create(themeBtn, TweenInfo.new(0.15), { BackgroundColor3 = C.BtnHover }):Play()
+    end)
+    themeBtn.MouseLeave:Connect(function()
+        TweenService:Create(themeBtn, TweenInfo.new(0.15), { BackgroundColor3 = C.BtnBg }):Play()
+    end)
+
+    themeBtn.MouseButton1Click:Connect(function()
+        if isDark then
+            themeBtn.Text = "🌙"
+            applyThemeTransition(LightTheme)
+            sendNotification("Theme Engine", "Light Theme Applied", true)
+        else
+            themeBtn.Text = "☀️"
+            applyThemeTransition(DarkTheme)
+            sendNotification("Theme Engine", "Dark Theme Applied", true)
+        end
+        saveConfigDebounced()
+    end)
 
     local settingsLink = Instance.new("TextButton")
     settingsLink.Size = UDim2.new(0,75,0,20); settingsLink.Position = UDim2.new(1,-85,0.5,-10)
     settingsLink.BackgroundTransparency = 1; settingsLink.Text = "settings"
     settingsLink.TextColor3 = C.NavLink; settingsLink.Font = Enum.Font.Code
     settingsLink.TextSize = 11; settingsLink.BorderSizePixel = 0; settingsLink.Parent = NavBar
-    settingsLink.MouseEnter:Connect(function() settingsLink.TextColor3 = C.NavLinkHover end)
-    settingsLink.MouseLeave:Connect(function() settingsLink.TextColor3 = C.NavLink end)
+    registerThemed(settingsLink, { TextColor3 = "NavLink" })
+
+    settingsLink.MouseEnter:Connect(function()
+        TweenService:Create(settingsLink, TweenInfo.new(0.12), { TextColor3 = C.NavLinkHover }):Play()
+    end)
+    settingsLink.MouseLeave:Connect(function()
+        TweenService:Create(settingsLink, TweenInfo.new(0.12), { TextColor3 = C.NavLink }):Play()
+    end)
     settingsLink.MouseButton1Click:Connect(function() Shared.ToggleDrawer("settings") end)
 
     -- BODY
@@ -324,11 +459,14 @@ return function(Shared)
     Body.Size = UDim2.new(1,0,1,-BODY_Y); Body.Position = UDim2.new(0,0,0,BODY_Y)
     Body.BackgroundColor3 = C.BodyBg; Body.BorderSizePixel = 0
     Body.ClipsDescendants = true; Body.Parent = Window
+    registerThemed(Body, { BackgroundColor3 = "BodyBg" })
 
     -- SIDEBAR
     local Sidebar = Instance.new("Frame")
-    Sidebar.Size = UDim2.new(0,SIDEBAR_W,1,0); Sidebar.BackgroundColor3 = Color3.fromRGB(255,255,255)
+    Sidebar.Size = UDim2.new(0,SIDEBAR_W,1,0); Sidebar.BackgroundColor3 = C.BodyBg
     Sidebar.BorderSizePixel = 0; Sidebar.ClipsDescendants = true; Sidebar.Parent = Body
+    registerThemed(Sidebar, { BackgroundColor3 = "BodyBg" })
+
     local CELL = 9
     for r = 0, 50 do for c = 0, 11 do
         local cell = Instance.new("Frame")
@@ -336,11 +474,14 @@ return function(Shared)
         cell.BorderSizePixel = 0
         cell.BackgroundColor3 = ((r+c)%2==0) and C.SidebarCellA or C.SidebarCellB
         cell.Parent = Sidebar
+        registerThemed(cell, { BackgroundColor3 = ((r+c)%2==0) and "SidebarCellA" or "SidebarCellB" })
     end end
+
     local SBorder = Instance.new("Frame")
     SBorder.Size = UDim2.new(0,2,1,0); SBorder.Position = UDim2.new(1,-2,0,0)
     SBorder.BackgroundColor3 = C.SidebarBorder; SBorder.BorderSizePixel = 0
     SBorder.ZIndex = 5; SBorder.Parent = Sidebar
+    registerThemed(SBorder, { BackgroundColor3 = "SidebarBorder" })
 
     local TabContainer = Instance.new("Frame")
     TabContainer.Size = UDim2.new(1,-4,1,0); TabContainer.BackgroundTransparency = 1
@@ -353,7 +494,7 @@ return function(Shared)
     local TabPad = Instance.new("UIPadding")
     TabPad.PaddingTop = UDim.new(0,8); TabPad.Parent = TabContainer
 
-    -- ── CONTENT AREA (Auto-Stretches With Window Resize) ──────────
+    -- ── CONTENT AREA ─────────────────────────────────────────────
     local ContentArea = Instance.new("ScrollingFrame")
     ContentArea.Name                 = "ContentArea"
     ContentArea.Size                 = UDim2.new(1, -SIDEBAR_W, 1, 0)
@@ -366,6 +507,7 @@ return function(Shared)
     ContentArea.AutomaticCanvasSize  = Enum.AutomaticSize.Y
     ContentArea.ClipsDescendants     = true
     ContentArea.Parent               = Body
+    registerThemed(ContentArea, { BackgroundColor3 = "BodyBg" })
 
     local CAPad = Instance.new("UIPadding")
     CAPad.PaddingTop    = UDim.new(0, 6)
@@ -386,11 +528,13 @@ return function(Shared)
     Drawer.BackgroundColor3 = C.DrawerBg; Drawer.BorderSizePixel = 1
     Drawer.BorderColor3 = C.SidebarBorder; Drawer.ZIndex = 20
     Drawer.Visible = false; Drawer.ClipsDescendants = true; Drawer.Parent = Body
+    registerThemed(Drawer, { BackgroundColor3 = "DrawerBg", BorderColor3 = "SidebarBorder" })
 
     local DHeader = Instance.new("Frame")
     DHeader.Size = UDim2.new(1,0,0,24); DHeader.BackgroundColor3 = C.SectionBg
     DHeader.BorderSizePixel = 1; DHeader.BorderColor3 = C.SidebarBorder
     DHeader.ZIndex = 21; DHeader.Parent = Drawer
+    registerThemed(DHeader, { BackgroundColor3 = "SectionBg", BorderColor3 = "SidebarBorder" })
 
     local DTitle = Instance.new("TextLabel")
     DTitle.Size = UDim2.new(1,-85,1,0); DTitle.Position = UDim2.new(0,8,0,0)
@@ -398,6 +542,7 @@ return function(Shared)
     DTitle.TextColor3 = C.SectionText; DTitle.Font = Enum.Font.Code
     DTitle.TextSize = 11; DTitle.TextXAlignment = Enum.TextXAlignment.Left
     DTitle.ZIndex = 22; DTitle.Parent = DHeader
+    registerThemed(DTitle, { TextColor3 = "SectionText" })
 
     local DClose = Instance.new("TextButton")
     DClose.Size = UDim2.new(0,76,0,18); DClose.Position = UDim2.new(1,-80,0,3)
@@ -405,6 +550,7 @@ return function(Shared)
     DClose.TextColor3 = C.BtnText; DClose.Font = Enum.Font.Code
     DClose.TextSize = 10; DClose.BorderSizePixel = 1; DClose.BorderColor3 = C.BtnBorder
     DClose.ZIndex = 22; DClose.Parent = DHeader
+    registerThemed(DClose, { BackgroundColor3 = "BtnBg", TextColor3 = "BtnText", BorderColor3 = "BtnBorder" })
 
     local DrawerScroll = Instance.new("ScrollingFrame")
     DrawerScroll.Size = UDim2.new(1,0,1,-24); DrawerScroll.Position = UDim2.new(0,0,0,24)
@@ -412,6 +558,7 @@ return function(Shared)
     DrawerScroll.ScrollBarThickness = 6; DrawerScroll.ScrollBarImageColor3 = Color3.fromRGB(140,160,200)
     DrawerScroll.CanvasSize = UDim2.new(0,0,0,0); DrawerScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
     DrawerScroll.ClipsDescendants = true; DrawerScroll.ZIndex = 21; DrawerScroll.Parent = Drawer
+    registerThemed(DrawerScroll, { BackgroundColor3 = "DrawerBg" })
 
     local DLayout = Instance.new("UIListLayout")
     DLayout.SortOrder = Enum.SortOrder.LayoutOrder; DLayout.Padding = UDim.new(0,6); DLayout.Parent = DrawerScroll
@@ -433,7 +580,7 @@ return function(Shared)
     Shared.ToggleDrawer  = toggleDrawer
     Shared.DrawerContent = DrawerScroll
 
-    -- ── TABS ─────────────────────────────────────────────────────
+    -- ── TABS WITH SMOOTH TRANSITIONS ─────────────────────────────
     local Tabs     = {}
     local TabBtns  = {}
     local QuadCols = {}
@@ -448,15 +595,35 @@ return function(Shared)
     }
 
     local function switchTab(name)
-        for tName, tFrame in pairs(Tabs) do tFrame.Visible = (tName == name) end
-        for tName, tBtn in pairs(TabBtns) do
+        if activeTab == name then return end
+        activeTab = name
+        NavTabLabel.Text = name
+
+        for tName, tFrame in pairs(Tabs) do
             if tName == name then
-                tBtn.BackgroundColor3 = C.TabActiveBg; tBtn.TextColor3 = C.TabActiveText; tBtn.BorderColor3 = C.WinBorder
+                tFrame.Visible = true
+                tFrame.Position = UDim2.new(0, 0, 0, 8)
+                TweenService:Create(tFrame, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Position = UDim2.new(0, 0, 0, 0) }):Play()
             else
-                tBtn.BackgroundColor3 = C.BtnBg; tBtn.TextColor3 = C.BtnText; tBtn.BorderColor3 = C.BtnBorder
+                tFrame.Visible = false
             end
         end
-        activeTab = name; NavTabLabel.Text = name
+
+        for tName, tBtn in pairs(TabBtns) do
+            if tName == name then
+                TweenService:Create(tBtn, TweenInfo.new(0.15), {
+                    BackgroundColor3 = C.TabActiveBg,
+                    TextColor3       = C.TabActiveText,
+                    BorderColor3     = C.WinBorder
+                }):Play()
+            else
+                TweenService:Create(tBtn, TweenInfo.new(0.15), {
+                    BackgroundColor3 = C.BtnBg,
+                    TextColor3       = C.BtnText,
+                    BorderColor3     = C.BtnBorder
+                }):Play()
+            end
+        end
     end
 
     for _, def in ipairs(tabDefs) do
@@ -465,8 +632,18 @@ return function(Shared)
         btn.Text = def.name; btn.TextColor3 = C.BtnText; btn.Font = Enum.Font.Code
         btn.TextSize = 11; btn.BorderSizePixel = 1; btn.BorderColor3 = C.BtnBorder
         btn.LayoutOrder = def.order; btn.ZIndex = 7; btn.Parent = TabContainer
-        btn.MouseEnter:Connect(function() if activeTab ~= def.name then btn.BackgroundColor3 = C.BtnHover end end)
-        btn.MouseLeave:Connect(function() if activeTab ~= def.name then btn.BackgroundColor3 = C.BtnBg end end)
+        registerThemed(btn, { BackgroundColor3 = "BtnBg", TextColor3 = "BtnText", BorderColor3 = "BtnBorder" })
+
+        btn.MouseEnter:Connect(function()
+            if activeTab ~= def.name then
+                TweenService:Create(btn, TweenInfo.new(0.12), { BackgroundColor3 = C.BtnHover }):Play()
+            end
+        end)
+        btn.MouseLeave:Connect(function()
+            if activeTab ~= def.name then
+                TweenService:Create(btn, TweenInfo.new(0.12), { BackgroundColor3 = C.BtnBg }):Play()
+            end
+        end)
 
         local tabFrame = Instance.new("Frame")
         tabFrame.Name = "Tab_"..def.name
@@ -480,7 +657,6 @@ return function(Shared)
         local tLayout = Instance.new("UIListLayout")
         tLayout.SortOrder = Enum.SortOrder.LayoutOrder; tLayout.Padding = UDim.new(0,6); tLayout.Parent = tabFrame
 
-        -- Quad grid inside tab frame
         local quadFrame = Instance.new("Frame")
         quadFrame.Name = "QuadGrid"; quadFrame.Size = UDim2.new(1,0,0,0)
         quadFrame.AutomaticSize = Enum.AutomaticSize.Y; quadFrame.BackgroundTransparency = 1
@@ -508,31 +684,36 @@ return function(Shared)
     -- MAIN BANNER
     local mainTab = Tabs["Main"]
     local logoBox = Instance.new("Frame")
-    logoBox.Size = UDim2.new(1,0,0,76); logoBox.BackgroundColor3 = Color3.fromRGB(248,250,255)
+    logoBox.Size = UDim2.new(1,0,0,76); logoBox.BackgroundColor3 = C.BannerBg
     logoBox.BorderSizePixel = 1; logoBox.BorderColor3 = C.WinBorder
     logoBox.LayoutOrder = 1; logoBox.Parent = mainTab
+    registerThemed(logoBox, { BackgroundColor3 = "BannerBg", BorderColor3 = "WinBorder" })
 
     local logoText = Instance.new("TextLabel")
     logoText.Size = UDim2.new(1,0,0,46); logoText.Position = UDim2.new(0,0,0,4)
     logoText.BackgroundTransparency = 1; logoText.Text = "Fih Ui"
-    logoText.TextColor3 = Color3.fromRGB(15,30,80); logoText.Font = Enum.Font.ArimoBold
+    logoText.TextColor3 = C.BannerTitle; logoText.Font = Enum.Font.ArimoBold
     logoText.TextSize = 40; logoText.TextXAlignment = Enum.TextXAlignment.Center; logoText.Parent = logoBox
+    registerThemed(logoText, { TextColor3 = "BannerTitle" })
 
     local logoSub = Instance.new("TextLabel")
     logoSub.Size = UDim2.new(1,0,0,18); logoSub.Position = UDim2.new(0,0,0,50)
     logoSub.BackgroundTransparency = 1
     logoSub.Text = "Windows XP / IE7 Modular Engine  |  RightShift to Toggle"
-    logoSub.TextColor3 = Color3.fromRGB(90,110,150); logoSub.Font = Enum.Font.Code
+    logoSub.TextColor3 = C.BannerSub; logoSub.Font = Enum.Font.Code
     logoSub.TextSize = 11; logoSub.TextXAlignment = Enum.TextXAlignment.Center; logoSub.Parent = logoBox
+    registerThemed(logoSub, { TextColor3 = "BannerSub" })
 
-    -- ── FACTORY BUILDERS ─────────────────────────────────────────
+    -- ── FACTORY BUILDERS WITH HOVER & THEME SUPPORT ──────────────
     local function makeSection(parent, labelText, order)
         local lbl = Instance.new("TextLabel")
         lbl.Size = UDim2.new(1,0,0,20); lbl.BackgroundColor3 = C.SectionBg
         lbl.TextColor3 = C.SectionText; lbl.Font = Enum.Font.Code; lbl.TextSize = 11
         lbl.Text = "  ["..labelText.."]"; lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.BorderSizePixel = 1; lbl.BorderColor3 = C.SidebarBorder
-        lbl.LayoutOrder = order or 0; lbl.Parent = parent; return lbl
+        lbl.LayoutOrder = order or 0; lbl.Parent = parent
+        registerThemed(lbl, { BackgroundColor3 = "SectionBg", TextColor3 = "SectionText", BorderColor3 = "SidebarBorder" })
+        return lbl
     end
 
     local function makeToggle(parent, labelText, flagKey, order, callback)
@@ -540,26 +721,38 @@ return function(Shared)
         row.Name = "Toggle_"..flagKey; row.Size = UDim2.new(1,0,0,26)
         row.BackgroundColor3 = C.RowBg; row.BorderSizePixel = 1; row.BorderColor3 = C.RowBorder
         row.LayoutOrder = order or 0; row.Parent = parent
+        registerThemed(row, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder" })
 
         local lbl = Instance.new("TextLabel")
         lbl.Size = UDim2.new(1,-34,1,0); lbl.Position = UDim2.new(0,6,0,0)
         lbl.BackgroundTransparency = 1; lbl.Text = labelText; lbl.TextColor3 = C.BtnText
         lbl.Font = Enum.Font.Code; lbl.TextSize = 11
         lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.TextTruncate = Enum.TextTruncate.AtEnd; lbl.Parent = row
+        registerThemed(lbl, { TextColor3 = "BtnText" })
 
         local box = Instance.new("TextButton")
         box.Name = "CheckBox"; box.Size = UDim2.new(0,18,0,18); box.Position = UDim2.new(1,-24,0.5,-9)
-        box.BackgroundColor3 = Color3.fromRGB(255,255,255); box.BorderSizePixel = 1
+        box.BackgroundColor3 = C.BodyBg; box.BorderSizePixel = 1
         box.BorderColor3 = Color3.fromRGB(100,100,100); box.Text = ""; box.TextSize = 12
-        box.Font = Enum.Font.Code; box.TextColor3 = Color3.fromRGB(0,80,200); box.Parent = row
+        box.Font = Enum.Font.Code; box.TextColor3 = C.Accent; box.Parent = row
+        registerThemed(box, { BackgroundColor3 = "BodyBg", TextColor3 = "Accent" })
+
+        -- Row hover effects
+        row.MouseEnter:Connect(function()
+            TweenService:Create(row, TweenInfo.new(0.12), { BackgroundColor3 = C.RowHover }):Play()
+        end)
+        row.MouseLeave:Connect(function()
+            TweenService:Create(row, TweenInfo.new(0.12), { BackgroundColor3 = C.RowBg }):Play()
+        end)
 
         Shared.Flags[flagKey] = false
         local function setToggle(state, suppressNotify)
             Shared.Flags[flagKey] = state
-            box.Text = state and "X" or ""; box.BackgroundColor3 = state and Color3.fromRGB(220,235,255) or Color3.fromRGB(255,255,255)
+            box.Text = state and "X" or ""
+            box.BackgroundColor3 = state and (isDark and Color3.fromRGB(30, 60, 100) or Color3.fromRGB(220, 235, 255)) or C.BodyBg
             if callback then callback(state) end
             if not suppressNotify then sendNotification(labelText, state and "ENABLED" or "DISABLED", state) end
-            saveConfig()
+            saveConfigDebounced()
         end
 
         local overlay = Instance.new("TextButton")
@@ -576,27 +769,38 @@ return function(Shared)
         row.Name = "Slider_"..flagKey; row.Size = UDim2.new(1,0,0,36)
         row.BackgroundColor3 = C.RowBg; row.BorderSizePixel = 1; row.BorderColor3 = C.RowBorder
         row.LayoutOrder = order or 0; row.Parent = parent
+        registerThemed(row, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder" })
 
         local lbl = Instance.new("TextLabel")
         lbl.Size = UDim2.new(1,-45,0,16); lbl.Position = UDim2.new(0,6,0,2)
         lbl.BackgroundTransparency = 1; lbl.Text = labelText; lbl.TextColor3 = C.BtnText
         lbl.Font = Enum.Font.Code; lbl.TextSize = 11
         lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.TextTruncate = Enum.TextTruncate.AtEnd; lbl.Parent = row
+        registerThemed(lbl, { TextColor3 = "BtnText" })
 
         local valLbl = Instance.new("TextLabel")
         valLbl.Size = UDim2.new(0,38,0,16); valLbl.Position = UDim2.new(1,-42,0,2)
         valLbl.BackgroundTransparency = 1; valLbl.Text = tostring(defaultVal)
-        valLbl.TextColor3 = Color3.fromRGB(0,50,180); valLbl.Font = Enum.Font.Code
+        valLbl.TextColor3 = C.Accent; valLbl.Font = Enum.Font.Code
         valLbl.TextSize = 11; valLbl.TextXAlignment = Enum.TextXAlignment.Right; valLbl.Parent = row
+        registerThemed(valLbl, { TextColor3 = "Accent" })
 
         local track = Instance.new("Frame")
         track.Name = "Track"; track.Size = UDim2.new(1,-12,0,8); track.Position = UDim2.new(0,6,0,22)
-        track.BackgroundColor3 = Color3.fromRGB(215,218,225); track.BorderSizePixel = 1
-        track.BorderColor3 = Color3.fromRGB(150,160,180); track.Parent = row
+        track.BackgroundColor3 = Color3.fromRGB(180, 190, 205); track.BorderSizePixel = 1
+        track.BorderColor3 = Color3.fromRGB(130, 140, 160); track.Parent = row
 
         local fill = Instance.new("Frame")
         fill.Size = UDim2.new(math.clamp((defaultVal-minVal)/(maxVal-minVal),0,1),0,1,0)
         fill.BackgroundColor3 = C.Accent; fill.BorderSizePixel = 0; fill.Parent = track
+        registerThemed(fill, { BackgroundColor3 = "Accent" })
+
+        row.MouseEnter:Connect(function()
+            TweenService:Create(row, TweenInfo.new(0.12), { BackgroundColor3 = C.RowHover }):Play()
+        end)
+        row.MouseLeave:Connect(function()
+            TweenService:Create(row, TweenInfo.new(0.12), { BackgroundColor3 = C.RowBg }):Play()
+        end)
 
         Shared.Flags[flagKey] = defaultVal
         local dragging = false
@@ -604,8 +808,10 @@ return function(Shared)
             local pct = math.clamp((inputX - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X,1), 0, 1)
             local val = math.floor(minVal + pct*(maxVal-minVal))
             Shared.Flags[flagKey] = val; fill.Size = UDim2.new(pct,0,1,0); valLbl.Text = tostring(val)
-            if callback then callback(val) end; saveConfig()
+            if callback then callback(val) end
+            saveConfigDebounced()
         end
+
         local sliderBtn = Instance.new("TextButton")
         sliderBtn.Size = UDim2.new(1,0,1,0); sliderBtn.BackgroundTransparency = 1; sliderBtn.Text = ""; sliderBtn.Parent = track
         sliderBtn.InputBegan:Connect(function(i)
@@ -628,10 +834,21 @@ return function(Shared)
         btn.BackgroundColor3 = C.BtnBg; btn.Text = labelText; btn.TextColor3 = C.BtnText
         btn.Font = Enum.Font.Code; btn.TextSize = 11; btn.BorderSizePixel = 1; btn.BorderColor3 = C.BtnBorder
         btn.LayoutOrder = order or 0; btn.Parent = parent
-        btn.MouseEnter:Connect(function() btn.BackgroundColor3 = C.BtnHover end)
-        btn.MouseLeave:Connect(function() btn.BackgroundColor3 = C.BtnBg end)
-        btn.MouseButton1Down:Connect(function() btn.BackgroundColor3 = C.BtnDown end)
-        btn.MouseButton1Up:Connect(function() btn.BackgroundColor3 = C.BtnHover end)
+        registerThemed(btn, { BackgroundColor3 = "BtnBg", TextColor3 = "BtnText", BorderColor3 = "BtnBorder" })
+
+        btn.MouseEnter:Connect(function()
+            TweenService:Create(btn, TweenInfo.new(0.12), { BackgroundColor3 = C.BtnHover }):Play()
+        end)
+        btn.MouseLeave:Connect(function()
+            TweenService:Create(btn, TweenInfo.new(0.12), { BackgroundColor3 = C.BtnBg }):Play()
+        end)
+        btn.MouseButton1Down:Connect(function()
+            TweenService:Create(btn, TweenInfo.new(0.08), { BackgroundColor3 = C.BtnDown }):Play()
+        end)
+        btn.MouseButton1Up:Connect(function()
+            TweenService:Create(btn, TweenInfo.new(0.08), { BackgroundColor3 = C.BtnHover }):Play()
+        end)
+
         if callback then btn.MouseButton1Click:Connect(callback) end
         return btn
     end
@@ -654,21 +871,28 @@ return function(Shared)
             row.Size = UDim2.new(1,0,0,26); row.BackgroundColor3 = C.RowBg
             row.BorderSizePixel = 1; row.BorderColor3 = C.RowBorder
             row.LayoutOrder = idx+1; row.Parent = parentCol
+            registerThemed(row, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder" })
+
             local lbl = Instance.new("TextLabel")
             lbl.Size = UDim2.new(1,-66,1,0); lbl.Position = UDim2.new(0,6,0,0)
             lbl.BackgroundTransparency = 1; lbl.Text = info.Name; lbl.TextColor3 = C.BtnText
             lbl.Font = Enum.Font.Code; lbl.TextSize = 11
             lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.TextTruncate = Enum.TextTruncate.AtEnd; lbl.Parent = row
+            registerThemed(lbl, { TextColor3 = "BtnText" })
+
             local bindBtn = Instance.new("TextButton")
             bindBtn.Size = UDim2.new(0,58,0,20); bindBtn.Position = UDim2.new(1,-62,0.5,-10)
             bindBtn.BackgroundColor3 = C.BtnBg; bindBtn.BorderSizePixel = 1; bindBtn.BorderColor3 = C.BtnBorder
             bindBtn.Text = info.Key and ("["..info.Key.Name.."]") or "[ None ]"
-            bindBtn.TextColor3 = info.Key and Color3.fromRGB(0,60,180) or Color3.fromRGB(120,120,120)
+            bindBtn.TextColor3 = info.Key and C.Accent or Color3.fromRGB(120,120,120)
             bindBtn.Font = Enum.Font.Code; bindBtn.TextSize = 10; bindBtn.Parent = row
+            registerThemed(bindBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder" })
+
             bindBtn.MouseButton1Click:Connect(function()
                 listeningKeyFor = fKey; bindBtn.Text = "[ ... ]"; bindBtn.TextColor3 = Color3.fromRGB(220,80,0)
             end)
         end
+
         if Shared._KeybindConn then Shared._KeybindConn:Disconnect() end
         Shared._KeybindConn = UserInput.InputBegan:Connect(function(input, gpe)
             if gpe then return end
@@ -682,7 +906,7 @@ return function(Shared)
                         Shared.Toggles[target].Key = input.KeyCode
                         sendNotification(Shared.Toggles[target].Name, "Bound to ["..input.KeyCode.Name.."]", true)
                     end
-                    saveConfig(); buildKeybindsUI()
+                    saveConfigDebounced(); buildKeybindsUI()
                 else
                     for fKey, info in pairs(Shared.Toggles) do
                         if info.Key and info.Key == input.KeyCode then info.SetToggle(not Shared.Flags[fKey]) end
@@ -697,10 +921,10 @@ return function(Shared)
     -- SETTINGS DRAWER POPULATION
     makeSection(DrawerScroll, "General & Engine", 1)
     makeButton(DrawerScroll, "Save Config File (Manual)", 2, function()
-        saveConfig(); sendNotification("Config Manager", "Saved to FihUi_Config.json", true)
+        saveConfigDirect(); sendNotification("Config Manager", "Saved to FihUi_Config.json", true)
     end)
     makeButton(DrawerScroll, "Unload / Force Close Menu", 3, function()
-        saveConfig(); if Shared.GUI then Shared.GUI:Destroy() end; for k in pairs(Shared.Flags) do Shared.Flags[k] = false end
+        saveConfigDirect(); if Shared.GUI then Shared.GUI:Destroy() end; for k in pairs(Shared.Flags) do Shared.Flags[k] = false end
     end)
     makeSection(DrawerScroll, "Audio & Camera", 10)
     makeSlider(DrawerScroll, "Master Volume", "MasterVolume", 0, 100, 50, 11, function(val)
@@ -717,5 +941,5 @@ return function(Shared)
     Shared.SwitchTab = switchTab; Shared.RebuildKeybinds = buildKeybindsUI
 
     switchTab("Main")
-    print("[UI_Handler] Loaded -- Resizable UI, Strict Padding, Scaling Engine")
+    print("[UI_Handler] Loaded -- Dark Mode Engine, Smooth Transitions, Hover Effects Active")
 end
