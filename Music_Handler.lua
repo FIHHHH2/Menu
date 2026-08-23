@@ -122,8 +122,8 @@ return function(Shared)
             return ""
         end
 
-        local cleanArtist = artist:gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-        local cleanTrack  = trackName:gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+        local cleanArtist = tostring(artist or ""):gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+        local cleanTrack  = tostring(trackName or ""):gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
         local term = Http:UrlEncode(cleanArtist .. " " .. cleanTrack)
 
         -- 1. iTunes API Search

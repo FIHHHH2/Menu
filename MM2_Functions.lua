@@ -259,6 +259,7 @@ return function(Shared)
 
         setreadonly(mt, false)
 
+        -- Clean Non-Intrusive Mouse Redirection (Direct to Murderer)
         rawset(mt, "__index", function(self, key)
             if Shared.Flags["SilentAim"] and typeof(self) == "Instance" and self:IsA("Mouse") then
                 local target = getSilentAimTarget()
@@ -279,57 +280,32 @@ return function(Shared)
             return oldIndex(self, key)
         end)
 
+        -- GunBeam FireServer Intercept only (Leaves Camera & Workspace Raycasts untouched)
         rawset(mt, "__namecall", function(self, ...)
             local method = getnamecallmethod()
-            if Shared.Flags["SilentAim"] then
-                local args = {...}
-                if method == "FireServer" or method == "InvokeServer" then
-                    local isGunRemote = (
-                        self == GUN_BEAM_REMOTE
-                        or self.Name == "GunBeam"
-                        or self.Name == "GunFired"
-                        or self.Name == "ShootGun"
-                        or self.Name == "BulletHit"
-                        or self.Name == "Shoot"
-                    )
-                    if not isGunRemote then
-                        local fullPath = self:GetFullName():lower()
-                        isGunRemote = (
-                            fullPath:find("gunbeam") or fullPath:find("gunfired") or
-                            fullPath:find("shoot") or fullPath:find("bullethi") or
-                            fullPath:find("weaponevent")
-                        )
-                    end
+            if Shared.Flags["SilentAim"] and (method == "FireServer" or method == "InvokeServer") then
+                local isGun = false
+                if GUN_BEAM_REMOTE and self == GUN_BEAM_REMOTE then
+                    isGun = true
+                elseif self.Name == "GunBeam" or self.Name == "GunFired" then
+                    isGun = true
+                end
 
-                    if isGunRemote then
-                        local target = getSilentAimTarget()
-                        if target then
-                            for i, v in ipairs(args) do
-                                if typeof(v) == "Vector3" then
-                                    args[i] = target.Position
-                                elseif typeof(v) == "CFrame" then
-                                    args[i] = target.CFrame
-                                elseif typeof(v) == "Instance" and v:IsA("BasePart") then
-                                    args[i] = target
-                                end
+                if isGun then
+                    local target = getSilentAimTarget()
+                    if target then
+                        local args = {...}
+                        for i, v in ipairs(args) do
+                            if typeof(v) == "Vector3" then
+                                args[i] = target.Position
+                            elseif typeof(v) == "CFrame" then
+                                args[i] = target.CFrame
+                            elseif typeof(v) == "Instance" and v:IsA("BasePart") then
+                                args[i] = target
                             end
                         end
                         return oldNamecall(self, table.unpack(args))
                     end
-                end
-
-                if method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
-                    local target = getSilentAimTarget()
-                    if target then
-                        local origin = args[1]
-                        if typeof(origin) == "Vector3" then
-                            args[2] = (target.Position - origin).Unit * 1000
-                        elseif typeof(args[1]) == "Ray" then
-                            local ray = args[1]
-                            args[1] = Ray.new(ray.Origin, (target.Position - ray.Origin).Unit * 1000)
-                        end
-                    end
-                    return oldNamecall(self, table.unpack(args))
                 end
             end
             return oldNamecall(self, ...)
