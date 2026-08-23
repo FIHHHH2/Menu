@@ -168,6 +168,7 @@ return function(Shared)
                     Shared.Config.LastFMUser   = data.LastFMUser or ""
                     if data.DarkMode == true then
                         applyThemeTransition(DarkTheme)
+                        if themeBtn then themeBtn.Text = '☀️' end
                     end
                     if data.Flags then
                         for k, v in pairs(data.Flags) do
@@ -401,36 +402,38 @@ return function(Shared)
     NavTabLabel.Parent = NavBar
     registerThemed(NavTabLabel, { TextColor3 = "NavText" })
 
-    -- ── THEME SWITCHER BUTTON (Sun / Moon) ───────────────────────
+    -- ── THEME SWITCHER BUTTON (Clean Transparent Sun / Moon Emoji) ──
     local themeBtn = Instance.new("TextButton")
     themeBtn.Name                   = "ThemeToggleBtn"
-    themeBtn.Size                   = UDim2.new(0, 32, 0, 20)
-    themeBtn.Position               = UDim2.new(1, -125, 0.5, -10)
-    themeBtn.BackgroundColor3       = C.BtnBg
-    themeBtn.BorderSizePixel        = 1
-    themeBtn.BorderColor3           = C.BtnBorder
+    themeBtn.Size                   = UDim2.new(0, 24, 0, 24)
+    themeBtn.Position               = UDim2.new(1, -118, 0.5, -12)
+    themeBtn.BackgroundTransparency = 1
+    themeBtn.BorderSizePixel        = 0
     themeBtn.Text                   = "🌙"
-    themeBtn.TextColor3             = C.BtnText
-    themeBtn.Font                   = Enum.Font.Code
-    themeBtn.TextSize               = 12
+    themeBtn.Font                   = Enum.Font.SourceSans
+    themeBtn.TextSize               = 18
+    themeBtn.ZIndex                 = 15
     themeBtn.Parent                 = NavBar
-    registerThemed(themeBtn, { BackgroundColor3 = "BtnBg", TextColor3 = "BtnText", BorderColor3 = "BtnBorder" })
 
     themeBtn.MouseEnter:Connect(function()
-        TweenService:Create(themeBtn, TweenInfo.new(0.15), { BackgroundColor3 = C.BtnHover }):Play()
+        TweenService:Create(themeBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { TextSize = 21 }):Play()
     end)
     themeBtn.MouseLeave:Connect(function()
-        TweenService:Create(themeBtn, TweenInfo.new(0.15), { BackgroundColor3 = C.BtnBg }):Play()
+        TweenService:Create(themeBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { TextSize = 18 }):Play()
     end)
+
+    local function updateThemeButtonIcon()
+        themeBtn.Text = isDark and "☀️" or "🌙"
+    end
 
     themeBtn.MouseButton1Click:Connect(function()
         if isDark then
-            themeBtn.Text = "🌙"
             applyThemeTransition(LightTheme)
+            updateThemeButtonIcon()
             sendNotification("Theme Engine", "Light Theme Applied", true)
         else
-            themeBtn.Text = "☀️"
             applyThemeTransition(DarkTheme)
+            updateThemeButtonIcon()
             sendNotification("Theme Engine", "Dark Theme Applied", true)
         end
         saveConfigDebounced()
