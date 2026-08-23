@@ -113,6 +113,71 @@ return function(Shared)
         end
     end
 
+    -- ── MULTI-SOURCE ALBUM ARTWORK RESOLVER (Fallback Pipeline) ──
+    -- Tier 1: Apple iTunes Search API (High-res 600x600 artwork, No Auth, Public)
+    -- Tier 2: Deezer API (Public, No Auth, High-res)
+    -- Tier 3: Last.fm track.getInfo (Rich metadata fallback)
+    local function fetchArtworkFallback(artist, trackName)
+        if not artist or not trackName or artist == "" or trackName == "" or trackName == "Not Playing" or trackName == "Unknown" then
+            return ""
+        end
+
+        local cleanArtist = artist:gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+        local cleanTrack  = trackName:gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+        local term = Http:UrlEncode(cleanArtist .. " " .. cleanTrack)
+
+        -- 1. iTunes API Search
+        local ok1, itunesRes = pcall(function()
+            return Shared.HttpRequest({
+                Url = "https://itunes.apple.com/search?term=" .. term .. "&media=music&entity=song&limit=1",
+                Method = "GET"
+            })
+        end)
+        if ok1 and itunesRes and itunesRes.Body and #itunesRes.Body > 0 then
+            local okD, data = pcall(function() return Http:JSONDecode(itunesRes.Body) end)
+            if okD and data and data.results and data.results[1] and data.results[1].artworkUrl100 then
+                local art = data.results[1].artworkUrl100:gsub("100x100bb", "600x600bb")
+                if art and #art > 0 then return art end
+            end
+        end
+
+        -- 2. Deezer API Search
+        local ok2, deezerRes = pcall(function()
+            return Shared.HttpRequest({
+                Url = "https://api.deezer.com/search?q=" .. term .. "&limit=1",
+                Method = "GET"
+            })
+        end)
+        if ok2 and deezerRes and deezerRes.Body and #deezerRes.Body > 0 then
+            local okD, data = pcall(function() return Http:JSONDecode(deezerRes.Body) end)
+            if okD and data and data.data and data.data[1] and data.data[1].album then
+                local art = data.data[1].album.cover_big or data.data[1].album.cover_medium or data.data[1].album.cover
+                if art and #art > 0 then return art end
+            end
+        end
+
+        -- 3. Last.fm track.getInfo API Search
+        local ok3, lfmRes = pcall(function()
+            return Shared.HttpRequest({
+                Url = "https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=" .. LASTFM_API_KEY .. "&artist=" .. Http:UrlEncode(artist) .. "&track=" .. Http:UrlEncode(trackName) .. "&format=json",
+                Method = "GET"
+            })
+        end)
+        if ok3 and lfmRes and lfmRes.Body and #lfmRes.Body > 0 then
+            local okD, data = pcall(function() return Http:JSONDecode(lfmRes.Body) end)
+            if okD and data and data.track and data.track.album and data.track.album.image then
+                for i = #data.track.album.image, 1, -1 do
+                    local imgObj = data.track.album.image[i]
+                    if imgObj and imgObj["#text"] and #imgObj["#text"] > 0 then
+                        return imgObj["#text"]
+                    end
+                end
+            end
+        end
+
+        return ""
+    end
+
     -- SPOTIFY API
     local function cleanToken(tok)
         if not tok then return "" end
@@ -161,14 +226,22 @@ return function(Shared)
         if not ok or not data or not data.item then return nil, "No Track Found" end
         local item = data.item
 
+        local trackName  = item.name or "Unknown"
+        local artistName = item.artists and item.artists[1] and item.artists[1].name or "Unknown"
+
         local coverUrl = ""
         if item.album and item.album.images and #item.album.images > 0 then
             coverUrl = item.album.images[1].url or ""
         end
 
+        -- Multi-source fallback if cover is missing
+        if not coverUrl or coverUrl == "" then
+            coverUrl = fetchArtworkFallback(artistName, trackName)
+        end
+
         return {
-            name      = item.name or "Unknown",
-            artist    = item.artists and item.artists[1] and item.artists[1].name or "Unknown",
+            name      = trackName,
+            artist    = artistName,
             cover     = coverUrl,
             isPlaying = data.is_playing or false,
             source    = "Spotify"
@@ -198,6 +271,7 @@ return function(Shared)
         if not track or type(track) ~= "table" then return nil end
 
         local isNowPlaying = (track["@attr"] and track["@attr"].nowplaying == "true") or false
+        local trackName = track.name or "Unknown"
         local artistName = "Unknown"
         if type(track.artist) == "table" then
             artistName = track.artist["#text"] or track.artist.name or "Unknown"
@@ -216,8 +290,13 @@ return function(Shared)
             end
         end
 
+        -- Multi-source fallback if Last.fm returned no cover
+        if not coverUrl or coverUrl == "" then
+            coverUrl = fetchArtworkFallback(artistName, trackName)
+        end
+
         return {
-            name      = track.name or "Unknown",
+            name      = trackName,
             artist    = artistName,
             cover     = coverUrl,
             isPlaying = isNowPlaying,
