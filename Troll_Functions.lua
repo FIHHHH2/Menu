@@ -1,5 +1,5 @@
 -- Troll_Functions.lua
--- Trolling suite: Fling All, Spinbot, Attach/Piggyback, Teleport Loop, Fake Lag, Invisibility
+-- Server-Replicated Physics Trolls: Push Booster, Platform Mode, Orbit Swarm, Path Blocker, Stalker
 
 return function(Shared)
     local Players      = Shared.Services.Players
@@ -22,144 +22,171 @@ return function(Shared)
     local leftCol  = cols.Left
     local rightCol = cols.Right
 
-    local function getChar()  return Shared.Character or (Player and Player.Character) end
+    local function getChar()  return Shared.Character or Player.Character end
     local function getHRP()   return Shared.HumanoidRP or (getChar() and getChar():FindFirstChild("HumanoidRootPart")) end
     local function getHuman() return getChar() and getChar():FindFirstChildOfClass("Humanoid") end
 
-    -- LEFT COLUMN: FLINGS & PHYSICS TROLLS
-    MkSection(leftCol, "Physics & Flings", 1)
-
-    -- Fling All
-    local flingLoop = false
-    MkToggle(leftCol, "Fling All Players", "FlingAll", 2, function(state)
-        flingLoop = state
-        if state then
-            task.spawn(function()
-                local hrp = getHRP()
-                local bAV = Instance.new("BodyAngularVelocity")
-                bAV.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-                bAV.AngularVelocity = Vector3.new(0, 99999, 0)
-                bAV.Parent = hrp
-
-                while flingLoop and Shared.Flags["FlingAll"] do
-                    for _, target in ipairs(Players:GetPlayers()) do
-                        if not flingLoop then break end
-                        if target ~= Player and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-                            local tHRP = target.Character.HumanoidRootPart
-                            local orig = hrp.CFrame
-                            for _ = 1, 10 do
-                                if not flingLoop then break end
-                                hrp.CFrame = tHRP.CFrame * CFrame.new(0, 0.5, 0)
-                                hrp.Velocity = Vector3.new(9999, 9999, 9999)
-                                task.wait(0.03)
-                            end
-                        end
-                    end
-                    task.wait(0.1)
+    local function getNearestPlayer()
+        local myHRP = getHRP()
+        if not myHRP then return nil end
+        local best, minDist = nil, math.huge
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= Player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health > 0 then
+                    local d = (plr.Character.HumanoidRootPart.Position - myHRP.Position).Magnitude
+                    if d < minDist then minDist = d; best = plr end
                 end
-
-                if bAV then bAV:Destroy() end
-            end)
-        end
-    end)
-
-    -- Spinbot
-    local spinBAV
-    MkToggle(leftCol, "Spinbot", "Spinbot", 3, function(state)
-        local hrp = getHRP()
-        if not hrp then return end
-        if state then
-            spinBAV = Instance.new("BodyAngularVelocity")
-            spinBAV.MaxTorque = Vector3.new(0, math.huge, 0)
-            spinBAV.AngularVelocity = Vector3.new(0, Shared.Flags["SpinSpeed"] or 50, 0)
-            spinBAV.Parent = hrp
-        else
-            if spinBAV then spinBAV:Destroy(); spinBAV = nil end
-        end
-    end)
-
-    MkSlider(leftCol, "Spin Speed", "SpinSpeed", 10, 150, 50, 4, function(val)
-        Shared.Flags["SpinSpeed"] = val
-        if spinBAV then spinBAV.AngularVelocity = Vector3.new(0, val, 0) end
-    end)
-
-    -- Fake Lag / Desync
-    local fakeLagConn
-    MkToggle(leftCol, "Fake Lag (Desync Spoof)", "FakeLag", 5, function(state)
-        if fakeLagConn then fakeLagConn:Disconnect(); fakeLagConn = nil end
-        if state then
-            fakeLagConn = RunService.Heartbeat:Connect(function()
-                local hrp = getHRP()
-                if hrp then
-                    hrp.CFrame = hrp.CFrame * CFrame.new(math.random(-1, 1) * 0.1, 0, math.random(-1, 1) * 0.1)
-                end
-            end)
-        end
-    end)
-
-    -- RIGHT COLUMN: STEALTH & STALKER TROLLS
-    MkSection(rightCol, "Stalker & Stealth", 1)
-
-    -- Invisibility
-    MkToggle(rightCol, "Client Ghost / Invisible", "ClientGhost", 2, function(state)
-        local char = getChar()
-        if not char then return end
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") or part:IsA("Decal") then
-                part.Transparency = state and 0.85 or 0
             end
         end
-    end)
+        return best
+    end
 
-    -- Stalker Loop Teleport
-    local stalkerLoop = false
-    local stalkTarget = nil
-    MkToggle(rightCol, "Stalk / Piggyback Closest", "StalkerMode", 3, function(state)
-        stalkerLoop = state
-        if state then
-            task.spawn(function()
-                while stalkerLoop and Shared.Flags["StalkerMode"] do
-                    local myHRP = getHRP()
-                    local closest = nil
-                    local minDist = math.huge
-                    for _, plr in ipairs(Players:GetPlayers()) do
-                        if plr ~= Player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                            local d = (plr.Character.HumanoidRootPart.Position - myHRP.Position).Magnitude
-                            if d < minDist then minDist = d; closest = plr end
-                        end
-                    end
-                    if closest and closest.Character and closest.Character:FindFirstChild("HumanoidRootPart") then
-                        myHRP.CFrame = closest.Character.HumanoidRootPart.CFrame * CFrame.new(0, 3.2, 1)
-                    end
-                    task.wait(0.05)
-                end
-            end)
-        end
-    end)
+    -- ── LEFT COLUMN: PHYSICS TROLLS & BOOSTERS ────────────────────
+    MkSection(leftCol, "Physics Boosters & Interactions", 1)
 
-    -- Evade Murderer
-    local evadeConn
-    MkToggle(rightCol, "Auto Evade Murderer", "AutoEvade", 4, function(state)
-        if evadeConn then evadeConn:Disconnect(); evadeConn = nil end
+    -- 1. Push Player (Physics Booster)
+    -- Hits target from behind in their facing direction at high velocity, launching them forward
+    local pushConn
+    MkToggle(leftCol, "Push Player (Speed Booster)", "PushPlayer", 2, function(state)
+        if pushConn then pushConn:Disconnect(); pushConn = nil end
         if state then
-            evadeConn = RunService.Heartbeat:Connect(function()
+            pushConn = RunService.Heartbeat:Connect(function()
                 local myHRP = getHRP()
                 if not myHRP then return end
-                for _, plr in ipairs(Players:GetPlayers()) do
-                    if plr ~= Player and plr.Character then
-                        local hasKnife = plr.Character:FindFirstChild("Knife") or (plr.Backpack and plr.Backpack:FindFirstChild("Knife"))
-                        if hasKnife and plr.Character:FindFirstChild("HumanoidRootPart") then
-                            local dist = (plr.Character.HumanoidRootPart.Position - myHRP.Position).Magnitude
-                            if dist < 25 then
-                                local awayDir = (myHRP.Position - plr.Character.HumanoidRootPart.Position).Unit
-                                myHRP.CFrame = myHRP.CFrame + (awayDir * 8)
-                            end
-                        end
-                    end
+                local target = getNearestPlayer()
+                if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                    local tHRP = target.Character.HumanoidRootPart
+                    local look = tHRP.CFrame.LookVector
+                    local power = Shared.Flags["PushForce"] or 160
+
+                    -- Place our character right behind them and apply forward impulse
+                    myHRP.CFrame = CFrame.new(tHRP.Position - look * 1.5, tHRP.Position + look)
+                    myHRP.AssemblyLinearVelocity = look * power + Vector3.new(0, 25, 0)
+                end
+            end)
+        else
+            local myHRP = getHRP()
+            if myHRP then myHRP.AssemblyLinearVelocity = Vector3.zero end
+        end
+    end)
+
+    MkSlider(leftCol, "Push Force", "PushForce", 50, 350, 160, 3, function(val)
+        Shared.Flags["PushForce"] = val
+    end)
+
+    -- 2. Platform Mode (Infinite Air Jump Pad)
+    -- Positions your character directly under target's feet so they can walk/jump in mid-air
+    local platformConn
+    MkToggle(leftCol, "Platform Mode (Air Jump Pad)", "PlatformMode", 4, function(state)
+        if platformConn then platformConn:Disconnect(); platformConn = nil end
+        if state then
+            platformConn = RunService.Heartbeat:Connect(function()
+                local myHRP = getHRP()
+                if not myHRP then return end
+                local target = getNearestPlayer()
+                if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                    local tHRP = target.Character.HumanoidRootPart
+                    -- Position flat directly underneath target's feet (2.6 studs down)
+                    myHRP.CFrame = CFrame.new(tHRP.Position - Vector3.new(0, 2.6, 0))
+                    myHRP.AssemblyLinearVelocity = tHRP.AssemblyLinearVelocity
                 end
             end)
         end
     end)
 
-    print("[Troll_Functions] Loaded -- Trolling & Fling suite online")
+    -- 3. Path Blocker (Physics Wall)
+    -- Plants your character right in front of target's moving path to block them
+    local blockConn
+    MkToggle(leftCol, "Path Blocker (Invisible Wall)", "PathBlocker", 5, function(state)
+        if blockConn then blockConn:Disconnect(); blockConn = nil end
+        if state then
+            blockConn = RunService.Heartbeat:Connect(function()
+                local myHRP = getHRP()
+                if not myHRP then return end
+                local target = getNearestPlayer()
+                if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                    local tHRP = target.Character.HumanoidRootPart
+                    local vel = tHRP.AssemblyLinearVelocity
+                    local dir = vel.Magnitude > 2 and vel.Unit or tHRP.CFrame.LookVector
+                    myHRP.CFrame = CFrame.new(tHRP.Position + dir * 2.2, tHRP.Position)
+                    myHRP.AssemblyLinearVelocity = Vector3.zero
+                end
+            end)
+        end
+    end)
+
+    -- ── RIGHT COLUMN: SWARM, ORBIT & ATTACHMENTS ─────────────────
+    MkSection(rightCol, "Swarm & Orbit Trolls", 1)
+
+    -- 4. Orbit Swarm / Tornado Shield
+    local orbitConn
+    local orbitAngle = 0
+    MkToggle(rightCol, "Orbit Swarm (Tornado)", "OrbitSwarm", 2, function(state)
+        if orbitConn then orbitConn:Disconnect(); orbitConn = nil end
+        if state then
+            orbitConn = RunService.RenderStepped:Connect(function(dt)
+                local myHRP = getHRP()
+                if not myHRP then return end
+                local target = getNearestPlayer()
+                if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                    local tHRP = target.Character.HumanoidRootPart
+                    local speed  = Shared.Flags["OrbitSpeed"] or 15
+                    local radius = Shared.Flags["OrbitRadius"] or 5
+
+                    orbitAngle = orbitAngle + dt * speed
+                    local x = math.cos(orbitAngle) * radius
+                    local z = math.sin(orbitAngle) * radius
+                    local pos = tHRP.Position + Vector3.new(x, math.sin(orbitAngle * 2) * 1.5, z)
+
+                    myHRP.CFrame = CFrame.new(pos, tHRP.Position)
+                end
+            end)
+        end
+    end)
+
+    MkSlider(rightCol, "Orbit Speed", "OrbitSpeed", 5, 40, 18, 3, function(val)
+        Shared.Flags["OrbitSpeed"] = val
+    end)
+
+    MkSlider(rightCol, "Orbit Radius", "OrbitRadius", 3, 20, 5, 4, function(val)
+        Shared.Flags["OrbitRadius"] = val
+    end)
+
+    -- 5. Head Stand / Hat Mode
+    local headStandConn
+    MkToggle(rightCol, "Head Stand (Hat Mode)", "HeadStand", 5, function(state)
+        if headStandConn then headStandConn:Disconnect(); headStandConn = nil end
+        if state then
+            headStandConn = RunService.Heartbeat:Connect(function()
+                local myHRP = getHRP()
+                if not myHRP then return end
+                local target = getNearestPlayer()
+                if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                    local tHRP = target.Character.HumanoidRootPart
+                    myHRP.CFrame = tHRP.CFrame * CFrame.new(0, 3.3, 0)
+                    myHRP.AssemblyLinearVelocity = tHRP.AssemblyLinearVelocity
+                end
+            end)
+        end
+    end)
+
+    -- 6. Shadow Stalker / Follower
+    local stalkerConn
+    MkToggle(rightCol, "Shadow Leash (Follow Behind)", "ShadowLeash", 6, function(state)
+        if stalkerConn then stalkerConn:Disconnect(); stalkerConn = nil end
+        if state then
+            stalkerConn = RunService.Heartbeat:Connect(function()
+                local myHRP = getHRP()
+                if not myHRP then return end
+                local target = getNearestPlayer()
+                if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                    local tHRP = target.Character.HumanoidRootPart
+                    myHRP.CFrame = tHRP.CFrame * CFrame.new(0, 0, 3.5)
+                end
+            end)
+        end
+    end)
+
+    print("[Troll_Functions] Loaded -- Physics Booster, Platform Mode, Orbit Swarm Online")
 end

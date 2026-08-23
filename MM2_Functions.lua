@@ -1,5 +1,6 @@
 -- MM2_Functions.lua
--- Unrestricted Kill Aura, Non-Intrusive Silent Aim Targeting Murderer, Knife Prediction, Lobby-Safe Auto Grab, Role ESP
+-- Unrestricted Kill Aura, Non-Intrusive Silent Aim Targeting Murderer, Knife Prediction,
+-- Lobby-Safe Auto Grab, Role ESP, and Dedicated Sheriff Gun & Dropped Gun ESP
 
 return function(Shared)
     local Players    = Shared.Services.Players
@@ -63,6 +64,15 @@ return function(Shared)
         return nil
     end
 
+    local function getSheriff()
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= Player and isAlive(plr) and getRole(plr) == "Sheriff" then
+                return plr
+            end
+        end
+        return nil
+    end
+
     local function getMyKnife()
         local c = getChar(); local bp = Player:FindFirstChild("Backpack")
         return (c and c:FindFirstChild("Knife")) or (bp and bp:FindFirstChild("Knife"))
@@ -73,9 +83,6 @@ return function(Shared)
             or (bp and (bp:FindFirstChild("Gun") or bp:FindFirstChild("Revolver")))
     end
 
-    -- Target resolver for Silent Aim:
-    -- If Sheriff / Innocent -> prioritize Murderer
-    -- If Murderer -> prioritize closest living innocent/sheriff
     local function getSilentAimTarget()
         local myHRP = getHRP()
         if not myHRP then return nil end
@@ -89,7 +96,6 @@ return function(Shared)
             end
         end
 
-        -- Fallback to nearest living enemy
         local best, bestDist = nil, math.huge
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= Player and isAlive(plr) then
@@ -121,7 +127,6 @@ return function(Shared)
         end
     end)
 
-    -- Aura heartbeat
     RunService.Heartbeat:Connect(function()
         if not Shared.Flags["KillAura"] then return end
         if not selfAliveInRound() then return end
@@ -181,8 +186,6 @@ return function(Shared)
         end
     end)
 
-    -- ── NON-INTRUSIVE SILENT AIM ───────────────────────────────────
-    -- Hooks Mouse.Hit / Mouse.Target and Raycast/FireServer without touching camera or player orientation.
     MkSection(leftCol, "Silent Aim (Direct Bullet Redirection)", 10)
 
     local hooksInstalled = false
@@ -198,7 +201,6 @@ return function(Shared)
 
         setreadonly(mt, false)
 
-        -- Hook Mouse.Hit & Mouse.Target
         rawset(mt, "__index", function(self, key)
             if Shared.Flags["SilentAim"] and typeof(self) == "Instance" and self:IsA("Mouse") then
                 local target = getSilentAimTarget()
@@ -219,13 +221,11 @@ return function(Shared)
             return oldIndex(self, key)
         end)
 
-        -- Hook Raycasts & Remote Events
         rawset(mt, "__namecall", function(self, ...)
             if Shared.Flags["SilentAim"] then
                 local method = getnamecallmethod()
                 local args   = {...}
 
-                -- Redirect raycast bullets straight to target
                 if method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "findPartOnRay" then
                     local target = getSilentAimTarget()
                     if target then
@@ -237,7 +237,6 @@ return function(Shared)
                     return oldNamecall(self, table.unpack(args))
                 end
 
-                -- Redirect MM2 gun remotes
                 if method == "FireServer" or method == "InvokeServer" then
                     local n = self.Name:lower()
                     if n:find("gun") or n:find("shoot") or n:find("bullet") or n:find("beam") then
@@ -294,7 +293,7 @@ return function(Shared)
         end
     end)
 
-    -- ── RIGHT COLUMN: KNIFE & COMBAT TOOLS ────────────────────────
+    -- ── RIGHT COLUMN: KNIFE, ESP & SHERIFF TOOLS ──────────────────
     MkSection(rightCol, "Knife Controls", 1)
 
     local knifeThrowConn
@@ -336,7 +335,6 @@ return function(Shared)
         end
     end)
 
-    -- Auto Throw: uses firetouchinterest WITHOUT rotating player CFrame/Camera
     MkToggle(rightCol, "Auto Throw Knife at Nearest", "AutoThrow", 3, function(state) end)
 
     RunService.Heartbeat:Connect(function()
@@ -368,11 +366,12 @@ return function(Shared)
         end
     end)
 
-    MkSection(rightCol, "Role ESP", 20)
+    -- ── ESP SECTION (Role ESP + Dedicated Sheriff & Gun Drop ESP) ──
+    MkSection(rightCol, "ESP & Visuals", 10)
 
     local espHighlights = {}
     local espConn
-    MkToggle(rightCol, "Role ESP (Billboard)", "RoleESP", 21, function(state)
+    MkToggle(rightCol, "Role ESP (All Players)", "RoleESP", 11, function(state)
         for _, h in pairs(espHighlights) do pcall(function() h.gui:Destroy() end) end
         espHighlights = {}
         if espConn then espConn:Disconnect(); espConn = nil end
@@ -385,12 +384,12 @@ return function(Shared)
                     if hrp and hum and hum.Health > 0 then
                         if not espHighlights[plr] then
                             local bb = Instance.new("BillboardGui")
-                            bb.Name = "FihESP"; bb.Size = UDim2.new(0,70,0,22)
+                            bb.Name = "FihESP"; bb.Size = UDim2.new(0,80,0,24)
                             bb.StudsOffset = Vector3.new(0,3,0); bb.AlwaysOnTop = true
                             bb.Adornee = hrp; bb.Parent = Shared.GUI
                             local lbl = Instance.new("TextLabel")
                             lbl.Size = UDim2.new(1,0,1,0); lbl.BackgroundTransparency = 0.3
-                            lbl.BackgroundColor3 = Color3.fromRGB(20,20,20); lbl.Font = Enum.Font.Code
+                            lbl.BackgroundColor3 = Color3.fromRGB(15,15,20); lbl.Font = Enum.Font.Code
                             lbl.TextSize = 11; lbl.TextStrokeTransparency = 0; lbl.Parent = bb
                             espHighlights[plr] = {gui = bb, lbl = lbl}
                         end
@@ -408,10 +407,82 @@ return function(Shared)
         end)
     end)
 
-    MkSection(rightCol, "Sheriff Tools", 30)
+    -- Dedicated Sheriff & Dropped Gun ESP
+    local gunEspHighlights = {}
+    local gunEspConn
+    MkToggle(rightCol, "Sheriff & Gun Drop ESP", "GunESP", 12, function(state)
+        for _, h in pairs(gunEspHighlights) do pcall(function() h:Destroy() end) end
+        gunEspHighlights = {}
+        if gunEspConn then gunEspConn:Disconnect(); gunEspConn = nil end
+        if not state then return end
 
-    -- Auto Shoot Murderer WITHOUT rotating camera
-    MkToggle(rightCol, "Auto Shoot Murderer", "AutoShoot", 31, function(state) end)
+        gunEspConn = RunService.Heartbeat:Connect(function()
+            local myHRP = getHRP()
+            -- 1. Sheriff Player ESP
+            local sheriff = getSheriff()
+            if sheriff and sheriff.Character and sheriff.Character:FindFirstChild("HumanoidRootPart") then
+                local sHRP = sheriff.Character.HumanoidRootPart
+                if not gunEspHighlights["Sheriff"] then
+                    local bb = Instance.new("BillboardGui")
+                    bb.Name = "SheriffESP"; bb.Size = UDim2.new(0, 100, 0, 26)
+                    bb.StudsOffset = Vector3.new(0, 3.8, 0); bb.AlwaysOnTop = true
+                    bb.Adornee = sHRP; bb.Parent = Shared.GUI
+
+                    local lbl = Instance.new("TextLabel")
+                    lbl.Size = UDim2.new(1,0,1,0); lbl.BackgroundTransparency = 0.2
+                    lbl.BackgroundColor3 = Color3.fromRGB(10, 30, 60); lbl.Font = Enum.Font.ArimoBold
+                    lbl.TextSize = 11; lbl.TextColor3 = Color3.fromRGB(0, 200, 255); lbl.Parent = bb
+                    gunEspHighlights["Sheriff"] = bb
+                end
+                local dist = myHRP and math.floor((sHRP.Position - myHRP.Position).Magnitude) or 0
+                local lbl = gunEspHighlights["Sheriff"]:FindFirstChildOfClass("TextLabel")
+                if lbl then lbl.Text = "[★ SHERIFF]\n" .. sheriff.Name .. " (" .. dist .. "m)" end
+            elseif gunEspHighlights["Sheriff"] then
+                pcall(function() gunEspHighlights["Sheriff"]:Destroy() end)
+                gunEspHighlights["Sheriff"] = nil
+            end
+
+            -- 2. Dropped Gun on Floor ESP
+            local foundDrop = nil
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if (obj.Name == "GunDrop" or (obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver")))
+                and obj.Parent ~= Player.Backpack and (not getChar() or obj.Parent ~= getChar()) then
+                    local part = obj:FindFirstChildOfClass("BasePart") or (obj:IsA("BasePart") and obj)
+                    if part then
+                        foundDrop = part
+                        break
+                    end
+                end
+            end
+
+            if foundDrop then
+                if not gunEspHighlights["GunDrop"] then
+                    local bb = Instance.new("BillboardGui")
+                    bb.Name = "GunDropESP"; bb.Size = UDim2.new(0, 110, 0, 28)
+                    bb.StudsOffset = Vector3.new(0, 2, 0); bb.AlwaysOnTop = true
+                    bb.Adornee = foundDrop; bb.Parent = Shared.GUI
+
+                    local lbl = Instance.new("TextLabel")
+                    lbl.Size = UDim2.new(1,0,1,0); lbl.BackgroundTransparency = 0.1
+                    lbl.BackgroundColor3 = Color3.fromRGB(60, 45, 0); lbl.Font = Enum.Font.ArimoBold
+                    lbl.TextSize = 12; lbl.TextColor3 = Color3.fromRGB(255, 215, 0); lbl.Parent = bb
+                    gunEspHighlights["GunDrop"] = bb
+                else
+                    gunEspHighlights["GunDrop"].Adornee = foundDrop
+                end
+                local dist = myHRP and math.floor((foundDrop.Position - myHRP.Position).Magnitude) or 0
+                local lbl = gunEspHighlights["GunDrop"]:FindFirstChildOfClass("TextLabel")
+                if lbl then lbl.Text = "[⚠ GUN DROPPED]\n" .. dist .. " studs" end
+            elseif gunEspHighlights["GunDrop"] then
+                pcall(function() gunEspHighlights["GunDrop"]:Destroy() end)
+                gunEspHighlights["GunDrop"] = nil
+            end
+        end)
+    end)
+
+    MkSection(rightCol, "Sheriff Tools", 20)
+
+    MkToggle(rightCol, "Auto Shoot Murderer", "AutoShoot", 21, function(state) end)
     RunService.Heartbeat:Connect(function()
         if not Shared.Flags["AutoShoot"] then return end
         if not selfAliveInRound() then return end
@@ -433,7 +504,7 @@ return function(Shared)
         end
     end)
 
-    MkToggle(rightCol, "Auto Kill All (Murderer)", "AutoKillAll", 32, function(state) end)
+    MkToggle(rightCol, "Auto Kill All (Murderer)", "AutoKillAll", 22, function(state) end)
     RunService.Heartbeat:Connect(function()
         if not Shared.Flags["AutoKillAll"] then return end
         if not selfAliveInRound() then return end
@@ -454,5 +525,5 @@ return function(Shared)
         end
     end)
 
-    print("[MM2_Functions] Loaded -- Non-Intrusive Silent Aim & Combat Online")
+    print("[MM2_Functions] Loaded -- Gun ESP, Silent Aim & Combat Online")
 end
