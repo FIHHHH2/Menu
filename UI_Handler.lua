@@ -1,5 +1,5 @@
 -- UI_Handler.lua
--- IE7/XP Modular UI -- 820x440, strict internal padding, zero right-clip
+-- IE7/XP Modular UI -- 820x440, Resizable Window with Corner Grip & Auto-Scaling Columns
 
 return function(Shared)
     Shared.Tabs         = {}
@@ -64,10 +64,12 @@ return function(Shared)
     local function saveConfig()
         pcall(function()
             if writefile then
-                local data = { Flags = Shared.Flags,
+                local data = {
+                    Flags        = Shared.Flags,
                     SpotifyToken = Shared.Config.SpotifyToken or "",
                     LastFMUser   = Shared.Config.LastFMUser or "",
-                    Keybinds     = {} }
+                    Keybinds     = {}
+                }
                 for fKey, item in pairs(Shared.Toggles) do
                     if item.Key then data.Keybinds[fKey] = item.Key.Name end
                 end
@@ -212,37 +214,78 @@ return function(Shared)
         winBtns[def.id] = b
     end
 
-    do  -- DRAG
+    do  -- DRAG WINDOW
         local drag, ds, sp = false, nil, nil
         TitleBar.InputBegan:Connect(function(i)
-            if i.UserInputType == Enum.UserInputType.MouseButton1 then drag=true; ds=i.Position; sp=Window.Position end
+            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                drag=true; ds=i.Position; sp=Window.Position
+            end
         end)
         TitleBar.InputEnded:Connect(function(i)
-            if i.UserInputType == Enum.UserInputType.MouseButton1 then drag=false end
+            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                drag=false
+            end
         end)
         UserInput.InputChanged:Connect(function(i)
-            if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+            if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
                 local d = i.Position - ds
                 Window.Position = UDim2.new(sp.X.Scale, sp.X.Offset+d.X, sp.Y.Scale, sp.Y.Offset+d.Y)
             end
         end)
     end
 
+    -- ── RESIZABLE CORNER GRIP FOR MAIN WINDOW ────────────────────
+    do
+        local resizeGrip = Instance.new("TextButton")
+        resizeGrip.Name                   = "ResizeGrip"
+        resizeGrip.Size                   = UDim2.new(0, 16, 0, 16)
+        resizeGrip.Position               = UDim2.new(1, -16, 1, -16)
+        resizeGrip.BackgroundTransparency = 1
+        resizeGrip.Text                   = "◢"
+        resizeGrip.TextColor3             = Color3.fromRGB(100, 125, 170)
+        resizeGrip.Font                   = Enum.Font.Code
+        resizeGrip.TextSize               = 13
+        resizeGrip.ZIndex                 = 30
+        resizeGrip.Parent                 = Window
+
+        local resizing = false
+        local rStartPos, rStartSize
+
+        resizeGrip.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                resizing = true; rStartPos = i.Position; rStartSize = Window.AbsoluteSize
+            end
+        end)
+        UserInput.InputEnded:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                resizing = false
+            end
+        end)
+        UserInput.InputChanged:Connect(function(i)
+            if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+                local d = i.Position - rStartPos
+                local newW = math.clamp(rStartSize.X + d.X, 520, 1600)
+                local newH = math.clamp(rStartSize.Y + d.Y, 300, 1100)
+                Window.Size = UDim2.new(0, newW, 0, newH)
+            end
+        end)
+    end
+
     local isOpen = true
     local function animClose()
-        Window:TweenSize(UDim2.new(0,WIN_W,0,0), Enum.EasingDirection.In, Enum.EasingStyle.Quad, 0.2, true, function() Window.Visible=false end)
+        Window:TweenSize(UDim2.new(0,Window.AbsoluteSize.X,0,0), Enum.EasingDirection.In, Enum.EasingStyle.Quad, 0.2, true, function() Window.Visible=false end)
         isOpen = false
     end
     local function animOpen()
         Window.Visible = true
-        Window:TweenSize(UDim2.new(0,WIN_W,0,WIN_H), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.25, true)
+        Window:TweenSize(UDim2.new(0,Window.AbsoluteSize.X,0,Window.AbsoluteSize.Y > 50 and Window.AbsoluteSize.Y or WIN_H), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.25, true)
         isOpen = true
     end
     local minimized = false
     winBtns["close"].MouseButton1Click:Connect(animClose)
     winBtns["min"].MouseButton1Click:Connect(function()
         minimized = not minimized
-        Window:TweenSize(minimized and UDim2.new(0,WIN_W,0,TITLE_H) or UDim2.new(0,WIN_W,0,WIN_H), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.18, true)
+        Window:TweenSize(minimized and UDim2.new(0,Window.AbsoluteSize.X,0,TITLE_H) or UDim2.new(0,Window.AbsoluteSize.X,0,WIN_H), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.18, true)
     end)
     winBtns["max"].MouseButton1Click:Connect(function() if isOpen then animClose() else animOpen() end end)
     UserInput.InputBegan:Connect(function(i, gpe)
@@ -310,9 +353,7 @@ return function(Shared)
     local TabPad = Instance.new("UIPadding")
     TabPad.PaddingTop = UDim.new(0,8); TabPad.Parent = TabContainer
 
-    -- ── CONTENT AREA ─────────────────────────────────────────────
-    -- Key fix: ScrollBarThickness=6, so content width = (WIN_W - SIDEBAR_W - 6).
-    -- We give ContentArea the full remaining width; children must respect padding.
+    -- ── CONTENT AREA (Auto-Stretches With Window Resize) ──────────
     local ContentArea = Instance.new("ScrollingFrame")
     ContentArea.Name                 = "ContentArea"
     ContentArea.Size                 = UDim2.new(1, -SIDEBAR_W, 1, 0)
@@ -326,15 +367,13 @@ return function(Shared)
     ContentArea.ClipsDescendants     = true
     ContentArea.Parent               = Body
 
-    -- Padding that accounts for the scrollbar on the right
     local CAPad = Instance.new("UIPadding")
     CAPad.PaddingTop    = UDim.new(0, 6)
     CAPad.PaddingLeft   = UDim.new(0, 6)
-    CAPad.PaddingRight  = UDim.new(0, 12)  -- leaves room for 6px scrollbar + 6px gap
+    CAPad.PaddingRight  = UDim.new(0, 12)
     CAPad.PaddingBottom = UDim.new(0, 12)
     CAPad.Parent        = ContentArea
 
-    -- Single UIListLayout inside ContentArea to stack tabs (only one visible at a time anyway)
     local CALayout = Instance.new("UIListLayout")
     CALayout.SortOrder = Enum.SortOrder.LayoutOrder
     CALayout.Padding   = UDim.new(0, 0)
@@ -429,7 +468,6 @@ return function(Shared)
         btn.MouseEnter:Connect(function() if activeTab ~= def.name then btn.BackgroundColor3 = C.BtnHover end end)
         btn.MouseLeave:Connect(function() if activeTab ~= def.name then btn.BackgroundColor3 = C.BtnBg end end)
 
-        -- Tab frame: width = 1,0 so it inherits the padded ContentArea width exactly
         local tabFrame = Instance.new("Frame")
         tabFrame.Name = "Tab_"..def.name
         tabFrame.Size = UDim2.new(1, 0, 0, 0)
@@ -679,5 +717,5 @@ return function(Shared)
     Shared.SwitchTab = switchTab; Shared.RebuildKeybinds = buildKeybindsUI
 
     switchTab("Main")
-    print("[UI_Handler] Loaded -- 820px, no clip, strict padding")
+    print("[UI_Handler] Loaded -- Resizable UI, Strict Padding, Scaling Engine")
 end

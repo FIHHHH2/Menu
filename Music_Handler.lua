@@ -1,6 +1,6 @@
 -- Music_Handler.lua
--- Robust Music Engine: Spotify + Last.fm Live Scrobbler with Dynamic Album Covers, Bold Typography,
--- Respawn Tracking, and Draggable Bottom-Left Info Widget
+-- Robust Music Engine: Spotify + Last.fm Live Scrobbler with Dynamic Cache-Busted Album Covers,
+-- Bold Typography, Respawn Tracking, and Resizable Bottom-Left Info Widget
 
 return function(Shared)
     local Http        = Shared.Services.Http
@@ -37,8 +37,9 @@ return function(Shared)
     local hudWidget   = nil
     local pollConn    = nil
     local placeTitle  = "Roblox Place"
-    local lastCoverUrl = ""
-    local coverFileCounter = 0
+    local lastLoadedCoverUrl = ""
+    local currentCoverAsset  = ""
+    local previousCoverFile  = ""
 
     -- Fetch place name asynchronously
     task.spawn(function()
@@ -48,8 +49,9 @@ return function(Shared)
         end
     end)
 
-    -- Dynamic image downloader with cache-busting per track cover
+    -- Dynamic image downloader: writes unique file per song to bust Roblox asset cache
     local function applyImage(imgLabel, url)
+        if not imgLabel then return end
         if not url or url == "" then
             imgLabel.Visible = false
             imgLabel.Image = ""
@@ -57,25 +59,56 @@ return function(Shared)
         end
         imgLabel.Visible = true
 
+        if url == lastLoadedCoverUrl and currentCoverAsset ~= "" then
+            imgLabel.Image = currentCoverAsset
+            return
+        end
+
+        local getcustomasset = getcustomasset or getsynasset or (getgenv and getgenv().getcustomasset)
+        local writefile      = writefile or (getgenv and getgenv().writefile)
+        local delfile        = delfile or (getgenv and getgenv().delfile)
+
         if getcustomasset and writefile then
             task.spawn(function()
-                coverFileCounter = (coverFileCounter + 1) % 10
-                local fName = "fih_cover_" .. tostring(coverFileCounter) .. ".png"
                 local ok, res = pcall(function()
-                    return Shared.HttpRequest({ Url = url, Method = "GET" })
+                    return game:HttpGet(url)
                 end)
-                if ok and res and res.Body and #res.Body > 0 then
+                if not ok or not res or #res == 0 then
+                    local reqRes = Shared.HttpRequest({ Url = url, Method = "GET" })
+                    if reqRes and reqRes.Body and #reqRes.Body > 0 then
+                        res = reqRes.Body
+                        ok = true
+                    end
+                end
+
+                if ok and res and #res > 0 then
                     pcall(function()
-                        writefile(fName, res.Body)
+                        local uniqueName = "fih_cover_" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 9999)) .. ".png"
+                        writefile(uniqueName, res)
+                        local newAsset = getcustomasset(uniqueName)
+                        currentCoverAsset = newAsset
+                        lastLoadedCoverUrl = url
+
+                        if previousCoverFile ~= "" and delfile then
+                            pcall(function() delfile(previousCoverFile) end)
+                        end
+                        previousCoverFile = uniqueName
+
                         imgLabel.Image = ""
                         task.wait()
-                        imgLabel.Image = getcustomasset(fName)
+                        imgLabel.Image = newAsset
                     end)
                 else
-                    pcall(function() imgLabel.Image = url end)
+                    pcall(function()
+                        lastLoadedCoverUrl = url
+                        currentCoverAsset = url
+                        imgLabel.Image = url
+                    end)
                 end
             end)
         else
+            lastLoadedCoverUrl = url
+            currentCoverAsset = url
             pcall(function() imgLabel.Image = url end)
         end
     end
@@ -260,7 +293,7 @@ return function(Shared)
         applyImage(bbCoverImg, currentTrack.cover)
     end
 
-    -- ── DRAGGABLE BOTTOM-LEFT INFO WIDGET ──────────────────────────
+    -- ── DRAGGABLE & RESIZABLE BOTTOM-LEFT INFO WIDGET ──────────────
     local hudSongLbl, hudArtistLbl, hudCoverImg, hudPlaceLbl, hudUserLbl
 
     local function buildHUD()
@@ -309,6 +342,7 @@ return function(Shared)
         tLbl.ZIndex                 = 52
         tLbl.Parent                 = tBar
 
+        -- Dragging logic
         do
             local drag, ds, sp = false, nil, nil
             tBar.InputBegan:Connect(function(i)
@@ -325,6 +359,43 @@ return function(Shared)
                 if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
                     local d = i.Position - ds
                     frame.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
+                end
+            end)
+        end
+
+        -- Resizing corner grip for HUD
+        do
+            local resizeGrip = Instance.new("TextButton")
+            resizeGrip.Name                   = "HUDResizeGrip"
+            resizeGrip.Size                   = UDim2.new(0, 14, 0, 14)
+            resizeGrip.Position               = UDim2.new(1, -14, 1, -14)
+            resizeGrip.BackgroundTransparency = 1
+            resizeGrip.Text                   = "◢"
+            resizeGrip.TextColor3             = Color3.fromRGB(100, 125, 170)
+            resizeGrip.Font                   = Enum.Font.Code
+            resizeGrip.TextSize               = 11
+            resizeGrip.ZIndex                 = 55
+            resizeGrip.Parent                 = frame
+
+            local resizing = false
+            local rStartPos, rStartSize
+
+            resizeGrip.InputBegan:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                    resizing = true; rStartPos = i.Position; rStartSize = frame.AbsoluteSize
+                end
+            end)
+            UserInput.InputEnded:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                    resizing = false
+                end
+            end)
+            UserInput.InputChanged:Connect(function(i)
+                if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+                    local d = i.Position - rStartPos
+                    local newW = math.clamp(rStartSize.X + d.X, 220, 600)
+                    local newH = math.clamp(rStartSize.Y + d.Y, 85, 300)
+                    frame.Size = UDim2.new(0, newW, 0, newH)
                 end
             end)
         end
@@ -416,17 +487,15 @@ return function(Shared)
 
     -- Update all visual elements & apply new cover image when URL changes
     local function updateVisuals(track)
-        local coverChanged = (track.cover ~= lastCoverUrl)
         currentTrack = track
-        lastCoverUrl = track.cover
 
         if bbSongLbl then bbSongLbl.Text = track.name end
         if bbArtistLbl then bbArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
-        if bbCoverImg and coverChanged then applyImage(bbCoverImg, track.cover) end
+        if bbCoverImg then applyImage(bbCoverImg, track.cover) end
 
         if hudSongLbl then hudSongLbl.Text = track.name end
         if hudArtistLbl then hudArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
-        if hudCoverImg and coverChanged then applyImage(hudCoverImg, track.cover) end
+        if hudCoverImg then applyImage(hudCoverImg, track.cover) end
     end
 
     -- Persistent Polling Engine
@@ -439,7 +508,9 @@ return function(Shared)
                 elapsed = 0
                 local track = getSpotifyTrack() or getLastFMTrack()
                 if track then
-                    updateVisuals(track)
+                    if track.name ~= currentTrack.name or track.cover ~= currentTrack.cover or track.isPlaying ~= currentTrack.isPlaying then
+                        updateVisuals(track)
+                    end
                 end
             end
         end)
@@ -574,5 +645,5 @@ return function(Shared)
         Shared.Notify("Spotify", "Next track command sent", true)
     end)
 
-    print("[Music_Handler] Loaded -- Dynamic Covers, HUD, Bold Fonts, Respawn Tracking Online")
+    print("[Music_Handler] Loaded -- Dynamic Cache-Busted Covers, Resizable HUD, Bold Fonts, Respawn Tracking Online")
 end
