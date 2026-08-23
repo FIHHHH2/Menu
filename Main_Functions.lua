@@ -28,6 +28,7 @@ return function(Shared)
     local function getHuman() return getChar() and getChar():FindFirstChildOfClass("Humanoid") end
 
     local function restoreDefaultCollisions(char)
+        if Shared.Flags["FragilePlayer"] then setupFragileCharacter(char) end
         if not char then return end
         for _, part in ipairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
@@ -91,7 +92,8 @@ return function(Shared)
             end)
         else
             local char = getChar()
-            if char then restoreDefaultCollisions(char) end
+            if char then restoreDefaultCollisions(char)
+        if Shared.Flags["FragilePlayer"] then setupFragileCharacter(char) end end
         end
     end)
 
@@ -122,7 +124,77 @@ return function(Shared)
         end
     end)
 
-    MkButton(leftCol, "[ Force Respawn ]", 8, function()
+    -- ── Fragile Player (Glass Character / Shatter on Impact) ──────
+    local fragileConns = {}
+    local fragileCooldown = false
+
+    local function setupFragileCharacter(char)
+        for _, conn in ipairs(fragileConns) do pcall(function() conn:Disconnect() end) end
+        fragileConns = {}
+
+        if not char then return end
+        local hum = char:WaitForChild("Humanoid", 3)
+        local hrp = char:WaitForChild("HumanoidRootPart", 3)
+        if not hum or not hrp then return end
+
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") then
+                local conn = part.Touched:Connect(function(hit)
+                    if not Shared.Flags["FragilePlayer"] or fragileCooldown then return end
+                    if not hit or not hit.Parent or hit:IsDescendantOf(char) then return end
+
+                    -- Check if touched by another player or moving object/floor with momentum
+                    local hitHum = hit.Parent:FindFirstChildOfClass("Humanoid") or (hit.Parent.Parent and hit.Parent.Parent:FindFirstChildOfClass("Humanoid"))
+                    local isFast = hrp.AssemblyLinearVelocity.Magnitude > 12 or hit.AssemblyLinearVelocity.Magnitude > 8
+
+                    if hitHum or isFast then
+                        fragileCooldown = true
+                        local force = Shared.Flags["FragileForce"] or 85
+                        local hitDir = (hrp.Position - hit.Position).Magnitude > 0.1 and (hrp.Position - hit.Position).Unit or Vector3.new(0, 1, 0)
+
+                        -- Ragdoll collapse
+                        hum.PlatformStand = true
+                        hum:ChangeState(Enum.HumanoidStateType.FallingDown)
+                        hrp.AssemblyLinearVelocity = hitDir * force + Vector3.new(0, force * 0.6, 0)
+                        hrp.AssemblyAngularVelocity = Vector3.new(math.random(-30, 30), math.random(-30, 30), math.random(-30, 30))
+
+                        -- Auto recover after short comedic delay
+                        task.delay(1.6, function()
+                            if hum and hum.Parent then
+                                hum.PlatformStand = false
+                                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                            end
+                            task.wait(0.3)
+                            fragileCooldown = false
+                        end)
+                    end
+                end)
+                table.insert(fragileConns, conn)
+            end
+        end
+    end
+
+    MkToggle(leftCol, "Fragile Player (Glass Mode)", "FragilePlayer", 8, function(state)
+        if state then
+            setupFragileCharacter(getChar())
+            Shared.Notify("Fragile Player", "Glass Physics Enabled -- Ragdoll on Contact", true)
+        else
+            for _, conn in ipairs(fragileConns) do pcall(function() conn:Disconnect() end) end
+            fragileConns = {}
+            local hum = getHuman()
+            if hum then
+                hum.PlatformStand = false
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end
+            Shared.Notify("Fragile Player", "Glass Mode Disabled", false)
+        end
+    end)
+
+    MkSlider(leftCol, "Fragile Knockback Force", "FragileForce", 20, 250, 85, 9, function(val)
+        Shared.Flags["FragileForce"] = val
+    end)
+
+    MkButton(leftCol, "[ Force Respawn ]", 10, function()
         Player:LoadCharacter()
     end)
 
@@ -247,6 +319,7 @@ return function(Shared)
         hum.WalkSpeed  = Shared.Flags["WalkSpeed"]  or 16
         hum.JumpHeight = Shared.Flags["JumpHeight"] or 7
         restoreDefaultCollisions(char)
+        if Shared.Flags["FragilePlayer"] then setupFragileCharacter(char) end
     end)
 
     MkSection(rightCol, "World Modifiers", 20)
