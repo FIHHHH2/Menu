@@ -307,7 +307,7 @@ return function(Shared)
     -- ── RIGHT COLUMN: UNIVERSAL ESP & CROSS-PLAYER DETECTION ──────
     MkSection(rightCol, "Universal ESP & Peer Radar", 35)
 
-    local peerUsers = {}          -- [UserId] = { isPeer = true, song = "", artist = "" }
+    local peerUsers = {}          -- [UserId] = { isPeer = true, song = "", artist = "", billboard = nil }
     local universalESPList = {}   -- [Player] = { gui = BillboardGui, hl = Highlight, lbl = TextLabel, bg = Frame }
     local universalESPConn = nil
 
@@ -334,6 +334,102 @@ return function(Shared)
         end)
     end
 
+    -- Create or update a full 3D Overhead Music Billboard on a Peer Player
+    local function updatePeerBillboard(plr, songName, artistName)
+        if not plr or not plr.Character then return end
+        local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        local info = peerUsers[plr.UserId]
+        if not info then return end
+
+        if not info.billboard or not info.billboard.Parent or info.billboard.Adornee ~= hrp then
+            if info.billboard then pcall(function() info.billboard:Destroy() end) end
+
+            local bb = Instance.new("BillboardGui")
+            bb.Name         = "PeerMusicBillboard_" .. tostring(plr.UserId)
+            bb.Size         = UDim2.new(0, 250, 0, 56)
+            bb.StudsOffset  = Vector3.new(0, 4.8, 0)
+            bb.AlwaysOnTop  = false
+            bb.Adornee      = hrp
+            bb.Parent       = Shared.GUI
+
+            local bg = Instance.new("Frame")
+            bg.Size                   = UDim2.new(1, 0, 1, 0)
+            bg.BackgroundColor3       = Color3.fromRGB(15, 18, 24)
+            bg.BackgroundTransparency = 0.15
+            bg.BorderSizePixel        = 1
+            bg.BorderColor3           = Color3.fromRGB(255, 205, 30)
+            bg.Parent                 = bb
+
+            -- Vinyl note placeholder icon
+            local coverFrame = Instance.new("Frame")
+            coverFrame.Name             = "CoverContainer"
+            coverFrame.Size             = UDim2.new(0, 44, 0, 44)
+            coverFrame.Position         = UDim2.new(0, 6, 0, 6)
+            coverFrame.BackgroundColor3 = Color3.fromRGB(22, 26, 36)
+            coverFrame.BorderSizePixel  = 1
+            coverFrame.BorderColor3     = Color3.fromRGB(255, 205, 30)
+            coverFrame.Parent           = bg
+
+            local note = Instance.new("TextLabel")
+            note.Size                   = UDim2.new(1, 0, 1, 0)
+            note.BackgroundTransparency = 1
+            note.Text                   = "🎵"
+            note.TextSize               = 20
+            note.TextColor3             = Color3.fromRGB(255, 215, 50)
+            note.Parent                 = coverFrame
+
+            local songLbl = Instance.new("TextLabel")
+            songLbl.Name                  = "SongTitle"
+            songLbl.Size                  = UDim2.new(1, -58, 0, 18)
+            songLbl.Position              = UDim2.new(0, 56, 0, 6)
+            songLbl.BackgroundTransparency = 1
+            songLbl.Text                  = (songName ~= "") and songName or "No Song Playing"
+            songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
+            songLbl.Font                  = Enum.Font.ArimoBold
+            songLbl.TextSize              = 11
+            songLbl.TextXAlignment        = Enum.TextXAlignment.Left
+            songLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+            songLbl.Parent                = bg
+
+            local artistLbl = Instance.new("TextLabel")
+            artistLbl.Name                  = "ArtistTitle"
+            artistLbl.Size                  = UDim2.new(1, -58, 0, 15)
+            artistLbl.Position              = UDim2.new(0, 56, 0, 24)
+            artistLbl.BackgroundTransparency = 1
+            artistLbl.Text                  = (artistName ~= "") and artistName or "[👑 FIH USER]"
+            artistLbl.TextColor3            = Color3.fromRGB(0, 230, 150)
+            artistLbl.Font                  = Enum.Font.Code
+            artistLbl.TextSize              = 10
+            artistLbl.TextXAlignment        = Enum.TextXAlignment.Left
+            artistLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+            artistLbl.Parent                = bg
+
+            local badgeLbl = Instance.new("TextLabel")
+            badgeLbl.Size                  = UDim2.new(1, -58, 0, 12)
+            badgeLbl.Position              = UDim2.new(0, 56, 0, 39)
+            badgeLbl.BackgroundTransparency = 1
+            badgeLbl.Text                  = "👑 " .. plr.DisplayName .. " (@" .. plr.Name .. ")"
+            badgeLbl.TextColor3            = Color3.fromRGB(255, 205, 30)
+            badgeLbl.Font                  = Enum.Font.Code
+            badgeLbl.TextSize              = 9
+            badgeLbl.TextXAlignment        = Enum.TextXAlignment.Left
+            badgeLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+            badgeLbl.Parent                = bg
+
+            info.billboard = bb
+        else
+            local bg = info.billboard:FindFirstChildOfClass("Frame")
+            if bg then
+                local sLbl = bg:FindFirstChild("SongTitle")
+                if sLbl then sLbl.Text = (songName ~= "") and songName or "No Song Playing" end
+                local aLbl = bg:FindFirstChild("ArtistTitle")
+                if aLbl then aLbl.Text = (artistName ~= "") and artistName or "[👑 FIH USER]" end
+            end
+        end
+    end
+
     local function parsePeerMessage(senderId, text)
         if not senderId or senderId == Player.UserId or not text or not text:find("FIH_SIG") then return end
         local rawJson = text:match("FIH_SIG:(.-)\226\128\139") or text:match("FIH_SIG:(.*)")
@@ -347,14 +443,20 @@ return function(Shared)
         end
 
         local isNew = not peerUsers[senderId]
+        local prevBB = peerUsers[senderId] and peerUsers[senderId].billboard or nil
         peerUsers[senderId] = {
-            isPeer = true,
-            song   = songName,
-            artist = artistName
+            isPeer    = true,
+            song      = songName,
+            artist    = artistName,
+            billboard = prevBB
         }
 
+        local senderPlr = Players:GetPlayerByUserId(senderId)
+        if senderPlr then
+            updatePeerBillboard(senderPlr, songName, artistName)
+        end
+
         if isNew then
-            local senderPlr = Players:GetPlayerByUserId(senderId)
             local name = senderPlr and senderPlr.DisplayName or ("User " .. tostring(senderId))
             local songMsg = (songName ~= "") and (" (🎵 " .. songName .. ")") or ""
             Shared.Notify("Peer Detected", name .. " is running this script!" .. songMsg, true)
@@ -478,6 +580,10 @@ return function(Shared)
 
                         local peerInfo = peerUsers[plr.UserId]
                         local isPeer = (peerInfo ~= nil and peerInfo.isPeer == true)
+
+                        if isPeer then
+                            updatePeerBillboard(plr, peerInfo.song or "", peerInfo.artist or "")
+                        end
 
                         local themeCol = isPeer and Color3.fromRGB(255, 205, 30) or Color3.fromRGB(0, 190, 255)
                         local tagPrefix = isPeer and "[👑 FIH USER] " or ""
