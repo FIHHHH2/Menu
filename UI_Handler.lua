@@ -1,6 +1,6 @@
 -- UI_Handler.lua
 -- Internet Explorer 7 / Windows XP Modular UI
--- Pixel-perfect cube geometry, topbar "Fih Ui" header (no rainbow), Settings drawer, Auto config save/load, Notification stack
+-- Pixel-perfect cube geometry, Topbar "Fih Ui" (no rainbow), Settings drawer, Auto config save/load, Notification stack
 
 return function(Shared)
     Shared.Tabs         = {}
@@ -34,7 +34,7 @@ return function(Shared)
     local C = {
         WinBorder     = Color3.fromRGB(58, 110, 165),
         TitleBar      = Color3.fromRGB(212, 208, 200),
-        TitleText     = Color3.fromRGB(10, 20, 60),
+        TitleText     = Color3.fromRGB(0, 0, 0),
         NavBar        = Color3.fromRGB(188, 199, 220),
         NavText       = Color3.fromRGB(10, 20, 80),
         NavLink       = Color3.fromRGB(0, 0, 180),
@@ -61,7 +61,7 @@ return function(Shared)
     }
 
     -- ============================================================
-    -- CONFIG PERSISTENCE (Saves on Change, On Leave, Loads on Init)
+    -- CONFIG PERSISTENCE
     -- ============================================================
     local CONFIG_FILE = "FihUi_Config.json"
 
@@ -112,16 +112,13 @@ return function(Shared)
     end
     Shared.LoadConfig = loadConfig
 
-    -- Auto save on player leaving
     Shared.Services.Players.PlayerRemoving:Connect(function(plr)
         if plr == Shared.Player then saveConfig() end
     end)
-    game:BindToClose(function()
-        saveConfig()
-    end)
+    game:BindToClose(function() saveConfig() end)
 
     -- ============================================================
-    -- NOTIFICATION STACK (Smooth stack & drop on expire)
+    -- NOTIFICATION STACK
     -- ============================================================
     local NotifyHolder = Instance.new("Frame")
     NotifyHolder.Name             = "NotifyHolder"
@@ -205,7 +202,7 @@ return function(Shared)
     -- ============================================================
     -- MAIN WINDOW
     -- ============================================================
-    local WIN_W, WIN_H = 680, 430
+    local WIN_W, WIN_H = 680, 420
     local Window = Instance.new("Frame")
     Window.Name             = "Window"
     Window.Size             = UDim2.new(0, WIN_W, 0, WIN_H)

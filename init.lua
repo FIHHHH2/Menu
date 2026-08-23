@@ -1,11 +1,12 @@
 -- init.lua
--- Modular Loadstring Entry Point
--- Usage: loadstring(game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu/main/init.lua"))()
+-- Modular Loadstring Entry Point with Cache Busting
+-- Usage: loadstring(game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu/main/init.lua?t=" .. tick()))()
 
 local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/main"
 
 local function loadModule(name)
-    local url = BASE_URL .. "/" .. name .. ".lua"
+    -- Cache busting prevents GitHub CDN from serving stale code
+    local url = BASE_URL .. "/" .. name .. ".lua?t=" .. tostring(os.time()) .. tostring(math.random(1000, 9999))
 
     local ok, src = pcall(function() return game:HttpGet(url) end)
     if not ok or type(src) ~= "string" or #src == 0 then
@@ -35,12 +36,26 @@ local function loadModule(name)
     return mod
 end
 
+-- Universal HTTP Request engine supporting getgenv.request, http_request, syn.request
+local function httpRequest(opt)
+    local req = (getgenv and (getgenv().request or getgenv().http_request)) or request or http_request or (syn and syn.request)
+    if req then
+        local ok, res = pcall(function() return req(opt) end)
+        if ok and res then return res end
+    end
+    if opt.Method == "GET" or not opt.Method then
+        local ok, res = pcall(function() return game:HttpGet(opt.Url) end)
+        if ok and res then return { StatusCode = 200, Body = res } end
+    end
+    return nil
+end
+
 -- Shared state table
 local Shared = {
-    Player     = game:GetService("Players").LocalPlayer,
-    Character  = nil,
-    HumanoidRP = nil,
-    Services   = {
+    Player      = game:GetService("Players").LocalPlayer,
+    Character   = nil,
+    HumanoidRP  = nil,
+    Services    = {
         Players      = game:GetService("Players"),
         RunService   = game:GetService("RunService"),
         UserInput    = game:GetService("UserInputService"),
@@ -50,17 +65,18 @@ local Shared = {
         Http         = game:GetService("HttpService"),
         CoreGui      = game:GetService("CoreGui"),
     },
-    Flags        = {},
-    Keybinds     = {},
-    Toggles      = {},
-    Config       = {
+    HttpRequest = httpRequest,
+    Flags       = {},
+    Keybinds    = {},
+    Toggles     = {},
+    Config      = {
         SpotifyToken = "",
         LastFMUser   = "",
         Keybinds     = {},
         Flags        = {},
     },
-    GUI          = nil,
-    Version      = "3.0.0",
+    GUI         = nil,
+    Version     = "3.5.0",
 }
 
 Shared.Character  = Shared.Player.Character or Shared.Player.CharacterAdded:Wait()
