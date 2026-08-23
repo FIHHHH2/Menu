@@ -152,23 +152,23 @@ return function(Shared)
         local plrs = getOtherPlayers()
         local rowH = 26
         local totalRows = math.min(#plrs + 1, 8)
+        local absPos = selRow.AbsolutePosition
+        local absSize = selRow.AbsoluteSize
 
-        dropPanel = Instance.new("Frame")
-        dropPanel.Name             = "TrollDropdown"
-        dropPanel.Size             = UDim2.new(1, 0, 0, totalRows * rowH)
-        dropPanel.Position         = UDim2.new(0, 0, 0, 28)
-        dropPanel.BackgroundColor3 = clrPopBg()
-        dropPanel.BorderSizePixel  = 1
-        dropPanel.BorderColor3     = isDark() and Color3.fromRGB(50,70,110) or Color3.fromRGB(140,160,200)
-        dropPanel.ZIndex           = 60
-        dropPanel.ClipsDescendants = true
-        dropPanel.Parent           = selRow
+        local rootPanel = Instance.new("Frame")
+        rootPanel.Name             = "TrollDropdown"
+        rootPanel.Size             = UDim2.new(0, absSize.X, 0, totalRows * rowH)
+        rootPanel.Position         = UDim2.new(0, absPos.X, 0, absPos.Y + absSize.Y + 2)
+        rootPanel.BackgroundColor3 = clrPopBg()
+        rootPanel.BorderSizePixel  = 1
+        rootPanel.BorderColor3     = isDark() and Color3.fromRGB(50,70,110) or Color3.fromRGB(140,160,200)
+        rootPanel.ZIndex           = 250
+        rootPanel.ClipsDescendants = true
+        rootPanel.Parent           = Shared.GUI or selRow
 
-        local layout = Instance.new("UIListLayout")
-        layout.SortOrder = Enum.SortOrder.LayoutOrder
-        layout.Parent    = dropPanel
+        dropPanel = rootPanel
 
-        -- scroll if needed
+        local container = rootPanel
         if #plrs + 1 > 8 then
             local sf = Instance.new("ScrollingFrame")
             sf.Size = UDim2.new(1,0,1,0)
@@ -177,11 +177,14 @@ return function(Shared)
             sf.ScrollBarThickness = 5
             sf.CanvasSize = UDim2.new(0,0,0,(#plrs+1)*rowH)
             sf.AutomaticCanvasSize = Enum.AutomaticSize.Y
-            sf.ZIndex = 60
-            sf.Parent = dropPanel
-            layout.Parent = sf
-            dropPanel = sf  -- redirect inserts
+            sf.ZIndex = 250
+            sf.Parent = rootPanel
+            container = sf
         end
+
+        local layout = Instance.new("UIListLayout")
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Parent    = container
 
         local function makeRow(displayText, col, isSelected, onClick)
             local row = Instance.new("TextButton")
@@ -194,8 +197,8 @@ return function(Shared)
             row.TextSize         = 11
             row.TextXAlignment   = Enum.TextXAlignment.Left
             row.TextTruncate     = Enum.TextTruncate.AtEnd
-            row.ZIndex           = 61
-            row.Parent           = dropPanel
+            row.ZIndex           = 251
+            row.Parent           = container
             row.MouseEnter:Connect(function()
                 TweenSvc:Create(row, TweenInfo.new(0.08), {BackgroundColor3 = clrHover()}):Play()
             end)
@@ -217,14 +220,31 @@ return function(Shared)
             end)
         end
 
-        -- close on outside click
+        -- Reposition if window moves
+        local posConn = selRow:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+            if rootPanel and rootPanel.Parent then
+                local p = selRow.AbsolutePosition
+                local s = selRow.AbsoluteSize
+                rootPanel.Position = UDim2.new(0, p.X, 0, p.Y + s.Y + 2)
+            end
+        end)
+
+        -- Close on outside click
         task.delay(0.08, function()
-            local conn
-            conn = UserInput.InputBegan:Connect(function(i)
-                if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            local clickConn
+            clickConn = UserInput.InputBegan:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
                     task.wait()
-                    if dropPanel and dropPanel.Parent then closeDropdown() end
-                    conn:Disconnect()
+                    if rootPanel and rootPanel.Parent then
+                        local mousePos = UserInput:GetMouseLocation()
+                        local rPos = rootPanel.AbsolutePosition
+                        local rSize = rootPanel.AbsoluteSize
+                        if mousePos.X < rPos.X or mousePos.X > rPos.X + rSize.X or mousePos.Y < rPos.Y or mousePos.Y > rPos.Y + rSize.Y then
+                            closeDropdown()
+                            if posConn then posConn:Disconnect() end
+                            if clickConn then clickConn:Disconnect() end
+                        end
+                    end
                 end
             end)
         end)
