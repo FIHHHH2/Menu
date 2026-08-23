@@ -49,133 +49,199 @@ return function(Shared)
         end
     end)
 
-    -- Dynamic image downloader: writes unique file per song to bust Roblox asset cache
-    local function applyImage(imgLabel, url)
-        if not imgLabel then return end
-        if not url or url == "" then
-            imgLabel.Visible = false
-            imgLabel.Image = ""
-            return
+    -- ── 7-STAGE CASCADING ALBUM ARTWORK PIPELINE ────────────────
+    -- Validates binary image bytes and chains through fallback endpoints
+    local function isValidImageData(data)
+        if not data or type(data) ~= "string" or #data < 400 then return false end
+        local b1, b2 = string.byte(data, 1, 2)
+        -- JPEG (FF D8) or PNG (89 50) or GIF (47 49) or WEBP (52 49)
+        if (b1 == 255 and b2 == 216) or (b1 == 137 and b2 == 80) or (b1 == 71 and b2 == 73) or (b1 == 82 and b2 == 73) then
+            return true
         end
-        imgLabel.Visible = true
-
-        if url == lastLoadedCoverUrl and currentCoverAsset ~= "" then
-            imgLabel.Image = currentCoverAsset
-            return
-        end
-
-        local getcustomasset = getcustomasset or getsynasset or (getgenv and getgenv().getcustomasset)
-        local writefile      = writefile or (getgenv and getgenv().writefile)
-        local delfile        = delfile or (getgenv and getgenv().delfile)
-
-        if getcustomasset and writefile then
-            task.spawn(function()
-                local ok, res = pcall(function()
-                    return game:HttpGet(url)
-                end)
-                if not ok or not res or #res == 0 then
-                    local reqRes = Shared.HttpRequest({ Url = url, Method = "GET" })
-                    if reqRes and reqRes.Body and #reqRes.Body > 0 then
-                        res = reqRes.Body
-                        ok = true
-                    end
-                end
-
-                if ok and res and #res > 0 then
-                    pcall(function()
-                        local uniqueName = "fih_cover_" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 9999)) .. ".png"
-                        writefile(uniqueName, res)
-                        local newAsset = getcustomasset(uniqueName)
-                        currentCoverAsset = newAsset
-                        lastLoadedCoverUrl = url
-
-                        if previousCoverFile ~= "" and delfile then
-                            pcall(function() delfile(previousCoverFile) end)
-                        end
-                        previousCoverFile = uniqueName
-
-                        imgLabel.Image = ""
-                        task.wait()
-                        imgLabel.Image = newAsset
-                    end)
-                else
-                    pcall(function()
-                        lastLoadedCoverUrl = url
-                        currentCoverAsset = url
-                        imgLabel.Image = url
-                    end)
-                end
-            end)
-        else
-            lastLoadedCoverUrl = url
-            currentCoverAsset = url
-            pcall(function() imgLabel.Image = url end)
-        end
+        return false
     end
 
-    -- ── MULTI-SOURCE ALBUM ARTWORK RESOLVER (Fallback Pipeline) ──
-    -- Tier 1: Apple iTunes Search API (High-res 600x600 artwork, No Auth, Public)
-    -- Tier 2: Deezer API (Public, No Auth, High-res)
-    -- Tier 3: Last.fm track.getInfo (Rich metadata fallback)
-    local function fetchArtworkFallback(artist, trackName)
-        if not artist or not trackName or artist == "" or trackName == "" or trackName == "Not Playing" or trackName == "Unknown" then
-            return ""
+    local function downloadImageBytes(url)
+        if not url or url == "" then return nil end
+        local ok, res = pcall(function() return game:HttpGet(url) end)
+        if ok and isValidImageData(res) then return res end
+
+        local reqRes = Shared.HttpRequest({
+            Url     = url,
+            Method  = "GET",
+            Headers = { ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+        })
+        if reqRes and reqRes.Body and isValidImageData(reqRes.Body) then
+            return reqRes.Body
+        end
+        return nil
+    end
+
+    -- Collects all available candidate URLs across multiple public databases
+    local function gatherCoverCandidates(artist, trackName, primaryUrl)
+        local list = {}
+        if primaryUrl and primaryUrl ~= "" and primaryUrl:find("http") then
+            table.insert(list, primaryUrl)
         end
 
-        local cleanArtist = tostring(artist or ""):gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-        local cleanTrack  = tostring(trackName or ""):gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+        if not artist or not trackName or trackName == "Not Playing" or trackName == "Unknown" then
+            return list
+        end
+
+        local cleanArtist = tostring(artist):gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+        local cleanTrack  = tostring(trackName):gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
         local term = Http:UrlEncode(cleanArtist .. " " .. cleanTrack)
 
-        -- 1. iTunes API Search
-        local ok1, itunesRes = pcall(function()
-            return Shared.HttpRequest({
-                Url = "https://itunes.apple.com/search?term=" .. term .. "&media=music&entity=song&limit=1",
-                Method = "GET"
-            })
-        end)
-        if ok1 and itunesRes and itunesRes.Body and #itunesRes.Body > 0 then
-            local okD, data = pcall(function() return Http:JSONDecode(itunesRes.Body) end)
-            if okD and data and data.results and data.results[1] and data.results[1].artworkUrl100 then
-                local art = data.results[1].artworkUrl100:gsub("100x100bb", "600x600bb")
-                if art and #art > 0 then return art end
+        -- 1. Apple iTunes Search API (HD 600x600)
+        pcall(function()
+            local res = game:HttpGet("https://itunes.apple.com/search?term=" .. term .. "&media=music&entity=song&limit=1")
+            if res and #res > 0 then
+                local data = Http:JSONDecode(res)
+                if data and data.results and data.results[1] and data.results[1].artworkUrl100 then
+                    local art = data.results[1].artworkUrl100:gsub("100x100bb", "600x600bb")
+                    table.insert(list, art)
+                    table.insert(list, data.results[1].artworkUrl100)
+                end
             end
-        end
-
-        -- 2. Deezer API Search
-        local ok2, deezerRes = pcall(function()
-            return Shared.HttpRequest({
-                Url = "https://api.deezer.com/search?q=" .. term .. "&limit=1",
-                Method = "GET"
-            })
         end)
-        if ok2 and deezerRes and deezerRes.Body and #deezerRes.Body > 0 then
-            local okD, data = pcall(function() return Http:JSONDecode(deezerRes.Body) end)
-            if okD and data and data.data and data.data[1] and data.data[1].album then
-                local art = data.data[1].album.cover_big or data.data[1].album.cover_medium or data.data[1].album.cover
-                if art and #art > 0 then return art end
+
+        -- 2. Deezer Search API
+        pcall(function()
+            local res = game:HttpGet("https://api.deezer.com/search?q=" .. term .. "&limit=1")
+            if res and #res > 0 then
+                local data = Http:JSONDecode(res)
+                if data and data.data and data.data[1] and data.data[1].album then
+                    local alb = data.data[1].album
+                    if alb.cover_xl then table.insert(list, alb.cover_xl) end
+                    if alb.cover_big then table.insert(list, alb.cover_big) end
+                    if alb.cover_medium then table.insert(list, alb.cover_medium) end
+                end
             end
-        end
-
-        -- 3. Last.fm track.getInfo API Search
-        local ok3, lfmRes = pcall(function()
-            return Shared.HttpRequest({
-                Url = "https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=" .. LASTFM_API_KEY .. "&artist=" .. Http:UrlEncode(artist) .. "&track=" .. Http:UrlEncode(trackName) .. "&format=json",
-                Method = "GET"
-            })
         end)
-        if ok3 and lfmRes and lfmRes.Body and #lfmRes.Body > 0 then
-            local okD, data = pcall(function() return Http:JSONDecode(lfmRes.Body) end)
-            if okD and data and data.track and data.track.album and data.track.album.image then
-                for i = #data.track.album.image, 1, -1 do
-                    local imgObj = data.track.album.image[i]
-                    if imgObj and imgObj["#text"] and #imgObj["#text"] > 0 then
-                        return imgObj["#text"]
+
+        -- 3. Last.fm track.getInfo API
+        pcall(function()
+            local url = "https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=" .. LASTFM_API_KEY .. "&artist=" .. Http:UrlEncode(artist) .. "&track=" .. Http:UrlEncode(trackName) .. "&format=json"
+            local res = game:HttpGet(url)
+            if res and #res > 0 then
+                local data = Http:JSONDecode(res)
+                if data and data.track and data.track.album and data.track.album.image then
+                    for i = #data.track.album.image, 1, -1 do
+                        local imgObj = data.track.album.image[i]
+                        if imgObj and imgObj["#text"] and #imgObj["#text"] > 0 then
+                            table.insert(list, imgObj["#text"])
+                        end
                     end
                 end
             end
+        end)
+
+        -- 4. Genius Multi-Search API
+        pcall(function()
+            local res = game:HttpGet("https://genius.com/api/search/multi?q=" .. term)
+            if res and #res > 0 then
+                local data = Http:JSONDecode(res)
+                if data and data.response and data.response.sections then
+                    for _, sec in ipairs(data.response.sections) do
+                        if sec.hits and sec.hits[1] and sec.hits[1].result then
+                            local r = sec.hits[1].result
+                            if r.song_art_image_url then table.insert(list, r.song_art_image_url) end
+                            if r.header_image_url then table.insert(list, r.header_image_url) end
+                            break
+                        end
+                    end
+                end
+            end
+        end)
+
+        -- 5. Last.fm artist.getInfo fallback (Artist avatar if no album cover)
+        pcall(function()
+            local url = "https://ws.audioscrobbler.com/2.0/?method=artist.getInfo&api_key=" .. LASTFM_API_KEY .. "&artist=" .. Http:UrlEncode(artist) .. "&format=json"
+            local res = game:HttpGet(url)
+            if res and #res > 0 then
+                local data = Http:JSONDecode(res)
+                if data and data.artist and data.artist.image then
+                    for i = #data.artist.image, 1, -1 do
+                        local imgObj = data.artist.image[i]
+                        if imgObj and imgObj["#text"] and #imgObj["#text"] > 0 then
+                            table.insert(list, imgObj["#text"])
+                        end
+                    end
+                end
+            end
+        end)
+
+        return list
+    end
+
+    local currentLoadingToken = 0
+    local function applyImage(imgLabel, trackOrUrl, optArtist)
+        if not imgLabel then return end
+
+        local artist    = ""
+        local trackName = ""
+        local rawUrl    = ""
+
+        if type(trackOrUrl) == "table" then
+            artist    = trackOrUrl.artist or ""
+            trackName = trackOrUrl.name or ""
+            rawUrl    = trackOrUrl.cover or ""
+        else
+            rawUrl    = tostring(trackOrUrl or "")
+            artist    = tostring(optArtist or "")
+            trackName = currentTrack.name or ""
         end
 
-        return ""
+        currentLoadingToken = currentLoadingToken + 1
+        local myToken = currentLoadingToken
+
+        task.spawn(function()
+            local candidates = gatherCoverCandidates(artist, trackName, rawUrl)
+            local getcustomasset = getcustomasset or getsynasset or (getgenv and getgenv().getcustomasset)
+            local writefile      = writefile or (getgenv and getgenv().writefile)
+            local delfile        = delfile or (getgenv and getgenv().delfile)
+
+            for _, candidateUrl in ipairs(candidates) do
+                if myToken ~= currentLoadingToken then return end
+                local imgBytes = downloadImageBytes(candidateUrl)
+
+                if imgBytes and isValidImageData(imgBytes) then
+                    if getcustomasset and writefile then
+                        local uniqueName = "fih_cov_" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 9999)) .. ".png"
+                        local okW = pcall(function() writefile(uniqueName, imgBytes) end)
+                        if okW then
+                            local okA, newAsset = pcall(function() return getcustomasset(uniqueName) end)
+                            if okA and newAsset and newAsset ~= "" then
+                                if previousCoverFile ~= "" and delfile then
+                                    pcall(function() delfile(previousCoverFile) end)
+                                end
+                                previousCoverFile = uniqueName
+                                currentCoverAsset = newAsset
+                                lastLoadedCoverUrl = candidateUrl
+
+                                if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
+                                    imgLabel.Image = newAsset
+                                    imgLabel.Visible = true
+                                    return
+                                end
+                            end
+                        end
+                    else
+                        if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
+                            imgLabel.Image = candidateUrl
+                            imgLabel.Visible = true
+                            return
+                        end
+                    end
+                end
+            end
+
+            -- If all candidate downloads failed, clear image cleanly without white box
+            if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
+                imgLabel.Image = ""
+                imgLabel.Visible = true
+            end
+        end)
     end
 
     -- SPOTIFY API
@@ -369,7 +435,7 @@ return function(Shared)
         artistLbl.Parent                = bg
         bbArtistLbl = artistLbl
 
-        applyImage(bbCoverImg, currentTrack.cover)
+        applyImage(bbCoverImg, currentTrack)
     end
 
     -- ── DRAGGABLE & RESIZABLE BOTTOM-LEFT INFO WIDGET ──────────────
@@ -599,7 +665,7 @@ return function(Shared)
             end)
         end
 
-        applyImage(hudCoverImg, currentTrack.cover)
+        applyImage(hudCoverImg, currentTrack)
     end
 
     -- Update all visual elements & apply new cover image when URL changes
@@ -608,11 +674,11 @@ return function(Shared)
 
         if bbSongLbl then bbSongLbl.Text = track.name end
         if bbArtistLbl then bbArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
-        if bbCoverImg then applyImage(bbCoverImg, track.cover) end
+        if bbCoverImg then applyImage(bbCoverImg, track) end
 
         if hudSongLbl then hudSongLbl.Text = track.name end
         if hudArtistLbl then hudArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
-        if hudCoverImg then applyImage(hudCoverImg, track.cover) end
+        if hudCoverImg then applyImage(hudCoverImg, track) end
     end
 
     -- Persistent Polling Engine
