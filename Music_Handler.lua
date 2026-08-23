@@ -51,16 +51,21 @@ return function(Shared)
     end)
 
     -- ── 7-STAGE CASCADING ALBUM ARTWORK PIPELINE ────────────────
-    -- Validates binary image bytes and chains through fallback endpoints
+    -- Strict binary header check — HTML error pages always rejected
     local function isValidImageData(data)
-        if not data or type(data) ~= "string" or #data < 100 then return false end
-        local b1, b2 = string.byte(data, 1, 2)
-        -- Check for common image signatures: JPEG (FF D8), PNG (89 50), GIF (47 49), WEBP (52 49 or RIFF)
-        if b1 == 255 or b1 == 137 or b1 == 71 or b1 == 82 then
-            return true
-        end
-        -- If data is large enough, treat as image payload
-        return #data > 500
+        if not data or type(data) ~= "string" or #data < 200 then return false end
+        local b1, b2, b3, b4 = string.byte(data, 1, 4)
+        -- JPEG: FF D8 FF
+        if b1 == 255 and b2 == 216 and b3 == 255 then return true end
+        -- PNG: 89 50 4E 47
+        if b1 == 137 and b2 == 80 and b3 == 78 and b4 == 71 then return true end
+        -- GIF: 47 49 46
+        if b1 == 71 and b2 == 73 and b3 == 70 then return true end
+        -- WEBP: 52 49 46 46 (...) 57 45 42 50
+        if b1 == 82 and b2 == 73 and b3 == 70 and b4 == 70 then return true end
+        -- BMP: 42 4D
+        if b1 == 66 and b2 == 77 then return true end
+        return false
     end
 
     local function downloadImageBytes(url)
@@ -182,6 +187,14 @@ return function(Shared)
         return list
     end
 
+    -- Detect JPEG vs PNG from header bytes to use correct extension
+    local function getImageExtension(data)
+        if not data or #data < 4 then return "png" end
+        local b1, b2 = string.byte(data, 1, 2)
+        if b1 == 255 and b2 == 216 then return "jpg" end
+        return "png"
+    end
+
     local currentLoadingToken = 0
     local function applyImage(imgLabel, trackOrUrl, optArtist)
         if not imgLabel then return end
@@ -200,54 +213,67 @@ return function(Shared)
             trackName = currentTrack.name or ""
         end
 
+        -- Immediately set transparent background so nothing white shows while loading
+        if imgLabel and imgLabel.Parent then
+            imgLabel.BackgroundTransparency = 1
+            imgLabel.Image = ""
+        end
+
         currentLoadingToken = currentLoadingToken + 1
         local myToken = currentLoadingToken
 
         task.spawn(function()
-            local candidates = gatherCoverCandidates(artist, trackName, rawUrl)
             local getcustomasset = getcustomasset or getsynasset or (getgenv and getgenv().getcustomasset)
             local writefile      = writefile or (getgenv and getgenv().writefile)
             local delfile        = delfile or (getgenv and getgenv().delfile)
 
+            -- Gather candidates sequentially (gatherCoverCandidates is concurrent internally)
+            local candidates = gatherCoverCandidates(artist, trackName, rawUrl)
+
             for _, candidateUrl in ipairs(candidates) do
                 if myToken ~= currentLoadingToken then return end
+
                 local imgBytes = downloadImageBytes(candidateUrl)
+                if not imgBytes then continue end
+                if not isValidImageData(imgBytes) then continue end
 
-                if imgBytes and isValidImageData(imgBytes) then
-                    if getcustomasset and writefile then
-                        local uniqueName = "fih_cov_" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 9999)) .. ".png"
-                        local okW = pcall(function() writefile(uniqueName, imgBytes) end)
-                        if okW then
-                            local okA, newAsset = pcall(function() return getcustomasset(uniqueName) end)
-                            if okA and newAsset and newAsset ~= "" then
-                                if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
-                                    if previousCoverFile ~= "" and previousCoverFile ~= uniqueName and delfile then
-                                        pcall(function() delfile(previousCoverFile) end)
-                                    end
-                                    previousCoverFile = uniqueName
-                                    currentCoverAsset = newAsset
-                                    lastLoadedCoverUrl = candidateUrl
-
-                                    imgLabel.Image = newAsset
-                                    imgLabel.BackgroundTransparency = 1
-                                    imgLabel.Visible = true
-                                    return
+                -- Try getcustomasset path first (executor file system)
+                if getcustomasset and writefile then
+                    local ext = getImageExtension(imgBytes)
+                    local uniqueName = "fih_cov_" .. tostring(os.time()) .. "_" .. tostring(math.random(1000,9999)) .. "." .. ext
+                    local okW = pcall(function() writefile(uniqueName, imgBytes) end)
+                    if okW then
+                        local okA, newAsset = pcall(function() return getcustomasset(uniqueName) end)
+                        if okA and newAsset and newAsset ~= "" then
+                            if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
+                                if previousCoverFile ~= "" and previousCoverFile ~= uniqueName and delfile then
+                                    pcall(function() delfile(previousCoverFile) end)
                                 end
+                                previousCoverFile = uniqueName
+                                currentCoverAsset = newAsset
+                                lastLoadedCoverUrl = candidateUrl
+
+                                imgLabel.BackgroundTransparency = 1
+                                imgLabel.Image = newAsset
+                                imgLabel.Visible = true
+                                return
                             end
                         end
-                    else
-                        if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
-                            imgLabel.Image = candidateUrl
-                            imgLabel.BackgroundTransparency = 1
-                            imgLabel.Visible = true
-                            return
-                        end
+                    end
+                else
+                    -- Fallback: direct URL (works in some executors)
+                    if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
+                        imgLabel.BackgroundTransparency = 1
+                        imgLabel.Image = candidateUrl
+                        imgLabel.Visible = true
+                        return
                     end
                 end
             end
 
-            -- If all candidates failed, clear image cleanly without white box
+            -- All candidates exhausted — keep transparent, show note icon placeholder
             if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
+                imgLabel.BackgroundTransparency = 1
                 imgLabel.Image = ""
                 imgLabel.Visible = true
             end
@@ -408,15 +434,30 @@ return function(Shared)
         bg.BorderColor3         = Color3.fromRGB(0, 160, 255)
         bg.Parent               = billboard
 
+        local bbCoverContainer = Instance.new("Frame")
+        bbCoverContainer.Size             = UDim2.new(0, 48, 0, 48)
+        bbCoverContainer.Position         = UDim2.new(0, 5, 0, 5)
+        bbCoverContainer.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
+        bbCoverContainer.BorderSizePixel  = 1
+        bbCoverContainer.BorderColor3     = Color3.fromRGB(60, 80, 110)
+        bbCoverContainer.Parent           = bg
+
+        local bbNote = Instance.new("TextLabel")
+        bbNote.Size                   = UDim2.new(1, 0, 1, 0)
+        bbNote.BackgroundTransparency = 1
+        bbNote.Text                   = "🎵"
+        bbNote.TextSize               = 22
+        bbNote.TextColor3             = Color3.fromRGB(100, 130, 180)
+        bbNote.TextTransparency       = 0.3
+        bbNote.Parent                 = bbCoverContainer
+
         local cover = Instance.new("ImageLabel")
-        cover.Name                = "CoverArt"
-        cover.Size                = UDim2.new(0, 48, 0, 48)
-        cover.Position            = UDim2.new(0, 5, 0, 5)
-        cover.BackgroundColor3    = Color3.fromRGB(25, 28, 35)
-        cover.BorderSizePixel     = 1
-        cover.BorderColor3        = Color3.fromRGB(60, 80, 110)
-        cover.ScaleType           = Enum.ScaleType.Fit
-        cover.Parent              = bg
+        cover.Name                    = "CoverArt"
+        cover.Size                    = UDim2.new(1, 0, 1, 0)
+        cover.BackgroundTransparency  = 1
+        cover.BorderSizePixel         = 0
+        cover.ScaleType               = Enum.ScaleType.Crop
+        cover.Parent                  = bbCoverContainer
         bbCoverImg = cover
 
         local songLbl = Instance.new("TextLabel")
