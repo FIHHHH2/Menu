@@ -98,18 +98,31 @@ return function(Shared)
     end)
 
     local clickTPConn
-    MkToggle(leftCol, "Click TP (Mouse Click)", "ClickTP", 6, function(state)
+    MkToggle(leftCol, "Click TP (Ctrl + Click)", "ClickTP", 6, function(state)
         if clickTPConn then clickTPConn:Disconnect(); clickTPConn = nil end
         if state then
             clickTPConn = UserInput.InputBegan:Connect(function(input, gpe)
                 if gpe then return end
                 if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    local hrp = getHRP(); if not hrp then return end
-                    local ray = workspace.CurrentCamera:ScreenPointToRay(input.Position.X, input.Position.Y)
-                    local params = RaycastParams.new()
-                    params.FilterDescendantsInstances = {getChar()}; params.FilterType = Enum.RaycastFilterType.Exclude
-                    local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
-                    if result then hrp.CFrame = CFrame.new(result.Position + Vector3.new(0,3,0)) end
+                    local isCtrlHeld = UserInput:IsKeyDown(Enum.KeyCode.LeftControl) or UserInput:IsKeyDown(Enum.KeyCode.RightControl)
+                    if isCtrlHeld then
+                        local hrp = getHRP(); if not hrp then return end
+                        local mouse = Player:GetMouse()
+                        if mouse and mouse.Hit then
+                            hrp.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0, 3.2, 0))
+                        else
+                            local mouseLoc = UserInput:GetMouseLocation()
+                            local cam = workspace.CurrentCamera
+                            local ray = cam:ViewportPointToRay(mouseLoc.X, mouseLoc.Y)
+                            local params = RaycastParams.new()
+                            params.FilterDescendantsInstances = {getChar()}
+                            params.FilterType = Enum.RaycastFilterType.Exclude
+                            local res = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
+                            if res then
+                                hrp.CFrame = CFrame.new(res.Position + Vector3.new(0, 3.2, 0))
+                            end
+                        end
+                    end
                 end
             end)
         end
@@ -206,14 +219,38 @@ return function(Shared)
     MkSlider(rightCol, "Walk Speed", "WalkSpeed", 16, 250, 16, 11, function(val)
         local hum = getHuman(); if hum then hum.WalkSpeed = val end
     end)
+    local function applyJumpStats(hum, val)
+        if not hum then return end
+        pcall(function()
+            hum.UseJumpPower = false
+            hum.JumpHeight   = val
+            -- Scale JumpPower for games enforcing UseJumpPower (50 power ~ 7.2 height)
+            hum.JumpPower    = math.clamp(val * 7, 50, 1000)
+        end)
+    end
+
     MkSlider(rightCol, "Jump Height", "JumpHeight", 7, 250, 7, 12, function(val)
-        local hum = getHuman(); if hum then hum.JumpHeight = val end
+        Shared.Flags["JumpHeight"] = val
+        local hum = getHuman(); applyJumpStats(hum, val)
+    end)
+
+    -- Continuous jump & speed enforcement loop
+    RunService.Heartbeat:Connect(function()
+        local hum = getHuman()
+        if hum then
+            if Shared.Flags["JumpHeight"] and Shared.Flags["JumpHeight"] > 7 then
+                applyJumpStats(hum, Shared.Flags["JumpHeight"])
+            end
+            if Shared.Flags["WalkSpeed"] and Shared.Flags["WalkSpeed"] > 16 then
+                hum.WalkSpeed = Shared.Flags["WalkSpeed"]
+            end
+        end
     end)
 
     Player.CharacterAdded:Connect(function(char)
         local hum = char:WaitForChild("Humanoid"); task.wait(0.1)
         hum.WalkSpeed  = Shared.Flags["WalkSpeed"]  or 16
-        hum.JumpHeight = Shared.Flags["JumpHeight"] or 7
+        applyJumpStats(hum, Shared.Flags["JumpHeight"] or 7)
         restoreDefaultCollisions(char)
         if Shared.Flags["FragilePlayer"] then setupFragileCharacter(char) end
     end)

@@ -406,6 +406,48 @@ return function(Shared)
         end)
     end)
 
+    -- 4. BODY PLATFORM (Self as Air Pad / Infinite Stepping Stone)
+    -- Moves YOUR character directly underneath the target player's feet so they can jump off you infinitely.
+    local bodyPlatConn = nil
+
+    MkToggle(leftCol, "Body Platform (Self as Pad)", "BodyPlatform", 15, function(state)
+        if bodyPlatConn then bodyPlatConn:Disconnect(); bodyPlatConn = nil end
+        if not state then
+            local myHRP = getHRP()
+            if myHRP then myHRP.AssemblyLinearVelocity = Vector3.zero end
+            return
+        end
+
+        local currentBodyY = nil
+        bodyPlatConn = RunService.Stepped:Connect(function()
+            local target = getActiveTarget()
+            local myHRP = getHRP()
+            if not myHRP or not (target and target.Character and target.Character:FindFirstChild("HumanoidRootPart")) then
+                return
+            end
+
+            local tHRP = target.Character.HumanoidRootPart
+            local feetY = tHRP.Position.Y - 3.2
+
+            local char = getChar()
+            if char then
+                local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("Head")
+                if torso then torso.CanCollide = true end
+            end
+
+            if not currentBodyY then
+                currentBodyY = feetY
+            else
+                if feetY > currentBodyY + 1.0 or feetY < currentBodyY - 0.8 then
+                    currentBodyY = feetY
+                end
+            end
+
+            myHRP.CFrame = CFrame.new(tHRP.Position.X, currentBodyY, tHRP.Position.Z)
+            myHRP.AssemblyLinearVelocity = Vector3.zero
+        end)
+    end)
+
     -- ── RIGHT COLUMN: SWARM, ORBIT, HATS ───────────────────────
     MkSection(rightCol, "Swarm & Orbit Trolls", 1)
 
