@@ -1,10 +1,15 @@
 -- Music_Handler.lua
--- Robust Music Engine: Spotify with Bearer Header + Last.fm Live Scrobbler & Head Billboard
+-- Robust Music Engine: Spotify + Last.fm Live Scrobbler with Album Covers, Bold Typography,
+-- Respawn Tracking, and Draggable Bottom-Left Info Widget
 
 return function(Shared)
-    local Http      = Shared.Services.Http
-    local Player    = Shared.Player
-    local RunSvc    = Shared.Services.RunService
+    local Http        = Shared.Services.Http
+    local Player      = Shared.Player
+    local RunSvc      = Shared.Services.RunService
+    local UserInput   = Shared.Services.UserInput
+    local TweenSvc    = Shared.Services.TweenService
+    local MarketSvc   = game:GetService("MarketplaceService")
+
     local Tabs      = Shared.Tabs or {}
     local QuadCols  = Shared.QuadCols or {}
     local MkSection = Shared.MakeSection or function() end
@@ -20,9 +25,53 @@ return function(Shared)
 
     -- Verified working Last.fm public API key
     local LASTFM_API_KEY = "b25b959554ed76058ac220b7b2e0a026"
-    local currentTrack = { name = "Not Playing", artist = "No Artist", isPlaying = false, source = "None" }
-    local billboard    = nil
-    local pollConn     = nil
+    local currentTrack = {
+        name     = "Not Playing",
+        artist   = "No Artist",
+        cover    = "",
+        isPlaying = false,
+        source   = "None"
+    }
+
+    local billboard   = nil
+    local hudWidget   = nil
+    local pollConn    = nil
+    local placeTitle  = "Roblox Place"
+
+    -- Fetch place name asynchronously
+    task.spawn(function()
+        local ok, info = pcall(function() return MarketSvc:GetProductInfo(game.PlaceId) end)
+        if ok and info and info.Name then
+            placeTitle = info.Name
+        end
+    end)
+
+    -- Image downloader/loader helper
+    local function applyImage(imgLabel, url)
+        if not url or url == "" then
+            imgLabel.Visible = false
+            return
+        end
+        imgLabel.Visible = true
+        if getcustomasset and writefile then
+            task.spawn(function()
+                local ok, res = pcall(function()
+                    return Shared.HttpRequest({ Url = url, Method = "GET" })
+                end)
+                if ok and res and res.Body and #res.Body > 0 then
+                    pcall(function()
+                        local fName = "fih_album_cache.png"
+                        writefile(fName, res.Body)
+                        imgLabel.Image = getcustomasset(fName)
+                    end)
+                else
+                    pcall(function() imgLabel.Image = url end)
+                end
+            end)
+        else
+            pcall(function() imgLabel.Image = url end)
+        end
+    end
 
     -- SPOTIFY API
     local function cleanToken(tok)
@@ -52,7 +101,6 @@ return function(Shared)
         local token = cleanToken(Shared.Config.SpotifyToken)
         if not token or token == "" then return nil, "No Token" end
 
-        -- Try /currently-playing first, then /me/player
         local resp = Shared.HttpRequest({
             Url     = "https://api.spotify.com/v1/me/player/currently-playing",
             Method  = "GET",
@@ -72,15 +120,22 @@ return function(Shared)
         local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
         if not ok or not data or not data.item then return nil, "No Track Found" end
         local item = data.item
+
+        local coverUrl = ""
+        if item.album and item.album.images and #item.album.images > 0 then
+            coverUrl = item.album.images[1].url or ""
+        end
+
         return {
             name      = item.name or "Unknown",
             artist    = item.artists and item.artists[1] and item.artists[1].name or "Unknown",
+            cover     = coverUrl,
             isPlaying = data.is_playing or false,
             source    = "Spotify"
         }
     end
 
-    -- LAST.FM API (Public Scrobbler API - Verified Key)
+    -- LAST.FM API (Public Scrobbler)
     local function getLastFMTrack()
         local user = Shared.Config.LastFMUser
         if not user or user == "" or user == "Enter Last.fm Username" then return nil end
@@ -95,7 +150,7 @@ return function(Shared)
         if not resp or not resp.Body or #resp.Body == 0 then return nil end
         local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
         if not ok or not data or not data.recenttracks or not data.recenttracks.track then return nil end
-        
+
         local track = data.recenttracks.track
         if type(track) == "table" and track[1] then
             track = track[1]
@@ -110,63 +165,268 @@ return function(Shared)
             artistName = track.artist
         end
 
+        local coverUrl = ""
+        if track.image and type(track.image) == "table" and #track.image > 0 then
+            local lastImg = track.image[#track.image]
+            coverUrl = (type(lastImg) == "table" and lastImg["#text"]) or ""
+        end
+
         return {
             name      = track.name or "Unknown",
             artist    = artistName,
+            cover     = coverUrl,
             isPlaying = isNowPlaying,
             source    = "Last.fm"
         }
     end
 
-    -- 3D BILLBOARD GUI OVER HEAD
+    -- ── 3D BILLBOARD GUI OVER HEAD ─────────────────────────────────
+    local bbSongLbl, bbArtistLbl, bbCoverImg
+
+    local function getHRP()
+        return Shared.HumanoidRP or (Shared.Character and Shared.Character:FindFirstChild("HumanoidRootPart")) or (Player.Character and Player.Character:FindFirstChild("HumanoidRootPart"))
+    end
+
     local function buildBillboard()
         if billboard then billboard:Destroy(); billboard = nil end
-        local hrp = Shared.HumanoidRP or (Shared.Character and Shared.Character:FindFirstChild("HumanoidRootPart"))
+        local hrp = getHRP()
         if not hrp then return end
 
         billboard = Instance.new("BillboardGui")
         billboard.Name          = "MusicBillboard"
-        billboard.Size          = UDim2.new(0, 210, 0, 52)
-        billboard.StudsOffset   = Vector3.new(0, 3.5, 0)
+        billboard.Size          = UDim2.new(0, 250, 0, 56)
+        billboard.StudsOffset   = Vector3.new(0, 3.8, 0)
         billboard.AlwaysOnTop   = false
         billboard.Adornee       = hrp
         billboard.Parent        = Shared.GUI
 
         local bg = Instance.new("Frame")
-        bg.Size             = UDim2.new(1, 0, 1, 0)
-        bg.BackgroundColor3 = Color3.fromRGB(15, 18, 24)
+        bg.Size                 = UDim2.new(1, 0, 1, 0)
+        bg.BackgroundColor3     = Color3.fromRGB(15, 18, 24)
         bg.BackgroundTransparency = 0.15
-        bg.BorderSizePixel  = 1
-        bg.BorderColor3     = Color3.fromRGB(0, 160, 255)
-        bg.Parent           = billboard
+        bg.BorderSizePixel      = 1
+        bg.BorderColor3         = Color3.fromRGB(0, 160, 255)
+        bg.Parent               = billboard
 
+        -- Cover Art Box
+        local cover = Instance.new("ImageLabel")
+        cover.Name                = "CoverArt"
+        cover.Size                = UDim2.new(0, 48, 0, 48)
+        cover.Position            = UDim2.new(0, 4, 0, 4)
+        cover.BackgroundColor3    = Color3.fromRGB(25, 28, 35)
+        cover.BorderSizePixel     = 1
+        cover.BorderColor3        = Color3.fromRGB(60, 80, 110)
+        cover.ScaleType           = Enum.ScaleType.Fit
+        cover.Parent              = bg
+        bbCoverImg = cover
+
+        -- Bold Song Title
         local songLbl = Instance.new("TextLabel")
-        songLbl.Size                  = UDim2.new(1, -12, 0, 22)
-        songLbl.Position              = UDim2.new(0, 6, 0, 4)
+        songLbl.Size                  = UDim2.new(1, -60, 0, 22)
+        songLbl.Position              = UDim2.new(0, 56, 0, 4)
         songLbl.BackgroundTransparency = 1
         songLbl.Text                  = currentTrack.name
         songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
-        songLbl.Font                  = Enum.Font.Code
-        songLbl.TextSize              = 11
+        songLbl.Font                  = Enum.Font.ArimoBold
+        songLbl.TextSize              = 12
         songLbl.TextXAlignment        = Enum.TextXAlignment.Left
         songLbl.TextTruncate          = Enum.TextTruncate.AtEnd
         songLbl.Parent                = bg
+        bbSongLbl = songLbl
 
+        -- Bold Artist + Source
         local artistLbl = Instance.new("TextLabel")
-        artistLbl.Size                  = UDim2.new(1, -12, 0, 18)
-        artistLbl.Position              = UDim2.new(0, 6, 0, 24)
+        artistLbl.Size                  = UDim2.new(1, -60, 0, 18)
+        artistLbl.Position              = UDim2.new(0, 56, 0, 26)
         artistLbl.BackgroundTransparency = 1
         artistLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
-        artistLbl.TextColor3            = Color3.fromRGB(0, 200, 120)
+        artistLbl.TextColor3            = Color3.fromRGB(0, 220, 140)
         artistLbl.Font                  = Enum.Font.Code
         artistLbl.TextSize              = 10
         artistLbl.TextXAlignment        = Enum.TextXAlignment.Left
         artistLbl.TextTruncate          = Enum.TextTruncate.AtEnd
         artistLbl.Parent                = bg
+        bbArtistLbl = artistLbl
 
-        Shared._MusicLabels = { songLbl, artistLbl }
+        applyImage(bbCoverImg, currentTrack.cover)
     end
 
+    -- ── DRAGGABLE BOTTOM-LEFT INFO WIDGET ──────────────────────────
+    local hudSongLbl, hudArtistLbl, hudCoverImg, hudPlaceLbl, hudUserLbl
+
+    local function buildHUD()
+        if hudWidget then hudWidget:Destroy(); hudWidget = nil end
+
+        local C = {
+            WinBorder = Color3.fromRGB(58, 110, 165),
+            TitleBar  = Color3.fromRGB(212, 208, 200),
+            TitleText = Color3.fromRGB(0, 0, 0),
+            BodyBg    = Color3.fromRGB(248, 250, 255),
+            BorderCol = Color3.fromRGB(180, 190, 210),
+            TextDark  = Color3.fromRGB(15, 25, 60),
+            Accent    = Color3.fromRGB(0, 120, 40),
+            SubText   = Color3.fromRGB(80, 95, 120)
+        }
+
+        local frame = Instance.new("Frame")
+        frame.Name             = "Fih_BottomHUD"
+        frame.Size             = UDim2.new(0, 280, 0, 108)
+        frame.Position         = UDim2.new(0, 16, 1, -126)
+        frame.BackgroundColor3 = C.BodyBg
+        frame.BorderSizePixel  = 2
+        frame.BorderColor3     = C.WinBorder
+        frame.ClipsDescendants = true
+        frame.ZIndex           = 50
+        frame.Parent           = Shared.GUI
+        hudWidget = frame
+
+        -- Title bar (draggable)
+        local tBar = Instance.new("Frame")
+        tBar.Size             = UDim2.new(1, 0, 0, 20)
+        tBar.BackgroundColor3 = C.TitleBar
+        tBar.BorderSizePixel  = 1
+        tBar.BorderColor3     = Color3.fromRGB(140, 140, 140)
+        tBar.ZIndex           = 51
+        tBar.Parent           = frame
+
+        local tLbl = Instance.new("TextLabel")
+        tLbl.Size                   = UDim2.new(1, -8, 1, 0)
+        tLbl.Position               = UDim2.new(0, 6, 0, 0)
+        tLbl.BackgroundTransparency = 1
+        tLbl.Text                   = "Fih HUD  ::  Now Playing & Session"
+        tLbl.TextColor3             = C.TitleText
+        tLbl.Font                   = Enum.Font.Code
+        tLbl.TextSize               = 11
+        tLbl.TextXAlignment         = Enum.TextXAlignment.Left
+        tLbl.ZIndex                 = 52
+        tLbl.Parent                 = tBar
+
+        -- Draggable logic
+        do
+            local drag, ds, sp = false, nil, nil
+            tBar.InputBegan:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                    drag = true; ds = i.Position; sp = frame.Position
+                end
+            end)
+            tBar.InputEnded:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                    drag = false
+                end
+            end)
+            UserInput.InputChanged:Connect(function(i)
+                if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+                    local d = i.Position - ds
+                    frame.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
+                end
+            end)
+        end
+
+        -- Body Area
+        local content = Instance.new("Frame")
+        content.Size             = UDim2.new(1, 0, 1, -20)
+        content.Position         = UDim2.new(0, 0, 0, 20)
+        content.BackgroundTransparency = 1
+        content.ZIndex           = 51
+        content.Parent           = frame
+
+        -- Album Cover
+        local cover = Instance.new("ImageLabel")
+        cover.Size                = UDim2.new(0, 48, 0, 48)
+        cover.Position            = UDim2.new(0, 6, 0, 6)
+        cover.BackgroundColor3    = Color3.fromRGB(225, 230, 240)
+        cover.BorderSizePixel     = 1
+        cover.BorderColor3        = C.BorderCol
+        cover.ScaleType           = Enum.ScaleType.Fit
+        cover.ZIndex              = 52
+        cover.Parent              = content
+        hudCoverImg = cover
+
+        -- Bold Song Title
+        local sLbl = Instance.new("TextLabel")
+        sLbl.Size                  = UDim2.new(1, -62, 0, 18)
+        sLbl.Position              = UDim2.new(0, 58, 0, 4)
+        sLbl.BackgroundTransparency = 1
+        sLbl.Text                  = currentTrack.name
+        sLbl.TextColor3            = C.TextDark
+        sLbl.Font                  = Enum.Font.ArimoBold
+        sLbl.TextSize              = 12
+        sLbl.TextXAlignment        = Enum.TextXAlignment.Left
+        sLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+        sLbl.ZIndex                = 52
+        sLbl.Parent                = content
+        hudSongLbl = sLbl
+
+        -- Bold Artist / Source
+        local aLbl = Instance.new("TextLabel")
+        aLbl.Size                  = UDim2.new(1, -62, 0, 16)
+        aLbl.Position              = UDim2.new(0, 58, 0, 22)
+        aLbl.BackgroundTransparency = 1
+        aLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
+        aLbl.TextColor3            = C.Accent
+        aLbl.Font                  = Enum.Font.Code
+        aLbl.TextSize              = 10
+        aLbl.TextXAlignment        = Enum.TextXAlignment.Left
+        aLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+        aLbl.ZIndex                = 52
+        aLbl.Parent                = content
+        hudArtistLbl = aLbl
+
+        -- Divider
+        local div = Instance.new("Frame")
+        div.Size             = UDim2.new(1, -12, 0, 1)
+        div.Position         = UDim2.new(0, 6, 0, 58)
+        div.BackgroundColor3 = C.BorderCol
+        div.BorderSizePixel  = 0
+        div.ZIndex           = 52
+        div.Parent           = content
+
+        -- Place Info
+        local pLbl = Instance.new("TextLabel")
+        pLbl.Size                  = UDim2.new(1, -12, 0, 14)
+        pLbl.Position              = UDim2.new(0, 6, 0, 62)
+        pLbl.BackgroundTransparency = 1
+        pLbl.Text                  = "Map: " .. placeTitle .. " (ID: " .. tostring(game.PlaceId) .. ")"
+        pLbl.TextColor3            = C.SubText
+        pLbl.Font                  = Enum.Font.Code
+        pLbl.TextSize              = 10
+        pLbl.TextXAlignment        = Enum.TextXAlignment.Left
+        pLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+        pLbl.ZIndex                = 52
+        pLbl.Parent                = content
+        hudPlaceLbl = pLbl
+
+        -- User Info
+        local uLbl = Instance.new("TextLabel")
+        uLbl.Size                  = UDim2.new(1, -12, 0, 14)
+        uLbl.Position              = UDim2.new(0, 6, 0, 76)
+        uLbl.BackgroundTransparency = 1
+        uLbl.Text                  = "User: " .. Player.DisplayName .. " (@" .. Player.Name .. ")"
+        uLbl.TextColor3            = C.SubText
+        uLbl.Font                  = Enum.Font.Code
+        uLbl.TextSize              = 10
+        uLbl.TextXAlignment        = Enum.TextXAlignment.Left
+        uLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+        uLbl.ZIndex                = 52
+        uLbl.Parent                = content
+        hudUserLbl = uLbl
+
+        applyImage(hudCoverImg, currentTrack.cover)
+    end
+
+    -- Update all visual elements
+    local function updateVisuals(track)
+        currentTrack = track
+        if bbSongLbl then bbSongLbl.Text = track.name end
+        if bbArtistLbl then bbArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
+        if bbCoverImg then applyImage(bbCoverImg, track.cover) end
+
+        if hudSongLbl then hudSongLbl.Text = track.name end
+        if hudArtistLbl then hudArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
+        if hudCoverImg then applyImage(hudCoverImg, track.cover) end
+    end
+
+    -- Persistent Polling Engine
     local function startPolling()
         if pollConn then pollConn:Disconnect() end
         local elapsed = 0
@@ -176,15 +436,27 @@ return function(Shared)
                 elapsed = 0
                 local track = getSpotifyTrack() or getLastFMTrack()
                 if track then
-                    currentTrack = track
-                    if Shared._MusicLabels then
-                        Shared._MusicLabels[1].Text = track.name
-                        Shared._MusicLabels[2].Text = track.artist .. " [" .. track.source .. "]"
-                    end
+                    updateVisuals(track)
                 end
             end
         end)
     end
+
+    -- ── RESPAWN / DEATH RE-TRACKING ────────────────────────────────
+    Player.CharacterAdded:Connect(function(char)
+        Shared.Character = char
+        local hrp = char:WaitForChild("HumanoidRootPart", 5)
+        Shared.HumanoidRP = hrp
+
+        if Shared.Flags["MusicBillboard"] then
+            task.wait(0.2)
+            if billboard and hrp then
+                billboard.Adornee = hrp
+            else
+                buildBillboard()
+            end
+        end
+    end)
 
     -- LEFT COLUMN: LAST.FM SCROBBLER & HEAD BILLBOARD
     MkSection(leftCol, "Last.fm Scrobbler (No Auth Required)", 1)
@@ -211,18 +483,34 @@ return function(Shared)
     MkButton(leftCol, "[ Sync Last.fm Track ]", 3, function()
         local trk = getLastFMTrack()
         if trk then
-            currentTrack = trk
+            updateVisuals(trk)
             Shared.Notify("Last.fm", trk.name .. " - " .. trk.artist, true)
-            buildBillboard()
+            if Shared.Flags["MusicBillboard"] then buildBillboard() end
+            if Shared.Flags["MusicHUD"] then buildHUD() end
             startPolling()
         else
             Shared.Notify("Last.fm", "No track found / scrobbling", false)
         end
     end)
 
-    MkSection(leftCol, "Head Billboard Display", 10)
+    MkSection(leftCol, "Display Overlays", 10)
+
     MkToggle(leftCol, "Billboard Over Head", "MusicBillboard", 11, function(state)
-        if state then buildBillboard(); startPolling() else if billboard then billboard:Destroy(); billboard = nil end end
+        if state then
+            buildBillboard()
+            startPolling()
+        else
+            if billboard then billboard:Destroy(); billboard = nil end
+        end
+    end)
+
+    MkToggle(leftCol, "Bottom-Left Info HUD", "MusicHUD", 12, function(state)
+        if state then
+            buildHUD()
+            startPolling()
+        else
+            if hudWidget then hudWidget:Destroy(); hudWidget = nil end
+        end
     end)
 
     -- RIGHT COLUMN: SPOTIFY OAUTH & CONTROLS
@@ -253,9 +541,10 @@ return function(Shared)
     MkButton(rightCol, "[ Test Spotify Token ]", 3, function()
         local trk, err = getSpotifyTrack()
         if trk then
-            currentTrack = trk
+            updateVisuals(trk)
             Shared.Notify("Spotify", trk.name .. " - " .. trk.artist, true)
-            buildBillboard()
+            if Shared.Flags["MusicBillboard"] then buildBillboard() end
+            if Shared.Flags["MusicHUD"] then buildHUD() end
             startPolling()
         else
             Shared.Notify("Spotify", "Status: " .. tostring(err or "Failed"), false)
@@ -282,5 +571,5 @@ return function(Shared)
         Shared.Notify("Spotify", "Next track command sent", true)
     end)
 
-    print("[Music_Handler] Loaded -- Spotify + Last.fm dual scrobbler active")
+    print("[Music_Handler] Loaded -- Covers, HUD, Bold Fonts, Respawn Tracking Online")
 end
