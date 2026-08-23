@@ -1,10 +1,12 @@
 -- Main_Functions.lua
--- Movement, Multipliers, Anti-Ragdoll, Reach Extend, Gravity, Respawn
+-- Movement, Stat Multipliers, World Modifiers, and Performance & FPS Boost Suite
 
 return function(Shared)
-    local Players    = Shared.Services.Players
-    local RunService = Shared.Services.RunService
-    local UserInput  = Shared.Services.UserInput
+    local Players      = Shared.Services.Players
+    local RunService   = Shared.Services.RunService
+    local UserInput    = Shared.Services.UserInput
+    local TweenService = Shared.Services.TweenService
+    local Lighting     = game:GetService("Lighting")
 
     local Player    = Shared.Player
     local Tabs      = Shared.Tabs or {}
@@ -98,7 +100,6 @@ return function(Shared)
         end
     end)
 
-    -- Anti-Ragdoll: prevents death animation ragdoll from kicking in
     MkToggle(leftCol, "Anti-Ragdoll", "AntiRagdoll", 7, function(state)
         local char = getChar(); if not char then return end
         for _, obj in ipairs(char:GetDescendants()) do
@@ -108,12 +109,117 @@ return function(Shared)
         end
     end)
 
-    -- Respawn button
     MkButton(leftCol, "[ Force Respawn ]", 8, function()
         Player:LoadCharacter()
     end)
 
-    -- ── RIGHT COLUMN: MULTIPLIERS & WORLD ────────────────────────
+    -- ── LEFT COLUMN: PERFORMANCE & FPS BOOST SUITE ──────────────
+    MkSection(leftCol, "Performance & FPS Boost", 20)
+
+    -- 1. Low Graphics / FPS Booster
+    local originalMaterials = {}
+    MkToggle(leftCol, "FPS Boost (Low Graphics)", "FPSBoost", 21, function(state)
+        if state then
+            Lighting.GlobalShadows = false
+            Lighting.FogEnd = 9e9
+            pcall(function()
+                workspace.Terrain.WaterWaveSize = 0
+                workspace.Terrain.WaterWaveSpeed = 0
+                workspace.Terrain.WaterReflectance = 0
+                workspace.Terrain.WaterTransparency = 0
+            end)
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("BasePart") then
+                    if not originalMaterials[obj] then originalMaterials[obj] = { mat = obj.Material, shadow = obj.CastShadow } end
+                    obj.Material = Enum.Material.SmoothPlastic
+                    obj.CastShadow = false
+                end
+            end
+            Shared.Notify("Performance", "Low Graphics Mode Enabled", true)
+        else
+            Lighting.GlobalShadows = true
+            for obj, info in pairs(originalMaterials) do
+                if obj and obj.Parent then
+                    pcall(function()
+                        obj.Material = info.mat
+                        obj.CastShadow = info.shadow
+                    end)
+                end
+            end
+            originalMaterials = {}
+            Shared.Notify("Performance", "Low Graphics Mode Disabled", false)
+        end
+    end)
+
+    -- 2. Disable Particles, Trails & Beams
+    local disabledEmitters = {}
+    MkToggle(leftCol, "Disable Particles & Trails", "NoParticles", 22, function(state)
+        if state then
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+                    if obj.Enabled then
+                        disabledEmitters[obj] = true
+                        obj.Enabled = false
+                    end
+                end
+            end
+        else
+            for obj in pairs(disabledEmitters) do
+                if obj and obj.Parent then pcall(function() obj.Enabled = true end) end
+            end
+            disabledEmitters = {}
+        end
+    end)
+
+    -- 3. Disable Post-Processing
+    local disabledEffects = {}
+    MkToggle(leftCol, "Disable Post-Processing (Bloom/Blur)", "NoPostProcessing", 23, function(state)
+        if state then
+            for _, obj in ipairs(Lighting:GetChildren()) do
+                if obj:IsA("PostProcessEffect") or obj:IsA("BloomEffect") or obj:IsA("BlurEffect") or obj:IsA("ColorCorrectionEffect") or obj:IsA("SunRaysEffect") or obj:IsA("DepthOfFieldEffect") then
+                    if obj.Enabled then
+                        disabledEffects[obj] = true
+                        obj.Enabled = false
+                    end
+                end
+            end
+        else
+            for obj in pairs(disabledEffects) do
+                if obj and obj.Parent then pcall(function() obj.Enabled = true end) end
+            end
+            disabledEffects = {}
+        end
+    end)
+
+    -- 4. Disable 3D Textures & Decals
+    local disabledTextures = {}
+    MkToggle(leftCol, "Disable 3D Textures & Decals", "NoTextures", 24, function(state)
+        if state then
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("Decal") or obj:IsA("Texture") then
+                    if obj.Transparency < 1 then
+                        disabledTextures[obj] = obj.Transparency
+                        obj.Transparency = 1
+                    end
+                end
+            end
+        else
+            for obj, orig in pairs(disabledTextures) do
+                if obj and obj.Parent then pcall(function() obj.Transparency = orig end) end
+            end
+            disabledTextures = {}
+        end
+    end)
+
+    -- 5. Unlock / Custom FPS Cap
+    local setfpscap = setfpscap or (getgenv and getgenv().setfpscap)
+    if setfpscap then
+        MkSlider(leftCol, "FPS Cap (Max FPS)", "FPSCap", 30, 360, 144, 25, function(val)
+            pcall(function() setfpscap(val) end)
+        end)
+    end
+
+    -- ── RIGHT COLUMN: STAT MULTIPLIERS & WORLD ───────────────────
     MkSection(rightCol, "Stat Multipliers", 10)
 
     MkSlider(rightCol, "Walk Speed", "WalkSpeed", 16, 250, 16, 11, function(val)
@@ -135,13 +241,11 @@ return function(Shared)
         workspace.Gravity = val
     end)
 
-    -- Reach Extender: scales HRP hitbox size for extended melee reach
     MkSlider(rightCol, "Reach Extender", "Reach", 4, 60, 4, 22, function(val)
         local hrp = getHRP()
         if hrp then hrp.Size = Vector3.new(val, hrp.Size.Y, val) end
     end)
 
-    -- Anti-Aim: spins HRP to confuse targeting
     local antiAimConn
     MkToggle(rightCol, "Anti-Aim (Spin HRP)", "AntiAim", 23, function(state)
         if antiAimConn then antiAimConn:Disconnect(); antiAimConn = nil end
@@ -162,7 +266,6 @@ return function(Shared)
     end)
 
     MkToggle(rightCol, "Full Bright", "FullBright", 32, function(state)
-        local Lighting = game:GetService("Lighting")
         if state then
             Lighting.Brightness = 2; Lighting.ClockTime = 14
             Lighting.FogEnd = 1e6; Lighting.GlobalShadows = false
@@ -172,5 +275,5 @@ return function(Shared)
         end
     end)
 
-    print("[Main_Functions] Loaded -- Sliders and Movement active")
+    print("[Main_Functions] Loaded -- Performance Suite & Stat Multipliers Active")
 end

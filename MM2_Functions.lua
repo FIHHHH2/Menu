@@ -1,13 +1,13 @@
 -- MM2_Functions.lua
--- Optimized Zero-Lag Combat Engine: Unrestricted Kill Aura, Non-Intrusive Silent Aim,
--- Throttled Gun Drop Scanner, Knife Prediction, and Role ESP
+-- Persistent Chams/ESP Engine, Smooth Noclip Tween Coin Collector,
+-- Unrestricted Kill Aura, Non-Intrusive Silent Aim, and Sheriff Dropped Gun Beacon
 
 return function(Shared)
-    local Players    = Shared.Services.Players
-    local RunService = Shared.Services.RunService
-    local UserInput  = Shared.Services.UserInput
-    local TweenSvc   = Shared.Services.TweenService
-    local Workspace  = Shared.Services.Workspace
+    local Players      = Shared.Services.Players
+    local RunService   = Shared.Services.RunService
+    local UserInput    = Shared.Services.UserInput
+    local TweenService = Shared.Services.TweenService
+    local Workspace    = Shared.Services.Workspace
 
     local Player    = Shared.Player
     local Tabs      = Shared.Tabs or {}
@@ -109,7 +109,7 @@ return function(Shared)
         return best
     end
 
-    -- ── Cached Gun Drop Scanner (Zero Lag) ─────────────────────────
+    -- ── Cached Gun Drop Scanner ──────────────────────────────────
     local cachedGunDrop = nil
     task.spawn(function()
         while true do
@@ -140,7 +140,6 @@ return function(Shared)
     MkSection(leftCol, "Kill Aura Engine", 1)
 
     local auraBoxPart = nil
-
     local function updateVisualizer(hrp, radius)
         if not auraBoxPart then
             auraBoxPart = Instance.new("Part")
@@ -168,51 +167,36 @@ return function(Shared)
     end
 
     local function clearVisualizer()
-        if auraBoxPart then
-            auraBoxPart:Destroy()
-            auraBoxPart = nil
-        end
+        if auraBoxPart then auraBoxPart:Destroy(); auraBoxPart = nil end
     end
 
     MkToggle(leftCol, "Kill Aura Box Visualizer", "KillAuraBox", 2, function(state)
-        if not state then
-            clearVisualizer()
-        end
+        if not state then clearVisualizer() end
     end)
 
     MkSlider(leftCol, "Aura Radius (studs)", "KillAuraRadius", 5, 80, 20, 3, function(val)
         Shared.Flags["KillAuraRadius"] = val
         if Shared.Flags["KillAuraBox"] then
-            local hrp = getHRP()
-            if hrp then updateVisualizer(hrp, val) end
+            local hrp = getHRP(); if hrp then updateVisualizer(hrp, val) end
         end
     end)
 
-    MkToggle(leftCol, "Kill Aura (All Players)", "KillAura", 4, function(state)
-    end)
+    MkToggle(leftCol, "Kill Aura (All Players)", "KillAura", 4, function(state) end)
 
-    -- Dedicated Independent Visualizer Loop (Always works regardless of KillAura attack state)
     RunService.RenderStepped:Connect(function()
         if Shared.Flags["KillAuraBox"] then
             local hrp = getHRP()
-            if hrp then
-                local radius = Shared.Flags["KillAuraRadius"] or 20
-                updateVisualizer(hrp, radius)
-            else
-                clearVisualizer()
-            end
+            if hrp then updateVisualizer(hrp, Shared.Flags["KillAuraRadius"] or 20) else clearVisualizer() end
         else
             clearVisualizer()
         end
     end)
 
-    -- Attack Loop
     RunService.Heartbeat:Connect(function()
         if not Shared.Flags["KillAura"] then return end
         if not selfAliveInRound() then return end
 
-        local hrp = getHRP()
-        if not hrp then return end
+        local hrp = getHRP(); if not hrp then return end
         local radius = Shared.Flags["KillAuraRadius"] or 20
 
         for _, plr in ipairs(Players:GetPlayers()) do
@@ -230,9 +214,7 @@ return function(Shared)
                     local gun = getMyGun()
                     if gun then
                         local handle = gun:FindFirstChild("Handle") or gun:FindFirstChildOfClass("BasePart")
-                        if handle then
-                            pcall(function() firetouchinterest(tHRP, handle, 0) end)
-                        end
+                        if handle then pcall(function() firetouchinterest(tHRP, handle, 0) end) end
                     end
                     pcall(function()
                         local kk = game:GetService("ReplicatedStorage").Remotes.Gameplay:FindFirstChild("KnifeKill")
@@ -245,13 +227,11 @@ return function(Shared)
         end
     end)
 
-    MkSection(leftCol, "Silent Aim (Direct Bullet Redirection)", 10)
+    -- ── SILENT AIM ENGINE ─────────────────────────────────────────
+    MkSection(leftCol, "Silent Aim (Bullet Redirection)", 10)
 
-    -- Resolved GunBeam remote path (the actual MM2 gun fire remote)
     local GUN_BEAM_REMOTE = nil
-    pcall(function()
-        GUN_BEAM_REMOTE = game:GetService("ReplicatedStorage").WeaponEvents.GunBeam
-    end)
+    pcall(function() GUN_BEAM_REMOTE = game:GetService("ReplicatedStorage").WeaponEvents.GunBeam end)
 
     local hooksInstalled = false
     local function installSilentAimHooks()
@@ -266,7 +246,6 @@ return function(Shared)
 
         setreadonly(mt, false)
 
-        -- Hook Mouse.Hit / Mouse.Target / Mouse.UnitRay (for crosshair visual only)
         rawset(mt, "__index", function(self, key)
             if Shared.Flags["SilentAim"] and typeof(self) == "Instance" and self:IsA("Mouse") then
                 local target = getSilentAimTarget()
@@ -289,12 +268,9 @@ return function(Shared)
 
         rawset(mt, "__namecall", function(self, ...)
             local method = getnamecallmethod()
-
             if Shared.Flags["SilentAim"] then
                 local args = {...}
-
-                -- Primary: intercept GunBeam FireServer specifically
-                if (method == "FireServer" or method == "InvokeServer") then
+                if method == "FireServer" or method == "InvokeServer" then
                     local isGunRemote = (
                         self == GUN_BEAM_REMOTE
                         or self.Name == "GunBeam"
@@ -303,9 +279,7 @@ return function(Shared)
                         or self.Name == "BulletHit"
                         or self.Name == "Shoot"
                     )
-
                     if not isGunRemote then
-                        -- Fallback: check by path fragments
                         local fullPath = self:GetFullName():lower()
                         isGunRemote = (
                             fullPath:find("gunbeam") or fullPath:find("gunfired") or
@@ -323,19 +297,14 @@ return function(Shared)
                                 elseif typeof(v) == "CFrame" then
                                     args[i] = target.CFrame
                                 elseif typeof(v) == "Instance" and v:IsA("BasePart") then
-                                    -- Replace target part reference with murderer HRP
                                     args[i] = target
                                 end
                             end
                         end
                         return oldNamecall(self, table.unpack(args))
                     end
-
-                    -- Secondary: Raycast redirection (workspace-level gun physics)
-                    return oldNamecall(self, table.unpack(args))
                 end
 
-                -- Workspace:Raycast / FindPartOnRay direction override
                 if method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
                     local target = getSilentAimTarget()
                     if target then
@@ -350,7 +319,6 @@ return function(Shared)
                     return oldNamecall(self, table.unpack(args))
                 end
             end
-
             return oldNamecall(self, ...)
         end)
 
@@ -360,14 +328,183 @@ return function(Shared)
     MkToggle(leftCol, "Silent Aim (Auto Hit Murderer)", "SilentAim", 11, function(state)
         if state then
             installSilentAimHooks()
-            Shared.Notify("Silent Aim", "Hooks active — targeting Murderer", true)
+            Shared.Notify("Silent Aim", "Hooks Active -- Auto Targeting Murderer", true)
         end
     end)
 
-    MkSection(leftCol, "Auto Grab Gun (Dead Drop)", 20)
+    -- ── AUTO COIN COLLECTOR (SMOOTH NOCLIP TWEEN) ────────────────
+    MkSection(leftCol, "Auto Coin Collector (Noclip Tween)", 20)
+
+    local function getActiveCoins()
+        local coins = {}
+        local container = (Workspace:FindFirstChild("Normal") and Workspace.Normal:FindFirstChild("CoinContainer"))
+                       or Workspace:FindFirstChild("CoinContainer")
+                       or (Workspace:FindFirstChild("Map") and Workspace.Map:FindFirstChild("CoinContainer"))
+
+        if container then
+            for _, c in ipairs(container:GetChildren()) do
+                local part = c:IsA("BasePart") and c or c:FindFirstChildOfClass("BasePart") or c:FindFirstChild("CoinVisual")
+                if part then table.insert(coins, part) end
+            end
+        end
+
+        if #coins == 0 then
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if (obj.Name == "Coin_Server" or obj.Name == "Coin" or obj.Name == "CoinVisual") and obj:IsA("BasePart") then
+                    local lobby = Workspace:FindFirstChild("Lobby")
+                    if not (lobby and obj:IsDescendantOf(lobby)) then
+                        table.insert(coins, obj)
+                    end
+                end
+            end
+        end
+        return coins
+    end
+
+    local coinCollectorRunning = false
+    local currentCoinTween = nil
+
+    local function stopCoinCollector()
+        coinCollectorRunning = false
+        if currentCoinTween then
+            pcall(function() currentCoinTween:Cancel() end)
+            currentCoinTween = nil
+        end
+    end
+
+    MkToggle(leftCol, "Auto Collect Coins (Tween)", "AutoCoins", 21, function(state)
+        if not state then
+            stopCoinCollector()
+            return
+        end
+
+        coinCollectorRunning = true
+        task.spawn(function()
+            while coinCollectorRunning and Shared.Flags["AutoCoins"] do
+                if selfAliveInRound() then
+                    local myHRP = getHRP()
+                    if myHRP then
+                        local coins = getActiveCoins()
+                        local bestCoin, bestDist = nil, math.huge
+                        for _, c in ipairs(coins) do
+                            if c and c.Parent then
+                                local d = (c.Position - myHRP.Position).Magnitude
+                                if d < bestDist then bestDist = d; bestCoin = c end
+                            end
+                        end
+
+                        if bestCoin and bestCoin.Parent then
+                            -- Noclip character while tweening
+                            local char = getChar()
+                            if char then
+                                for _, p in ipairs(char:GetDescendants()) do
+                                    if p:IsA("BasePart") then p.CanCollide = false end
+                                end
+                            end
+
+                            local speed = Shared.Flags["CoinTweenSpeed"] or 32
+                            local duration = math.clamp(bestDist / speed, 0.1, 8.0)
+                            local targetCF = CFrame.new(bestCoin.Position)
+
+                            currentCoinTween = TweenService:Create(myHRP, TweenInfo.new(duration, Enum.EasingStyle.Linear), {
+                                CFrame = targetCF
+                            })
+                            currentCoinTween:Play()
+
+                            local reached = false
+                            local waitTime = 0
+                            while waitTime < duration and coinCollectorRunning and Shared.Flags["AutoCoins"] and bestCoin.Parent do
+                                task.wait(0.05)
+                                waitTime = waitTime + 0.05
+                                pcall(function()
+                                    firetouchinterest(myHRP, bestCoin, 0)
+                                    firetouchinterest(myHRP, bestCoin, 1)
+                                end)
+                                if (bestCoin.Position - myHRP.Position).Magnitude < 3 then
+                                    reached = true
+                                    break
+                                end
+                            end
+                            pcall(function() currentCoinTween:Cancel() end)
+                            task.wait(0.08)
+                        else
+                            task.wait(0.5)
+                        end
+                    else
+                        task.wait(0.5)
+                    end
+                else
+                    task.wait(0.5)
+                end
+            end
+        end)
+    end)
+
+    MkSlider(leftCol, "Coin Tween Speed", "CoinTweenSpeed", 15, 75, 35, 22, function(val)
+        Shared.Flags["CoinTweenSpeed"] = val
+    end)
+
+    -- Coin ESP & Visualizer
+    local coinESPObjects = {}
+    local coinESPConn = nil
+    local function clearCoinESP()
+        for _, obj in pairs(coinESPObjects) do pcall(function() obj:Destroy() end) end
+        coinESPObjects = {}
+    end
+
+    MkToggle(leftCol, "Coin ESP & Visualizer", "CoinESP", 23, function(state)
+        clearCoinESP()
+        if coinESPConn then coinESPConn:Disconnect(); coinESPConn = nil end
+        if not state then return end
+
+        coinESPConn = RunService.RenderStepped:Connect(function()
+            local myHRP = getHRP()
+            local coins = getActiveCoins()
+            local activeCoinsMap = {}
+
+            for _, c in ipairs(coins) do
+                if c and c.Parent then
+                    activeCoinsMap[c] = true
+                    if not coinESPObjects[c] then
+                        local bb = Instance.new("BillboardGui")
+                        bb.Name         = "CoinTag"
+                        bb.Size         = UDim2.new(0, 80, 0, 20)
+                        bb.StudsOffset  = Vector3.new(0, 1.5, 0)
+                        bb.AlwaysOnTop  = true
+                        bb.Adornee      = c
+                        bb.Parent       = Shared.GUI
+
+                        local lbl = Instance.new("TextLabel")
+                        lbl.Size                   = UDim2.new(1, 0, 1, 0)
+                        lbl.BackgroundTransparency = 0.3
+                        lbl.BackgroundColor3       = Color3.fromRGB(40, 32, 5)
+                        lbl.Font                   = Enum.Font.ArimoBold
+                        lbl.TextSize               = 10
+                        lbl.TextColor3             = Color3.fromRGB(255, 225, 50)
+                        lbl.TextStrokeTransparency = 0
+                        lbl.Parent                 = bb
+
+                        coinESPObjects[c] = bb
+                    end
+                    local dist = myHRP and math.floor((c.Position - myHRP.Position).Magnitude) or 0
+                    local lbl = coinESPObjects[c]:FindFirstChildOfClass("TextLabel")
+                    if lbl then lbl.Text = "[COIN] " .. dist .. "m" end
+                end
+            end
+
+            for c, bb in pairs(coinESPObjects) do
+                if not activeCoinsMap[c] or not c.Parent then
+                    pcall(function() bb:Destroy() end)
+                    coinESPObjects[c] = nil
+                end
+            end
+        end)
+    end)
+
+    MkSection(leftCol, "Auto Grab Gun (Dead Drop)", 30)
 
     local autoGrabConn
-    MkToggle(leftCol, "Auto Grab Dropped Gun", "AutoGrabGun", 21, function(state)
+    MkToggle(leftCol, "Auto Grab Dropped Gun", "AutoGrabGun", 31, function(state)
         if autoGrabConn then autoGrabConn:Disconnect(); autoGrabConn = nil end
         if state then
             autoGrabConn = RunService.Heartbeat:Connect(function()
@@ -459,10 +596,10 @@ return function(Shared)
         end
     end)
 
-    -- ── ESP SECTION (Role ESP + Dedicated Sheriff & Gun Drop ESP) ──
+    -- ── 100% PERSISTENT ESP & HIGHLIGHT CHAMS ─────────────────────
     MkSection(rightCol, "ESP & Visuals", 10)
 
-    local espEntries = {}  -- [plr] = { gui = BillboardGui, hl = Highlight, lbl = TextLabel, lastChar = Character }
+    local espEntries = {}  -- [plr] = { gui = BillboardGui, hl = Highlight, lbl = TextLabel, bg = Frame, lastChar = Character }
     local espConn
 
     local function cleanupPlayerESP(plr)
@@ -475,9 +612,7 @@ return function(Shared)
     end
 
     local function clearAllESP()
-        for plr in pairs(espEntries) do
-            cleanupPlayerESP(plr)
-        end
+        for plr in pairs(espEntries) do cleanupPlayerESP(plr) end
         espEntries = {}
     end
 
@@ -489,80 +624,91 @@ return function(Shared)
         espConn = RunService.RenderStepped:Connect(function()
             local myHRP = getHRP()
 
-            -- Cleanup leaving / removed players
+            -- Clean removed players
             for plr, entry in pairs(espEntries) do
                 if not plr.Parent or not plr.Character or not isAlive(plr) then
                     cleanupPlayerESP(plr)
                 end
             end
 
+            local livingPlayers = {}
             for _, plr in ipairs(Players:GetPlayers()) do
                 if plr ~= Player and plr.Character and isAlive(plr) then
-                    local char = plr.Character
-                    local hrp  = char:FindFirstChild("HumanoidRootPart")
-                    local hum  = char:FindFirstChildOfClass("Humanoid")
+                    table.insert(livingPlayers, plr)
+                end
+            end
 
-                    if hrp and hum and hum.Health > 0 then
-                        local entry = espEntries[plr]
+            for _, plr in ipairs(livingPlayers) do
+                local char = plr.Character
+                local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+                local hum  = char and char:FindFirstChildOfClass("Humanoid")
 
-                        -- Re-create if character respawned
-                        if not entry or entry.lastChar ~= char or not entry.hl.Parent or not entry.gui.Parent then
-                            cleanupPlayerESP(plr)
+                if hrp and hum and hum.Health > 0 then
+                    local entry = espEntries[plr]
 
-                            -- 1. Highlight Outline Chams
-                            local hl = Instance.new("Highlight")
-                            hl.Name                = "Fih_Chams"
-                            hl.Adornee             = char
-                            hl.FillTransparency    = 0.55
-                            hl.OutlineTransparency = 0
-                            hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
-                            hl.Parent              = char
+                    -- Rebind if character respawned or highlight was dropped
+                    if not entry or entry.lastChar ~= char or not (entry.hl and entry.hl.Parent) or not (entry.gui and entry.gui.Parent) then
+                        cleanupPlayerESP(plr)
 
-                            -- 2. Billboard Info Tag
-                            local bb = Instance.new("BillboardGui")
-                            bb.Name         = "Fih_RoleTag"
-                            bb.Size         = UDim2.new(0, 130, 0, 32)
-                            bb.StudsOffset  = Vector3.new(0, 3.8, 0)
-                            bb.AlwaysOnTop  = true
-                            bb.Adornee      = hrp
-                            bb.Parent       = Shared.GUI
+                        -- 1. Highlight Chams (AlwaysOnTop, bound directly to character)
+                        local hl = Instance.new("Highlight")
+                        hl.Name                = "Fih_Chams"
+                        hl.Adornee             = char
+                        hl.FillTransparency    = 0.55
+                        hl.OutlineTransparency = 0
+                        hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
+                        hl.Parent              = char
 
-                            local bg = Instance.new("Frame")
-                            bg.Size                   = UDim2.new(1, 0, 1, 0)
-                            bg.BackgroundColor3       = Color3.fromRGB(15, 18, 24)
-                            bg.BackgroundTransparency = 0.25
-                            bg.BorderSizePixel        = 1
-                            bg.BorderColor3           = Color3.fromRGB(100, 120, 160)
-                            bg.Parent                 = bb
+                        -- 2. AlwaysOnTop Billboard Box & Text
+                        local bb = Instance.new("BillboardGui")
+                        bb.Name         = "Fih_RoleTag"
+                        bb.Size         = UDim2.new(0, 130, 0, 32)
+                        bb.StudsOffset  = Vector3.new(0, 3.8, 0)
+                        bb.AlwaysOnTop  = true
+                        bb.Adornee      = hrp
+                        bb.Parent       = Shared.GUI
 
-                            local lbl = Instance.new("TextLabel")
-                            lbl.Size                   = UDim2.new(1, 0, 1, 0)
-                            lbl.BackgroundTransparency = 1
-                            lbl.Font                   = Enum.Font.ArimoBold
-                            lbl.TextSize               = 11
-                            lbl.TextStrokeTransparency = 0
-                            lbl.TextStrokeColor3       = Color3.fromRGB(0, 0, 0)
-                            lbl.Parent                 = bg
+                        local bg = Instance.new("Frame")
+                        bg.Size                   = UDim2.new(1, 0, 1, 0)
+                        bg.BackgroundColor3       = Color3.fromRGB(15, 18, 24)
+                        bg.BackgroundTransparency = 0.25
+                        bg.BorderSizePixel        = 1
+                        bg.BorderColor3           = Color3.fromRGB(100, 120, 160)
+                        bg.Parent                 = bb
 
-                            entry = { gui = bb, hl = hl, lbl = lbl, bg = bg, lastChar = char }
-                            espEntries[plr] = entry
-                        end
+                        local lbl = Instance.new("TextLabel")
+                        lbl.Size                   = UDim2.new(1, 0, 1, 0)
+                        lbl.BackgroundTransparency = 1
+                        lbl.Font                   = Enum.Font.ArimoBold
+                        lbl.TextSize               = 11
+                        lbl.TextStrokeTransparency = 0
+                        lbl.TextStrokeColor3       = Color3.fromRGB(0, 0, 0)
+                        lbl.Parent                 = bg
 
-                        -- Dynamic Role Detection & Color Update
-                        local role = getRole(plr)
-                        local col, roleTag = Color3.fromRGB(80, 240, 120), "[INNOCENT]"
-                        if role == "Murderer" then
-                            col     = Color3.fromRGB(255, 45, 45)
-                            roleTag = "[★ MURDERER]"
-                        elseif role == "Sheriff" then
-                            col     = Color3.fromRGB(0, 190, 255)
-                            roleTag = "[✦ SHERIFF]"
-                        end
+                        entry = { gui = bb, hl = hl, lbl = lbl, bg = bg, lastChar = char }
+                        espEntries[plr] = entry
+                    end
 
-                        local dist = myHRP and math.floor((hrp.Position - myHRP.Position).Magnitude) or 0
+                    -- Live Role & Color Updates
+                    local role = getRole(plr)
+                    local col, roleTag = Color3.fromRGB(80, 240, 120), "[INNOCENT]"
+                    if role == "Murderer" then
+                        col     = Color3.fromRGB(255, 45, 45)
+                        roleTag = "[★ MURDERER]"
+                    elseif role == "Sheriff" then
+                        col     = Color3.fromRGB(0, 190, 255)
+                        roleTag = "[✦ SHERIFF]"
+                    end
 
+                    local dist = myHRP and math.floor((hrp.Position - myHRP.Position).Magnitude) or 0
+
+                    if entry.hl and entry.hl.Parent then
                         entry.hl.FillColor    = col
                         entry.hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        entry.hl.Adornee      = char
+                    end
+
+                    if entry.bg and entry.lbl then
                         entry.bg.BorderColor3 = col
                         entry.lbl.TextColor3  = col
                         entry.lbl.Text        = roleTag .. " " .. plr.Name .. "\n" .. dist .. " studs"
@@ -572,7 +718,7 @@ return function(Shared)
         end)
     end)
 
-    -- Dedicated Dropped Gun & Sheriff ESP
+    -- Dropped Gun Beacon ESP
     local gunEspHL = nil
     local gunEspBB = nil
     local gunEspConn
@@ -592,7 +738,7 @@ return function(Shared)
             local foundDrop = cachedGunDrop
 
             if foundDrop and foundDrop.Parent then
-                if not gunEspHL or not gunEspHL.Parent then
+                if not gunEspHL or not gunEspHL.Parent or not gunEspBB or not gunEspBB.Parent then
                     clearGunDropESP()
 
                     local hl = Instance.new("Highlight")
@@ -639,9 +785,7 @@ return function(Shared)
 
                 local dist = myHRP and math.floor((foundDrop.Position - myHRP.Position).Magnitude) or 0
                 local lbl = gunEspBB:FindFirstChildOfClass("Frame") and gunEspBB.Frame:FindFirstChildOfClass("TextLabel")
-                if lbl then
-                    lbl.Text = "[⚠ DROPPED GUN]\n" .. dist .. " studs"
-                end
+                if lbl then lbl.Text = "[⚠ DROPPED GUN]\n" .. dist .. " studs" end
             else
                 clearGunDropESP()
             end
@@ -693,5 +837,5 @@ return function(Shared)
         end
     end)
 
-    print("[MM2_Functions] Loaded -- Highlight Chams & Real-Time Role ESP Online")
+    print("[MM2_Functions] Loaded -- Persistent Chams/ESP & Smooth Tween Auto-Coin Online")
 end
