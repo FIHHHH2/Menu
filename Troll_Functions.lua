@@ -284,9 +284,12 @@ return function(Shared)
             local look  = tHRP.CFrame.LookVector
             local power = Shared.Flags["PushForce"] or 220
 
-            -- Keep all parts collidable
-            for _, p in ipairs(getChar():GetDescendants()) do
-                if p:IsA("BasePart") then p.CanCollide = true end
+            -- Enable collision only on main torso/HRP for momentum transfer
+            myHRP.CanCollide = true
+            local char = getChar()
+            if char then
+                local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+                if torso then torso.CanCollide = true end
             end
 
             -- Plant behind target

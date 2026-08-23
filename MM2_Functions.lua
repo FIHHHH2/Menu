@@ -29,6 +29,19 @@ return function(Shared)
     local function getHRP()   local c = getChar(); return c and c:FindFirstChild("HumanoidRootPart") end
     local function getHuman() local c = getChar(); return c and c:FindFirstChildOfClass("Humanoid") end
 
+    local function restoreDefaultCollisions(char)
+        if not char then return end
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                if part.Name == "HumanoidRootPart" or part.Name == "UpperTorso" or part.Name == "LowerTorso" or part.Name == "Torso" or part.Name == "Head" then
+                    part.CanCollide = true
+                else
+                    part.CanCollide = false
+                end
+            end
+        end
+    end
+
     local function isAlive(plr)
         if not plr or not plr.Character then return false end
         local hum = plr.Character:FindFirstChildOfClass("Humanoid")
@@ -370,6 +383,8 @@ return function(Shared)
             pcall(function() currentCoinTween:Cancel() end)
             currentCoinTween = nil
         end
+        local char = getChar()
+        if char then restoreDefaultCollisions(char) end
     end
 
     MkToggle(leftCol, "Auto Collect Coins (Tween)", "AutoCoins", 21, function(state)

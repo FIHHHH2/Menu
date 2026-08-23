@@ -27,6 +27,20 @@ return function(Shared)
     local function getHRP()   return Shared.HumanoidRP or (getChar() and getChar():FindFirstChild("HumanoidRootPart")) end
     local function getHuman() return getChar() and getChar():FindFirstChildOfClass("Humanoid") end
 
+    local function restoreDefaultCollisions(char)
+        if not char then return end
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                if part.Name == "HumanoidRootPart" or part.Name == "UpperTorso" or part.Name == "LowerTorso" or part.Name == "Torso" or part.Name == "Head" then
+                    part.CanCollide = true
+                else
+                    -- Limbs (arms, legs, hands, feet) and accessory handles MUST be CanCollide = false
+                    part.CanCollide = false
+                end
+            end
+        end
+    end
+
     -- ── LEFT COLUMN: MOVEMENT & PHYSICS ──────────────────────────
     MkSection(leftCol, "Movement & Physics", 1)
 
@@ -76,9 +90,8 @@ return function(Shared)
                 for _, p in ipairs(char:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end
             end)
         else
-            local char = getChar(); if char then
-                for _, p in ipairs(char:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end
-            end
+            local char = getChar()
+            if char then restoreDefaultCollisions(char) end
         end
     end)
 
@@ -233,6 +246,7 @@ return function(Shared)
         local hum = char:WaitForChild("Humanoid"); task.wait(0.1)
         hum.WalkSpeed  = Shared.Flags["WalkSpeed"]  or 16
         hum.JumpHeight = Shared.Flags["JumpHeight"] or 7
+        restoreDefaultCollisions(char)
     end)
 
     MkSection(rightCol, "World Modifiers", 20)
@@ -241,9 +255,18 @@ return function(Shared)
         workspace.Gravity = val
     end)
 
-    MkSlider(rightCol, "Reach Extender", "Reach", 4, 60, 4, 22, function(val)
+    MkSlider(rightCol, "Reach Extender", "Reach", 2, 40, 2, 22, function(val)
         local hrp = getHRP()
-        if hrp then hrp.Size = Vector3.new(val, hrp.Size.Y, val) end
+        if hrp then
+            if val <= 2 then
+                hrp.Size = Vector3.new(2, 2, 1)
+                hrp.CanCollide = true
+            else
+                hrp.Size = Vector3.new(val, 2, val)
+                -- Keep enlarged root part non-collidable so player can fit through tight spaces and doors
+                hrp.CanCollide = false
+            end
+        end
     end)
 
     local antiAimConn
