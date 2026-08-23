@@ -304,6 +304,188 @@ return function(Shared)
         end
     end)
 
+    -- ── RIGHT COLUMN: UNIVERSAL ESP & CROSS-PLAYER DETECTION ──────
+    MkSection(rightCol, "Universal ESP & Peer Radar", 35)
+
+    local peerUsers = {}          -- [UserId] = true
+    local universalESPList = {}   -- [Player] = { gui = BillboardGui, hl = Highlight, lbl = TextLabel, bg = Frame }
+    local universalESPConn = nil
+
+    -- Invisible Unicode Handshake Beacon (Hidden from Chat GUI)
+    local BEACON_SIG = "\226\128\139\226\128\140FIH_SIG\226\128\139"
+
+    local function broadcastBeacon()
+        pcall(function()
+            local tcs = game:GetService("TextChatService")
+            if tcs and tcs.ChatVersion == Enum.ChatVersion.TextChatService then
+                local genChannel = tcs:FindFirstChild("TextChannels") and tcs.TextChannels:FindFirstChild("RBXGeneral")
+                if genChannel then genChannel:SendAsync(BEACON_SIG) end
+            else
+                local sayReq = game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
+                            and game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
+                if sayReq then sayReq:FireServer(BEACON_SIG, "All") end
+            end
+        end)
+    end
+
+    -- Peer listener
+    task.spawn(function()
+        pcall(function()
+            local tcs = game:GetService("TextChatService")
+            if tcs and tcs.ChatVersion == Enum.ChatVersion.TextChatService then
+                tcs.MessageReceived:Connect(function(msg)
+                    if msg.Text and msg.Text:find("FIH_SIG") and msg.TextSource then
+                        local senderId = msg.TextSource.UserId
+                        if senderId and senderId ~= Player.UserId and not peerUsers[senderId] then
+                            peerUsers[senderId] = true
+                            local senderPlr = Players:GetPlayerByUserId(senderId)
+                            local name = senderPlr and senderPlr.DisplayName or ("User " .. tostring(senderId))
+                            Shared.Notify("Peer Detected", name .. " is running this script!", true)
+                        end
+                    end
+                end)
+            end
+        end)
+
+        -- Legacy chat listener
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= Player then
+                plr.Chatted:Connect(function(msg)
+                    if msg:find("FIH_SIG") and not peerUsers[plr.UserId] then
+                        peerUsers[plr.UserId] = true
+                        Shared.Notify("Peer Detected", plr.DisplayName .. " is running this script!", true)
+                    end
+                end)
+            end
+        end
+        Players.PlayerAdded:Connect(function(plr)
+            if plr ~= Player then
+                plr.Chatted:Connect(function(msg)
+                    if msg:find("FIH_SIG") and not peerUsers[plr.UserId] then
+                        peerUsers[plr.UserId] = true
+                        Shared.Notify("Peer Detected", plr.DisplayName .. " is running this script!", true)
+                    end
+                end)
+            end
+        end)
+
+        -- Periodic invisible broadcast
+        while true do
+            if Shared.Flags["PeerDetect"] or Shared.Flags["UniversalESP"] then
+                broadcastBeacon()
+            end
+            task.wait(12)
+        end
+    end)
+
+    local function cleanupUniversalESP(plr)
+        local item = universalESPList[plr]
+        if item then
+            pcall(function() if item.gui then item.gui:Destroy() end end)
+            pcall(function() if item.hl then item.hl:Destroy() end end)
+            universalESPList[plr] = nil
+        end
+    end
+
+    local function clearAllUniversalESP()
+        for plr in pairs(universalESPList) do cleanupUniversalESP(plr) end
+        universalESPList = {}
+    end
+
+    MkToggle(rightCol, "Universal Player ESP & Chams", "UniversalESP", 36, function(state)
+        clearAllUniversalESP()
+        if universalESPConn then universalESPConn:Disconnect(); universalESPConn = nil end
+        if not state then return end
+
+        broadcastBeacon()
+        universalESPConn = RunService.RenderStepped:Connect(function()
+            local myHRP = getHRP()
+
+            -- Clean up dead entries
+            for plr, item in pairs(universalESPList) do
+                if not plr.Parent or not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then
+                    cleanupUniversalESP(plr)
+                end
+            end
+
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= Player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                    local char = plr.Character
+                    local hrp  = char.HumanoidRootPart
+                    local hum  = char:FindFirstChildOfClass("Humanoid")
+                    local isPeer = peerUsers[plr.UserId] == true
+
+                    if hum and hum.Health > 0 then
+                        local entry = universalESPList[plr]
+
+                        if not entry or not (entry.hl and entry.hl.Parent) or not (entry.gui and entry.gui.Parent) then
+                            cleanupUniversalESP(plr)
+
+                            local hl = Instance.new("Highlight")
+                            hl.Name                = "Fih_UnivChams"
+                            hl.Adornee             = char
+                            hl.FillTransparency    = 0.5
+                            hl.OutlineTransparency = 0
+                            hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
+                            hl.Parent              = char
+
+                            local bb = Instance.new("BillboardGui")
+                            bb.Name         = "Fih_UnivTag"
+                            bb.Size         = UDim2.new(0, 140, 0, 34)
+                            bb.StudsOffset  = Vector3.new(0, 3.8, 0)
+                            bb.AlwaysOnTop  = true
+                            bb.Adornee      = hrp
+                            bb.Parent       = Shared.GUI
+
+                            local bg = Instance.new("Frame")
+                            bg.Size                   = UDim2.new(1, 0, 1, 0)
+                            bg.BackgroundColor3       = Color3.fromRGB(15, 18, 24)
+                            bg.BackgroundTransparency = 0.2
+                            bg.BorderSizePixel        = 1
+                            bg.BorderColor3           = isPeer and Color3.fromRGB(255, 200, 0) or Color3.fromRGB(0, 170, 255)
+                            bg.Parent                 = bb
+
+                            local lbl = Instance.new("TextLabel")
+                            lbl.Size                   = UDim2.new(1, 0, 1, 0)
+                            lbl.BackgroundTransparency = 1
+                            lbl.Font                   = Enum.Font.ArimoBold
+                            lbl.TextSize               = 11
+                            lbl.TextStrokeTransparency = 0
+                            lbl.Parent                 = bg
+
+                            entry = { gui = bb, hl = hl, lbl = lbl, bg = bg }
+                            universalESPList[plr] = entry
+                        end
+
+                        local dist = myHRP and math.floor((hrp.Position - myHRP.Position).Magnitude) or 0
+                        local hp = math.floor(hum.Health)
+                        local maxHp = math.floor(hum.MaxHealth)
+
+                        local themeCol = isPeer and Color3.fromRGB(255, 200, 0) or Color3.fromRGB(0, 190, 255)
+                        local tagPrefix = isPeer and "[👑 FIH USER] " or ""
+
+                        if entry.hl and entry.hl.Parent then
+                            entry.hl.FillColor    = themeCol
+                            entry.hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        end
+                        if entry.bg and entry.lbl then
+                            entry.bg.BorderColor3 = themeCol
+                            entry.lbl.TextColor3  = themeCol
+                            entry.lbl.Text        = tagPrefix .. plr.DisplayName .. "\n" .. hp .. "/" .. maxHp .. " HP | " .. dist .. "m"
+                        end
+                    end
+                end
+            end
+        end)
+    end)
+
+    MkToggle(rightCol, "Cross-Player Detection (Peer Radar)", "PeerDetect", 37, function(state)
+        if state then
+            broadcastBeacon()
+            Shared.Notify("Peer Radar", "Searching for other users in this server...", true)
+        end
+    end)
+
     -- ── RIGHT COLUMN: SERVER & TELEPORTS ─────────────────────────
     local TeleportService = game:GetService("TeleportService")
     local HttpService     = game:GetService("HttpService")
