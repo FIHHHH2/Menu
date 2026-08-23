@@ -878,8 +878,8 @@ return function(Shared)
     local function buildKeybindsUI()
         for _, c in ipairs(keybindCols.Left:GetChildren()) do if not c:IsA("UIListLayout") then c:Destroy() end end
         for _, c in ipairs(keybindCols.Right:GetChildren()) do if not c:IsA("UIListLayout") then c:Destroy() end end
-        makeSection(keybindCols.Left, "Features (A-M)", 1)
-        makeSection(keybindCols.Right, "Features (N-Z)", 1)
+        makeSection(keybindCols.Left, "Features (A-M)  [R-Click Clears]", 1)
+        makeSection(keybindCols.Right, "Features (N-Z)  [R-Click Clears]", 1)
         local toggleList = {}
         for fKey, info in pairs(Shared.Toggles) do table.insert(toggleList, {Key=fKey, Info=info}) end
         table.sort(toggleList, function(a,b) return a.Info.Name < b.Info.Name end)
@@ -910,6 +910,16 @@ return function(Shared)
 
             bindBtn.MouseButton1Click:Connect(function()
                 listeningKeyFor = fKey; bindBtn.Text = "[ ... ]"; bindBtn.TextColor3 = Color3.fromRGB(220,80,0)
+            end)
+
+            -- Right-click to clear keybind
+            bindBtn.MouseButton2Click:Connect(function()
+                if Shared.Toggles[fKey] then
+                    Shared.Toggles[fKey].Key = nil
+                    sendNotification(Shared.Toggles[fKey].Name, "Keybind Cleared", nil)
+                    saveConfigDebounced()
+                    buildKeybindsUI()
+                end
             end)
         end
 
