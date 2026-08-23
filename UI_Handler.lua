@@ -116,7 +116,7 @@ return function(Shared)
         if plr == Shared.Player then saveConfig() end
     end)
     
-    -- Client-side exit / teleport hooks
+    -- Client-side exit / disconnect / teleport hooks
     pcall(function()
         game:GetService("GuiService").ErrorMessageChanged:Connect(function()
             saveConfig()
@@ -124,6 +124,11 @@ return function(Shared)
     end)
     pcall(function()
         game:GetService("TeleportService").TeleportInitFailed:Connect(function()
+            saveConfig()
+        end)
+    end)
+    pcall(function()
+        UserInput.WindowFocusReleased:Connect(function()
             saveConfig()
         end)
     end)
