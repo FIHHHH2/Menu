@@ -1,6 +1,6 @@
 -- UI_Handler.lua
 -- Internet Explorer 7 / Windows XP Modular UI
--- Pixel-perfect cube geometry, Topbar "Fih Ui" header, Settings drawer, Notification stack (Pure in-memory execution)
+-- Pixel-perfect cube geometry, Topbar "Fih Ui" header, Settings drawer, Auto config save/load (Client-safe, zero BindToClose)
 
 return function(Shared)
     Shared.Tabs         = {}
@@ -12,10 +12,13 @@ return function(Shared)
     Shared.SwitchTab    = function() end
     Shared.ToggleDrawer = function() end
     Shared.Notify       = function() end
+    Shared.SaveConfig   = function() end
+    Shared.LoadConfig   = function() end
 
     local TweenService = Shared.Services.TweenService
     local UserInput    = Shared.Services.UserInput
     local CoreGui      = Shared.Services.CoreGui
+    local Http         = Shared.Services.Http
 
     if CoreGui:FindFirstChild("IE7_Menu") then
         CoreGui:FindFirstChild("IE7_Menu"):Destroy()
@@ -56,6 +59,67 @@ return function(Shared)
         NotifyBg      = Color3.fromRGB(250, 250, 255),
         NotifyBorder  = Color3.fromRGB(58, 110, 165),
     }
+
+    -- ============================================================
+    -- CLIENT-SIDE CONFIG PERSISTENCE (Safe writefile, zero BindToClose)
+    -- ============================================================
+    local CONFIG_FILE = "FihUi_Config.json"
+
+    local function saveConfig()
+        pcall(function()
+            if writefile then
+                local data = {
+                    Flags        = Shared.Flags,
+                    SpotifyToken = Shared.Config.SpotifyToken or "",
+                    LastFMUser   = Shared.Config.LastFMUser or "",
+                    Keybinds     = {},
+                }
+                for fKey, item in pairs(Shared.Toggles) do
+                    if item.Key then
+                        data.Keybinds[fKey] = item.Key.Name
+                    end
+                end
+                writefile(CONFIG_FILE, Http:JSONEncode(data))
+            end
+        end)
+    end
+    Shared.SaveConfig = saveConfig
+
+    local function loadConfig()
+        pcall(function()
+            if isfile and readfile and isfile(CONFIG_FILE) then
+                local raw = readfile(CONFIG_FILE)
+                local data = Http:JSONDecode(raw)
+                if data then
+                    Shared.Config.SpotifyToken = data.SpotifyToken or ""
+                    Shared.Config.LastFMUser   = data.LastFMUser or ""
+                    if data.Flags then
+                        for k, v in pairs(data.Flags) do
+                            Shared.Flags[k] = v
+                            -- Update active toggles if already registered
+                            if Shared.Toggles[k] and Shared.Toggles[k].SetToggle and type(v) == "boolean" then
+                                Shared.Toggles[k].SetToggle(v, true)
+                            end
+                        end
+                    end
+                    if data.Keybinds then
+                        for fKey, kName in pairs(data.Keybinds) do
+                            local code = Enum.KeyCode[kName]
+                            if code and Shared.Toggles[fKey] then
+                                Shared.Toggles[fKey].Key = code
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end
+    Shared.LoadConfig = loadConfig
+
+    -- Client-side exit hook (fires when local player leaves)
+    Shared.Services.Players.PlayerRemoving:Connect(function(plr)
+        if plr == Shared.Player then saveConfig() end
+    end)
 
     -- ============================================================
     -- NOTIFICATION STACK
@@ -419,7 +483,7 @@ return function(Shared)
     DrawerTitle.Size                  = UDim2.new(1, -85, 1, 0)
     DrawerTitle.Position              = UDim2.new(0, 8, 0, 0)
     DrawerTitle.BackgroundTransparency = 1
-    DrawerTitle.Text                  = "Settings & Audio Controls"
+    DrawerTitle.Text                  = "Settings & Configuration"
     DrawerTitle.TextColor3            = C.SectionText
     DrawerTitle.Font                  = Enum.Font.Code
     DrawerTitle.TextSize              = 11
@@ -714,6 +778,7 @@ return function(Shared)
             if not suppressNotify then
                 sendNotification(labelText, state and "ENABLED" or "DISABLED", state)
             end
+            saveConfig()
         end
 
         local clickOverlay = Instance.new("TextButton")
@@ -798,6 +863,7 @@ return function(Shared)
             fill.Size = UDim2.new(pct, 0, 1, 0)
             valLbl.Text = tostring(val)
             if callback then callback(val) end
+            saveConfig()
         end
 
         local sliderBtn = Instance.new("TextButton")
@@ -933,6 +999,7 @@ return function(Shared)
                         Shared.Toggles[target].Key = input.KeyCode
                         sendNotification(Shared.Toggles[target].Name, "Bound to [" .. input.KeyCode.Name .. "]", true)
                     end
+                    saveConfig()
                     buildKeybindsUI()
                 else
                     for fKey, info in pairs(Shared.Toggles) do
@@ -945,11 +1012,19 @@ return function(Shared)
         end)
     end
 
-    task.delay(0.6, buildKeybindsUI)
+    task.delay(0.6, function()
+        loadConfig()
+        buildKeybindsUI()
+    end)
 
     -- SETTINGS DRAWER POPULATION
-    makeSection(DrawerScroll, "General Controls", 1)
-    makeButton(DrawerScroll, "Unload / Force Close Menu", 2, function()
+    makeSection(DrawerScroll, "General & Engine", 1)
+    makeButton(DrawerScroll, "Save Config File (Manual)", 2, function()
+        saveConfig()
+        sendNotification("Config Manager", "Saved to FihUi_Config.json", true)
+    end)
+    makeButton(DrawerScroll, "Unload / Force Close Menu", 3, function()
+        saveConfig()
         if Shared.GUI then Shared.GUI:Destroy() end
         for k in pairs(Shared.Flags) do Shared.Flags[k] = false end
     end)
@@ -993,5 +1068,5 @@ return function(Shared)
     Shared.RebuildKeybinds = buildKeybindsUI
 
     switchTab("Main")
-    print("[UI_Handler] Loaded -- Pure in-memory execution")
+    print("[UI_Handler] Loaded -- Fih Ui header, client persistence (zero BindToClose)")
 end
