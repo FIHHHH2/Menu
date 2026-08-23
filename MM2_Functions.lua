@@ -423,99 +423,188 @@ return function(Shared)
     -- ── ESP SECTION (Role ESP + Dedicated Sheriff & Gun Drop ESP) ──
     MkSection(rightCol, "ESP & Visuals", 10)
 
-    local espHighlights = {}
+    local espEntries = {}  -- [plr] = { gui = BillboardGui, hl = Highlight, lbl = TextLabel, lastChar = Character }
     local espConn
-    MkToggle(rightCol, "Role ESP (All Players)", "RoleESP", 11, function(state)
-        for _, h in pairs(espHighlights) do pcall(function() h.gui:Destroy() end) end
-        espHighlights = {}
+
+    local function cleanupPlayerESP(plr)
+        local entry = espEntries[plr]
+        if entry then
+            pcall(function() if entry.gui then entry.gui:Destroy() end end)
+            pcall(function() if entry.hl then entry.hl:Destroy() end end)
+            espEntries[plr] = nil
+        end
+    end
+
+    local function clearAllESP()
+        for plr in pairs(espEntries) do
+            cleanupPlayerESP(plr)
+        end
+        espEntries = {}
+    end
+
+    MkToggle(rightCol, "Role ESP & Highlight Chams", "RoleESP", 11, function(state)
+        clearAllESP()
         if espConn then espConn:Disconnect(); espConn = nil end
         if not state then return end
-        espConn = RunService.Heartbeat:Connect(function()
+
+        espConn = RunService.RenderStepped:Connect(function()
+            local myHRP = getHRP()
+
+            -- Cleanup leaving / removed players
+            for plr, entry in pairs(espEntries) do
+                if not plr.Parent or not plr.Character or not isAlive(plr) then
+                    cleanupPlayerESP(plr)
+                end
+            end
+
             for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= Player and plr.Character then
-                    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                    local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+                if plr ~= Player and plr.Character and isAlive(plr) then
+                    local char = plr.Character
+                    local hrp  = char:FindFirstChild("HumanoidRootPart")
+                    local hum  = char:FindFirstChildOfClass("Humanoid")
+
                     if hrp and hum and hum.Health > 0 then
-                        if not espHighlights[plr] then
+                        local entry = espEntries[plr]
+
+                        -- Re-create if character respawned
+                        if not entry or entry.lastChar ~= char or not entry.hl.Parent or not entry.gui.Parent then
+                            cleanupPlayerESP(plr)
+
+                            -- 1. Highlight Outline Chams
+                            local hl = Instance.new("Highlight")
+                            hl.Name                = "Fih_Chams"
+                            hl.Adornee             = char
+                            hl.FillTransparency    = 0.55
+                            hl.OutlineTransparency = 0
+                            hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
+                            hl.Parent              = char
+
+                            -- 2. Billboard Info Tag
                             local bb = Instance.new("BillboardGui")
-                            bb.Name = "FihESP"; bb.Size = UDim2.new(0,80,0,24)
-                            bb.StudsOffset = Vector3.new(0,3,0); bb.AlwaysOnTop = true
-                            bb.Adornee = hrp; bb.Parent = Shared.GUI
+                            bb.Name         = "Fih_RoleTag"
+                            bb.Size         = UDim2.new(0, 130, 0, 32)
+                            bb.StudsOffset  = Vector3.new(0, 3.8, 0)
+                            bb.AlwaysOnTop  = true
+                            bb.Adornee      = hrp
+                            bb.Parent       = Shared.GUI
+
+                            local bg = Instance.new("Frame")
+                            bg.Size                   = UDim2.new(1, 0, 1, 0)
+                            bg.BackgroundColor3       = Color3.fromRGB(15, 18, 24)
+                            bg.BackgroundTransparency = 0.25
+                            bg.BorderSizePixel        = 1
+                            bg.BorderColor3           = Color3.fromRGB(100, 120, 160)
+                            bg.Parent                 = bb
+
                             local lbl = Instance.new("TextLabel")
-                            lbl.Size = UDim2.new(1,0,1,0); lbl.BackgroundTransparency = 0.3
-                            lbl.BackgroundColor3 = Color3.fromRGB(15,15,20); lbl.Font = Enum.Font.Code
-                            lbl.TextSize = 11; lbl.TextStrokeTransparency = 0; lbl.Parent = bb
-                            espHighlights[plr] = {gui = bb, lbl = lbl}
+                            lbl.Size                   = UDim2.new(1, 0, 1, 0)
+                            lbl.BackgroundTransparency = 1
+                            lbl.Font                   = Enum.Font.ArimoBold
+                            lbl.TextSize               = 11
+                            lbl.TextStrokeTransparency = 0
+                            lbl.TextStrokeColor3       = Color3.fromRGB(0, 0, 0)
+                            lbl.Parent                 = bg
+
+                            entry = { gui = bb, hl = hl, lbl = lbl, bg = bg, lastChar = char }
+                            espEntries[plr] = entry
                         end
+
+                        -- Dynamic Role Detection & Color Update
                         local role = getRole(plr)
-                        local col  = role == "Murderer" and Color3.fromRGB(255,60,60) or (role == "Sheriff" and Color3.fromRGB(60,180,255) or Color3.fromRGB(180,255,180))
-                        local info = espHighlights[plr]
-                        info.lbl.Text = plr.Name .. "\n" .. role
-                        info.lbl.TextColor3 = col
-                    elseif espHighlights[plr] then
-                        pcall(function() espHighlights[plr].gui:Destroy() end)
-                        espHighlights[plr] = nil
+                        local col, roleTag = Color3.fromRGB(80, 240, 120), "[INNOCENT]"
+                        if role == "Murderer" then
+                            col     = Color3.fromRGB(255, 45, 45)
+                            roleTag = "[★ MURDERER]"
+                        elseif role == "Sheriff" then
+                            col     = Color3.fromRGB(0, 190, 255)
+                            roleTag = "[✦ SHERIFF]"
+                        end
+
+                        local dist = myHRP and math.floor((hrp.Position - myHRP.Position).Magnitude) or 0
+
+                        entry.hl.FillColor    = col
+                        entry.hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        entry.bg.BorderColor3 = col
+                        entry.lbl.TextColor3  = col
+                        entry.lbl.Text        = roleTag .. " " .. plr.Name .. "\n" .. dist .. " studs"
                     end
                 end
             end
         end)
     end)
 
-    local gunEspHighlights = {}
+    -- Dedicated Dropped Gun & Sheriff ESP
+    local gunEspHL = nil
+    local gunEspBB = nil
     local gunEspConn
-    MkToggle(rightCol, "Sheriff & Gun Drop ESP", "GunESP", 12, function(state)
-        for _, h in pairs(gunEspHighlights) do pcall(function() h:Destroy() end) end
-        gunEspHighlights = {}
+
+    local function clearGunDropESP()
+        if gunEspHL then gunEspHL:Destroy(); gunEspHL = nil end
+        if gunEspBB then gunEspBB:Destroy(); gunEspBB = nil end
+    end
+
+    MkToggle(rightCol, "Dropped Gun Beacon ESP", "GunESP", 12, function(state)
+        clearGunDropESP()
         if gunEspConn then gunEspConn:Disconnect(); gunEspConn = nil end
         if not state then return end
 
-        gunEspConn = RunService.Heartbeat:Connect(function()
+        gunEspConn = RunService.RenderStepped:Connect(function()
             local myHRP = getHRP()
-            local sheriff = getSheriff()
-            if sheriff and sheriff.Character and sheriff.Character:FindFirstChild("HumanoidRootPart") then
-                local sHRP = sheriff.Character.HumanoidRootPart
-                if not gunEspHighlights["Sheriff"] then
-                    local bb = Instance.new("BillboardGui")
-                    bb.Name = "SheriffESP"; bb.Size = UDim2.new(0, 100, 0, 26)
-                    bb.StudsOffset = Vector3.new(0, 3.8, 0); bb.AlwaysOnTop = true
-                    bb.Adornee = sHRP; bb.Parent = Shared.GUI
-
-                    local lbl = Instance.new("TextLabel")
-                    lbl.Size = UDim2.new(1,0,1,0); lbl.BackgroundTransparency = 0.2
-                    lbl.BackgroundColor3 = Color3.fromRGB(10, 30, 60); lbl.Font = Enum.Font.ArimoBold
-                    lbl.TextSize = 11; lbl.TextColor3 = Color3.fromRGB(0, 200, 255); lbl.Parent = bb
-                    gunEspHighlights["Sheriff"] = bb
-                end
-                local dist = myHRP and math.floor((sHRP.Position - myHRP.Position).Magnitude) or 0
-                local lbl = gunEspHighlights["Sheriff"]:FindFirstChildOfClass("TextLabel")
-                if lbl then lbl.Text = "[★ SHERIFF]\n" .. sheriff.Name .. " (" .. dist .. "m)" end
-            elseif gunEspHighlights["Sheriff"] then
-                pcall(function() gunEspHighlights["Sheriff"]:Destroy() end)
-                gunEspHighlights["Sheriff"] = nil
-            end
-
             local foundDrop = cachedGunDrop
+
             if foundDrop and foundDrop.Parent then
-                if not gunEspHighlights["GunDrop"] then
+                if not gunEspHL or not gunEspHL.Parent then
+                    clearGunDropESP()
+
+                    local hl = Instance.new("Highlight")
+                    hl.Name                = "Fih_GunHL"
+                    hl.Adornee             = foundDrop.Parent:IsA("Tool") and foundDrop.Parent or foundDrop
+                    hl.FillColor           = Color3.fromRGB(255, 215, 0)
+                    hl.OutlineColor        = Color3.fromRGB(255, 255, 255)
+                    hl.FillTransparency    = 0.3
+                    hl.OutlineTransparency = 0
+                    hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
+                    hl.Parent              = foundDrop
+                    gunEspHL = hl
+
                     local bb = Instance.new("BillboardGui")
-                    bb.Name = "GunDropESP"; bb.Size = UDim2.new(0, 110, 0, 28)
-                    bb.StudsOffset = Vector3.new(0, 2, 0); bb.AlwaysOnTop = true
-                    bb.Adornee = foundDrop; bb.Parent = Shared.GUI
+                    bb.Name         = "Fih_GunDropTag"
+                    bb.Size         = UDim2.new(0, 130, 0, 30)
+                    bb.StudsOffset  = Vector3.new(0, 2.5, 0)
+                    bb.AlwaysOnTop  = true
+                    bb.Adornee      = foundDrop
+                    bb.Parent       = Shared.GUI
+
+                    local bg = Instance.new("Frame")
+                    bg.Size                   = UDim2.new(1, 0, 1, 0)
+                    bg.BackgroundColor3       = Color3.fromRGB(30, 25, 5)
+                    bg.BackgroundTransparency = 0.15
+                    bg.BorderSizePixel        = 1
+                    bg.BorderColor3           = Color3.fromRGB(255, 215, 0)
+                    bg.Parent                 = bb
 
                     local lbl = Instance.new("TextLabel")
-                    lbl.Size = UDim2.new(1,0,1,0); lbl.BackgroundTransparency = 0.1
-                    lbl.BackgroundColor3 = Color3.fromRGB(60, 45, 0); lbl.Font = Enum.Font.ArimoBold
-                    lbl.TextSize = 12; lbl.TextColor3 = Color3.fromRGB(255, 215, 0); lbl.Parent = bb
-                    gunEspHighlights["GunDrop"] = bb
+                    lbl.Size                   = UDim2.new(1, 0, 1, 0)
+                    lbl.BackgroundTransparency = 1
+                    lbl.Font                   = Enum.Font.ArimoBold
+                    lbl.TextSize               = 11
+                    lbl.TextColor3             = Color3.fromRGB(255, 220, 30)
+                    lbl.TextStrokeTransparency = 0
+                    lbl.TextStrokeColor3       = Color3.fromRGB(0, 0, 0)
+                    lbl.Parent                 = bg
+                    gunEspBB = bb
                 else
-                    gunEspHighlights["GunDrop"].Adornee = foundDrop
+                    gunEspHL.Adornee = foundDrop.Parent:IsA("Tool") and foundDrop.Parent or foundDrop
+                    gunEspBB.Adornee = foundDrop
                 end
+
                 local dist = myHRP and math.floor((foundDrop.Position - myHRP.Position).Magnitude) or 0
-                local lbl = gunEspHighlights["GunDrop"]:FindFirstChildOfClass("TextLabel")
-                if lbl then lbl.Text = "[⚠ GUN DROPPED]\n" .. dist .. " studs" end
-            elseif gunEspHighlights["GunDrop"] then
-                pcall(function() gunEspHighlights["GunDrop"]:Destroy() end)
-                gunEspHighlights["GunDrop"] = nil
+                local lbl = gunEspBB:FindFirstChildOfClass("Frame") and gunEspBB.Frame:FindFirstChildOfClass("TextLabel")
+                if lbl then
+                    lbl.Text = "[⚠ DROPPED GUN]\n" .. dist .. " studs"
+                end
+            else
+                clearGunDropESP()
             end
         end)
     end)
@@ -565,5 +654,5 @@ return function(Shared)
         end
     end)
 
-    print("[MM2_Functions] Loaded -- Optimized Zero-Lag Combat Online")
+    print("[MM2_Functions] Loaded -- Highlight Chams & Real-Time Role ESP Online")
 end
