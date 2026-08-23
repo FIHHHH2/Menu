@@ -931,7 +931,9 @@ return function(Shared)
 
     task.delay(0.6, function() loadConfig(); buildKeybindsUI() end)
 
-    -- SETTINGS DRAWER POPULATION
+    -- SETTINGS DRAWER POPULATION (General, Performance, Audio & Camera)
+    local Lighting = game:GetService("Lighting")
+
     makeSection(DrawerScroll, "General & Engine", 1)
     makeButton(DrawerScroll, "Save Config File (Manual)", 2, function()
         saveConfigDirect(); sendNotification("Config Manager", "Saved to FihUi_Config.json", true)
@@ -939,11 +941,116 @@ return function(Shared)
     makeButton(DrawerScroll, "Unload / Force Close Menu", 3, function()
         saveConfigDirect(); if Shared.GUI then Shared.GUI:Destroy() end; for k in pairs(Shared.Flags) do Shared.Flags[k] = false end
     end)
-    makeSection(DrawerScroll, "Audio & Camera", 10)
-    makeSlider(DrawerScroll, "Master Volume", "MasterVolume", 0, 100, 50, 11, function(val)
+
+    -- ── PERFORMANCE & FPS BOOST ENGINE ──────────────────────────
+    makeSection(DrawerScroll, "Performance & FPS Boost", 10)
+
+    local originalMaterials = {}
+    makeToggle(DrawerScroll, "FPS Boost (Low Graphics)", "FPSBoost", 11, function(state)
+        if state then
+            Lighting.GlobalShadows = false
+            Lighting.FogEnd = 9e9
+            pcall(function()
+                workspace.Terrain.WaterWaveSize = 0
+                workspace.Terrain.WaterWaveSpeed = 0
+                workspace.Terrain.WaterReflectance = 0
+                workspace.Terrain.WaterTransparency = 0
+            end)
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("BasePart") then
+                    if not originalMaterials[obj] then originalMaterials[obj] = { mat = obj.Material, shadow = obj.CastShadow } end
+                    obj.Material = Enum.Material.SmoothPlastic
+                    obj.CastShadow = false
+                end
+            end
+        else
+            Lighting.GlobalShadows = true
+            for obj, info in pairs(originalMaterials) do
+                if obj and obj.Parent then
+                    pcall(function()
+                        obj.Material = info.mat
+                        obj.CastShadow = info.shadow
+                    end)
+                end
+            end
+            originalMaterials = {}
+        end
+    end)
+
+    local disabledEmitters = {}
+    makeToggle(DrawerScroll, "Disable Particles & Trails", "NoParticles", 12, function(state)
+        if state then
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+                    if obj.Enabled then
+                        disabledEmitters[obj] = true
+                        obj.Enabled = false
+                    end
+                end
+            end
+        else
+            for obj in pairs(disabledEmitters) do
+                if obj and obj.Parent then pcall(function() obj.Enabled = true end) end
+            end
+            disabledEmitters = {}
+        end
+    end)
+
+    local disabledEffects = {}
+    makeToggle(DrawerScroll, "Disable Post-Processing", "NoPostProcessing", 13, function(state)
+        if state then
+            for _, obj in ipairs(Lighting:GetChildren()) do
+                if obj:IsA("PostProcessEffect") or obj:IsA("BloomEffect") or obj:IsA("BlurEffect") or obj:IsA("ColorCorrectionEffect") or obj:IsA("SunRaysEffect") or obj:IsA("DepthOfFieldEffect") then
+                    if obj.Enabled then
+                        disabledEffects[obj] = true
+                        obj.Enabled = false
+                    end
+                end
+            end
+        else
+            for obj in pairs(disabledEffects) do
+                if obj and obj.Parent then pcall(function() obj.Enabled = true end) end
+            end
+            disabledEffects = {}
+        end
+    end)
+
+    local disabledTextures = {}
+    makeToggle(DrawerScroll, "Disable 3D Textures & Decals", "NoTextures", 14, function(state)
+        if state then
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("Decal") or obj:IsA("Texture") then
+                    if obj.Transparency < 1 then
+                        disabledTextures[obj] = obj.Transparency
+                        obj.Transparency = 1
+                    end
+                end
+            end
+        else
+            for obj, orig in pairs(disabledTextures) do
+                if obj and obj.Parent then pcall(function() obj.Transparency = orig end) end
+            end
+            disabledTextures = {}
+        end
+    end)
+
+    makeToggle(DrawerScroll, "No Shadows Mode", "NoShadows", 15, function(state)
+        Lighting.GlobalShadows = not state
+    end)
+
+    local setfpscap = setfpscap or (getgenv and getgenv().setfpscap)
+    if setfpscap then
+        makeSlider(DrawerScroll, "FPS Cap (Max FPS)", "FPSCap", 30, 360, 144, 16, function(val)
+            pcall(function() setfpscap(val) end)
+        end)
+    end
+
+    -- ── AUDIO & CAMERA ───────────────────────────────────────────
+    makeSection(DrawerScroll, "Audio & Camera", 20)
+    makeSlider(DrawerScroll, "Master Volume", "MasterVolume", 0, 100, 50, 21, function(val)
         for _, s in ipairs(workspace:GetDescendants()) do if s:IsA("Sound") then s.Volume = val/100 end end
     end)
-    makeSlider(DrawerScroll, "Field of View (FOV)", "FieldOfView", 70, 120, 70, 12, function(val)
+    makeSlider(DrawerScroll, "Field of View (FOV)", "FieldOfView", 70, 120, 70, 22, function(val)
         if workspace.CurrentCamera then workspace.CurrentCamera.FieldOfView = val end
     end)
 
