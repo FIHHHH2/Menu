@@ -115,7 +115,18 @@ return function(Shared)
     Shared.Services.Players.PlayerRemoving:Connect(function(plr)
         if plr == Shared.Player then saveConfig() end
     end)
-    game:BindToClose(function() saveConfig() end)
+    
+    -- Client-side exit / teleport hooks
+    pcall(function()
+        game:GetService("GuiService").ErrorMessageChanged:Connect(function()
+            saveConfig()
+        end)
+    end)
+    pcall(function()
+        game:GetService("TeleportService").TeleportInitFailed:Connect(function()
+            saveConfig()
+        end)
+    end)
 
     -- ============================================================
     -- NOTIFICATION STACK
