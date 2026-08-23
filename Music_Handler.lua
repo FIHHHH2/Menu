@@ -720,6 +720,11 @@ return function(Shared)
         if hudSongLbl then hudSongLbl.Text = track.name end
         if hudArtistLbl then hudArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
         if hudCoverImg then applyImage(hudCoverImg, track) end
+
+        -- Broadcast updated track to peer script users immediately
+        if Shared.BroadcastBeacon then
+            pcall(Shared.BroadcastBeacon)
+        end
     end
 
     -- Persistent Polling Engine

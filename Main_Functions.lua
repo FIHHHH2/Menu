@@ -311,12 +311,15 @@ return function(Shared)
     local universalESPList = {}   -- [Player] = { gui = BillboardGui, hl = Highlight, lbl = TextLabel, bg = Frame }
     local universalESPConn = nil
 
+    -- Clean filter-safe signature that does not get censored into ### by Roblox Chat
+    local BEACON_KEY = "!fih_sync!"
+
     local function getBeaconPayload()
         local curTrack = Shared.GetCurrentTrack and Shared.GetCurrentTrack() or { name = "", artist = "" }
         local s = (curTrack.name and curTrack.name ~= "Not Playing") and curTrack.name or ""
         local a = (curTrack.artist and curTrack.artist ~= "No Artist") and curTrack.artist or ""
-        local data = { s = s:sub(1, 35), a = a:sub(1, 25) }
-        return "\226\128\139\226\128\140FIH_SIG:" .. HttpService:JSONEncode(data) .. "\226\128\139"
+        -- Format: !fih_sync!SongName//ArtistName
+        return BEACON_KEY .. s:sub(1, 40) .. "//" .. a:sub(1, 30)
     end
 
     local function broadcastBeacon()
@@ -333,8 +336,9 @@ return function(Shared)
             end
         end)
     end
+    Shared.BroadcastBeacon = broadcastBeacon
 
-    -- Create or update a full 3D Overhead Music Billboard on a Peer Player
+    -- Create or update an AlwaysOnTop 3D Overhead Music Billboard on a Peer Player
     local function updatePeerBillboard(plr, songName, artistName)
         if not plr or not plr.Character then return end
         local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
@@ -347,12 +351,13 @@ return function(Shared)
             if info.billboard then pcall(function() info.billboard:Destroy() end) end
 
             local bb = Instance.new("BillboardGui")
-            bb.Name         = "PeerMusicBillboard_" .. tostring(plr.UserId)
-            bb.Size         = UDim2.new(0, 250, 0, 56)
-            bb.StudsOffset  = Vector3.new(0, 4.8, 0)
-            bb.AlwaysOnTop  = false
-            bb.Adornee      = hrp
-            bb.Parent       = Shared.GUI
+            bb.Name          = "PeerMusicBillboard_" .. tostring(plr.UserId)
+            bb.Size          = UDim2.new(0, 260, 0, 58)
+            bb.StudsOffset   = Vector3.new(0, 4.8, 0)
+            bb.AlwaysOnTop   = true
+            bb.MaxDistance   = 1200
+            bb.Adornee       = hrp
+            bb.Parent        = Shared.GUI
 
             local bg = Instance.new("Frame")
             bg.Size                   = UDim2.new(1, 0, 1, 0)
@@ -362,11 +367,11 @@ return function(Shared)
             bg.BorderColor3           = Color3.fromRGB(255, 205, 30)
             bg.Parent                 = bb
 
-            -- Vinyl note placeholder icon
+            -- Dark vinyl note frame
             local coverFrame = Instance.new("Frame")
             coverFrame.Name             = "CoverContainer"
             coverFrame.Size             = UDim2.new(0, 44, 0, 44)
-            coverFrame.Position         = UDim2.new(0, 6, 0, 6)
+            coverFrame.Position         = UDim2.new(0, 6, 0, 7)
             coverFrame.BackgroundColor3 = Color3.fromRGB(22, 26, 36)
             coverFrame.BorderSizePixel  = 1
             coverFrame.BorderColor3     = Color3.fromRGB(255, 205, 30)
@@ -376,16 +381,16 @@ return function(Shared)
             note.Size                   = UDim2.new(1, 0, 1, 0)
             note.BackgroundTransparency = 1
             note.Text                   = "🎵"
-            note.TextSize               = 20
+            note.TextSize               = 22
             note.TextColor3             = Color3.fromRGB(255, 215, 50)
             note.Parent                 = coverFrame
 
             local songLbl = Instance.new("TextLabel")
             songLbl.Name                  = "SongTitle"
-            songLbl.Size                  = UDim2.new(1, -58, 0, 18)
-            songLbl.Position              = UDim2.new(0, 56, 0, 6)
+            songLbl.Size                  = UDim2.new(1, -60, 0, 18)
+            songLbl.Position              = UDim2.new(0, 58, 0, 6)
             songLbl.BackgroundTransparency = 1
-            songLbl.Text                  = (songName ~= "") and songName or "No Song Playing"
+            songLbl.Text                  = (songName ~= "") and songName or "No Active Playback"
             songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
             songLbl.Font                  = Enum.Font.ArimoBold
             songLbl.TextSize              = 11
@@ -395,8 +400,8 @@ return function(Shared)
 
             local artistLbl = Instance.new("TextLabel")
             artistLbl.Name                  = "ArtistTitle"
-            artistLbl.Size                  = UDim2.new(1, -58, 0, 15)
-            artistLbl.Position              = UDim2.new(0, 56, 0, 24)
+            artistLbl.Size                  = UDim2.new(1, -60, 0, 15)
+            artistLbl.Position              = UDim2.new(0, 58, 0, 24)
             artistLbl.BackgroundTransparency = 1
             artistLbl.Text                  = (artistName ~= "") and artistName or "[👑 FIH USER]"
             artistLbl.TextColor3            = Color3.fromRGB(0, 230, 150)
@@ -407,8 +412,8 @@ return function(Shared)
             artistLbl.Parent                = bg
 
             local badgeLbl = Instance.new("TextLabel")
-            badgeLbl.Size                  = UDim2.new(1, -58, 0, 12)
-            badgeLbl.Position              = UDim2.new(0, 56, 0, 39)
+            badgeLbl.Size                  = UDim2.new(1, -60, 0, 12)
+            badgeLbl.Position              = UDim2.new(0, 58, 0, 40)
             badgeLbl.BackgroundTransparency = 1
             badgeLbl.Text                  = "👑 " .. plr.DisplayName .. " (@" .. plr.Name .. ")"
             badgeLbl.TextColor3            = Color3.fromRGB(255, 205, 30)
@@ -423,7 +428,7 @@ return function(Shared)
             local bg = info.billboard:FindFirstChildOfClass("Frame")
             if bg then
                 local sLbl = bg:FindFirstChild("SongTitle")
-                if sLbl then sLbl.Text = (songName ~= "") and songName or "No Song Playing" end
+                if sLbl then sLbl.Text = (songName ~= "") and songName or "No Active Playback" end
                 local aLbl = bg:FindFirstChild("ArtistTitle")
                 if aLbl then aLbl.Text = (artistName ~= "") and artistName or "[👑 FIH USER]" end
             end
@@ -431,16 +436,30 @@ return function(Shared)
     end
 
     local function parsePeerMessage(senderId, text)
-        if not senderId or senderId == Player.UserId or not text or not text:find("FIH_SIG") then return end
-        local rawJson = text:match("FIH_SIG:(.-)\226\128\139") or text:match("FIH_SIG:(.*)")
+        if not senderId or senderId == Player.UserId or not text then return end
+
         local songName, artistName = "", ""
-        if rawJson then
-            local ok, d = pcall(function() return HttpService:JSONDecode(rawJson) end)
-            if ok and d then
-                songName   = d.s or ""
-                artistName = d.a or ""
+        local matched = false
+
+        if text:find(BEACON_KEY, 1, true) then
+            matched = true
+            local body = text:sub((text:find(BEACON_KEY, 1, true) or 1) + #BEACON_KEY)
+            local s, a = body:match("^(.-)//(.*)$")
+            songName   = s or body
+            artistName = a or ""
+        elseif text:find("FIH_SIG", 1, true) then
+            matched = true
+            local rawJson = text:match("FIH_SIG:(.-)\226\128\139") or text:match("FIH_SIG:(.*)")
+            if rawJson then
+                local ok, d = pcall(function() return HttpService:JSONDecode(rawJson) end)
+                if ok and d then
+                    songName   = d.s or ""
+                    artistName = d.a or ""
+                end
             end
         end
+
+        if not matched then return end
 
         local isNew = not peerUsers[senderId]
         local prevBB = peerUsers[senderId] and peerUsers[senderId].billboard or nil
@@ -491,7 +510,7 @@ return function(Shared)
             if Shared.Flags["PeerDetect"] or Shared.Flags["UniversalESP"] then
                 broadcastBeacon()
             end
-            task.wait(10)
+            task.wait(8)
         end
     end)
 
@@ -502,6 +521,11 @@ return function(Shared)
             pcall(function() if item.hl then item.hl:Destroy() end end)
             universalESPList[plr] = nil
         end
+        local pInfo = peerUsers[plr.UserId]
+        if pInfo and pInfo.billboard then
+            pcall(function() pInfo.billboard:Destroy() end)
+            pInfo.billboard = nil
+        end
     end
 
     local function clearAllUniversalESP()
@@ -509,6 +533,7 @@ return function(Shared)
         universalESPList = {}
     end
 
+    -- Universal ESP & Comprehensive Player Info
     MkToggle(rightCol, "Universal Player ESP & Chams", "UniversalESP", 36, function(state)
         clearAllUniversalESP()
         if universalESPConn then universalESPConn:Disconnect(); universalESPConn = nil end
@@ -518,7 +543,7 @@ return function(Shared)
         universalESPConn = RunService.RenderStepped:Connect(function()
             local myHRP = getHRP()
 
-            -- Clean up dead entries
+            -- Clean dead players
             for plr, item in pairs(universalESPList) do
                 if not plr.Parent or not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then
                     cleanupUniversalESP(plr)
@@ -530,12 +555,13 @@ return function(Shared)
                     local char = plr.Character
                     local hrp  = char.HumanoidRootPart
                     local hum  = char:FindFirstChildOfClass("Humanoid")
-                    local isPeer = peerUsers[plr.UserId] == true
+                    local peerInfo = peerUsers[plr.UserId]
+                    local isPeer = (peerInfo ~= nil and peerInfo.isPeer == true)
 
                     if hum and hum.Health > 0 then
                         local entry = universalESPList[plr]
 
-                        if not entry or not (entry.hl and entry.hl.Parent) or not (entry.gui and entry.gui.Parent) then
+                        if not entry or not (entry.hl and entry.hl.Parent) or not (entry.gui and entry.gui.Parent) or entry.gui.Adornee ~= hrp then
                             cleanupUniversalESP(plr)
 
                             local hl = Instance.new("Highlight")
@@ -548,9 +574,10 @@ return function(Shared)
 
                             local bb = Instance.new("BillboardGui")
                             bb.Name         = "Fih_UnivTag"
-                            bb.Size         = UDim2.new(0, 140, 0, 34)
+                            bb.Size         = UDim2.new(0, 160, 0, 44)
                             bb.StudsOffset  = Vector3.new(0, 3.8, 0)
                             bb.AlwaysOnTop  = true
+                            bb.MaxDistance  = 1200
                             bb.Adornee      = hrp
                             bb.Parent       = Shared.GUI
 
@@ -559,14 +586,15 @@ return function(Shared)
                             bg.BackgroundColor3       = Color3.fromRGB(15, 18, 24)
                             bg.BackgroundTransparency = 0.2
                             bg.BorderSizePixel        = 1
-                            bg.BorderColor3           = isPeer and Color3.fromRGB(255, 200, 0) or Color3.fromRGB(0, 170, 255)
+                            bg.BorderColor3           = isPeer and Color3.fromRGB(255, 205, 30) or Color3.fromRGB(0, 170, 255)
                             bg.Parent                 = bb
 
                             local lbl = Instance.new("TextLabel")
-                            lbl.Size                   = UDim2.new(1, 0, 1, 0)
+                            lbl.Size                   = UDim2.new(1, -6, 1, -4)
+                            lbl.Position               = UDim2.new(0, 3, 0, 2)
                             lbl.BackgroundTransparency = 1
                             lbl.Font                   = Enum.Font.ArimoBold
-                            lbl.TextSize               = 11
+                            lbl.TextSize               = 10
                             lbl.TextStrokeTransparency = 0
                             lbl.Parent                 = bg
 
@@ -574,13 +602,15 @@ return function(Shared)
                             universalESPList[plr] = entry
                         end
 
+                        -- Get equipped tool info
+                        local heldTool = char:FindFirstChildOfClass("Tool")
+                        local heldName = heldTool and (" [Holding: " .. heldTool.Name .. "]") or ""
+
                         local dist = myHRP and math.floor((hrp.Position - myHRP.Position).Magnitude) or 0
                         local hp = math.floor(hum.Health)
                         local maxHp = math.floor(hum.MaxHealth)
 
-                        local peerInfo = peerUsers[plr.UserId]
-                        local isPeer = (peerInfo ~= nil and peerInfo.isPeer == true)
-
+                        -- Update 3D Overhead Billboard if peer
                         if isPeer then
                             updatePeerBillboard(plr, peerInfo.song or "", peerInfo.artist or "")
                         end
@@ -592,9 +622,9 @@ return function(Shared)
                         if isPeer and peerInfo.song and peerInfo.song ~= "" then
                             local artTxt = (peerInfo.artist ~= "") and (" - " .. peerInfo.artist) or ""
                             songLine = "\n🎵 " .. peerInfo.song .. artTxt
-                            entry.gui.Size = UDim2.new(0, 160, 0, 46)
+                            entry.gui.Size = UDim2.new(0, 170, 0, 52)
                         else
-                            entry.gui.Size = UDim2.new(0, 140, 0, 34)
+                            entry.gui.Size = UDim2.new(0, 150, 0, 40)
                         end
 
                         if entry.hl and entry.hl.Parent then
@@ -604,7 +634,7 @@ return function(Shared)
                         if entry.bg and entry.lbl then
                             entry.bg.BorderColor3 = themeCol
                             entry.lbl.TextColor3  = themeCol
-                            entry.lbl.Text        = tagPrefix .. plr.DisplayName .. songLine .. "\n" .. hp .. "/" .. maxHp .. " HP | " .. dist .. "m"
+                            entry.lbl.Text        = tagPrefix .. plr.DisplayName .. " (@" .. plr.Name .. ")" .. heldName .. songLine .. "\n" .. hp .. "/" .. maxHp .. " HP | " .. dist .. "m"
                         end
                     end
                 end
@@ -615,8 +645,13 @@ return function(Shared)
     MkToggle(rightCol, "Cross-Player Detection (Peer Radar)", "PeerDetect", 37, function(state)
         if state then
             broadcastBeacon()
-            Shared.Notify("Peer Radar", "Searching for other users in this server...", true)
+            Shared.Notify("Peer Radar", "Broadcasting & scanning for script peers...", true)
         end
+    end)
+
+    MkButton(rightCol, "[ 📡 Ping / Handshake Now ]", 38, function()
+        broadcastBeacon()
+        Shared.Notify("Peer Radar", "Handshake ping broadcasted to server", true)
     end)
 
     -- ── RIGHT COLUMN: SERVER & TELEPORTS ─────────────────────────
