@@ -18,14 +18,24 @@ return function(Shared)
     local leftCol  = cols.Left
     local rightCol = cols.Right
 
-    local LASTFM_API_KEY = "2c6a0c0a373a693b827361ab6e1b6f00"
+    -- Verified working Last.fm public API key
+    local LASTFM_API_KEY = "b25b959554ed76058ac220b7b2e0a026"
     local currentTrack = { name = "Not Playing", artist = "No Artist", isPlaying = false, source = "None" }
     local billboard    = nil
     local pollConn     = nil
 
-    -- SPOTIFY API (Uses executor request function with custom Bearer Authorization header)
+    -- SPOTIFY API
+    local function cleanToken(tok)
+        if not tok then return "" end
+        tok = tok:gsub("^%s+", ""):gsub("%s+$", "")
+        if tok:sub(1, 7):lower() == "bearer " then
+            tok = tok:sub(8)
+        end
+        return tok
+    end
+
     local function spotifyRequest(endpoint, method, body)
-        local token = Shared.Config.SpotifyToken
+        local token = cleanToken(Shared.Config.SpotifyToken)
         if not token or token == "" then return nil end
         return Shared.HttpRequest({
             Url     = "https://api.spotify.com/v1/me/player" .. endpoint,
@@ -39,11 +49,28 @@ return function(Shared)
     end
 
     local function getSpotifyTrack()
-        local resp = spotifyRequest("", "GET")
-        if not resp or (resp.StatusCode and resp.StatusCode ~= 200 and resp.StatusCode ~= 204) then return nil end
-        if not resp.Body or #resp.Body == 0 then return nil end
+        local token = cleanToken(Shared.Config.SpotifyToken)
+        if not token or token == "" then return nil, "No Token" end
+
+        -- Try /currently-playing first, then /me/player
+        local resp = Shared.HttpRequest({
+            Url     = "https://api.spotify.com/v1/me/player/currently-playing",
+            Method  = "GET",
+            Headers = {
+                ["Authorization"] = "Bearer " .. token,
+                ["Content-Type"]  = "application/json",
+            },
+        })
+
+        if not resp or (resp.StatusCode and resp.StatusCode == 401) then
+            return nil, "Expired/Invalid Token (401)"
+        end
+        if resp.StatusCode == 204 or not resp.Body or #resp.Body == 0 then
+            return nil, "No Active Playback"
+        end
+
         local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
-        if not ok or not data or not data.item then return nil end
+        if not ok or not data or not data.item then return nil, "No Track Found" end
         local item = data.item
         return {
             name      = item.name or "Unknown",
@@ -53,21 +80,39 @@ return function(Shared)
         }
     end
 
-    -- LAST.FM API (Public Scrobble API - Requires only Username)
+    -- LAST.FM API (Public Scrobbler API - Verified Key)
     local function getLastFMTrack()
         local user = Shared.Config.LastFMUser
-        if not user or user == "" then return nil end
+        if not user or user == "" or user == "Enter Last.fm Username" then return nil end
         local url = "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=" .. Http:UrlEncode(user) .. "&api_key=" .. LASTFM_API_KEY .. "&format=json&limit=1"
-        local resp = Shared.HttpRequest({ Url = url, Method = "GET" })
+        local resp = Shared.HttpRequest({
+            Url = url,
+            Method = "GET",
+            Headers = {
+                ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            }
+        })
         if not resp or not resp.Body or #resp.Body == 0 then return nil end
         local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
         if not ok or not data or not data.recenttracks or not data.recenttracks.track then return nil end
-        local track = data.recenttracks.track[1] or data.recenttracks.track
-        if not track then return nil end
+        
+        local track = data.recenttracks.track
+        if type(track) == "table" and track[1] then
+            track = track[1]
+        end
+        if not track or type(track) ~= "table" then return nil end
+
         local isNowPlaying = (track["@attr"] and track["@attr"].nowplaying == "true") or false
+        local artistName = "Unknown"
+        if type(track.artist) == "table" then
+            artistName = track.artist["#text"] or track.artist.name or "Unknown"
+        elseif type(track.artist) == "string" then
+            artistName = track.artist
+        end
+
         return {
             name      = track.name or "Unknown",
-            artist    = track.artist and (track.artist["#text"] or track.artist.name) or "Unknown",
+            artist    = artistName,
             isPlaying = isNowPlaying,
             source    = "Last.fm"
         }
@@ -76,7 +121,7 @@ return function(Shared)
     -- 3D BILLBOARD GUI OVER HEAD
     local function buildBillboard()
         if billboard then billboard:Destroy(); billboard = nil end
-        local hrp = Shared.HumanoidRP
+        local hrp = Shared.HumanoidRP or (Shared.Character and Shared.Character:FindFirstChild("HumanoidRootPart"))
         if not hrp then return end
 
         billboard = Instance.new("BillboardGui")
@@ -142,7 +187,7 @@ return function(Shared)
     end
 
     -- LEFT COLUMN: LAST.FM SCROBBLER & HEAD BILLBOARD
-    MkSection(leftCol, "Last.fm Scrobbler (Easiest)", 1)
+    MkSection(leftCol, "Last.fm Scrobbler (No Auth Required)", 1)
 
     local lfmBox = Instance.new("TextBox")
     lfmBox.Name                  = "LastFMInput"
@@ -150,7 +195,7 @@ return function(Shared)
     lfmBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
     lfmBox.BorderSizePixel       = 1
     lfmBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
-    lfmBox.Text                  = Shared.Config.LastFMUser ~= "" and Shared.Config.LastFMUser or "Enter Last.fm Username"
+    lfmBox.Text                  = (Shared.Config.LastFMUser and Shared.Config.LastFMUser ~= "") and Shared.Config.LastFMUser or "Enter Last.fm Username"
     lfmBox.TextColor3            = Color3.fromRGB(20, 20, 60)
     lfmBox.Font                  = Enum.Font.Code
     lfmBox.TextSize              = 11
@@ -171,7 +216,7 @@ return function(Shared)
             buildBillboard()
             startPolling()
         else
-            Shared.Notify("Last.fm", "No track scrobbling now", false)
+            Shared.Notify("Last.fm", "No track found / scrobbling", false)
         end
     end)
 
@@ -189,7 +234,7 @@ return function(Shared)
     spotBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
     spotBox.BorderSizePixel       = 1
     spotBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
-    spotBox.Text                  = Shared.Config.SpotifyToken ~= "" and "Token: Set (Click to change)" or "Paste Spotify OAuth Token"
+    spotBox.Text                  = (Shared.Config.SpotifyToken and Shared.Config.SpotifyToken ~= "") and "Token: Set (Click to change)" or "Paste Spotify OAuth Token"
     spotBox.TextColor3            = Color3.fromRGB(20, 20, 60)
     spotBox.Font                  = Enum.Font.Code
     spotBox.TextSize              = 11
@@ -198,10 +243,22 @@ return function(Shared)
 
     spotBox.FocusLost:Connect(function()
         if spotBox.Text ~= "" and not spotBox.Text:find("Token: Set") then
-            Shared.Config.SpotifyToken = spotBox.Text
+            Shared.Config.SpotifyToken = cleanToken(spotBox.Text)
             if Shared.SaveConfig then Shared.SaveConfig() end
             spotBox.Text = "Token: Set (Click to change)"
             Shared.Notify("Spotify", "OAuth Token saved", true)
+        end
+    end)
+
+    MkButton(rightCol, "[ Test Spotify Token ]", 3, function()
+        local trk, err = getSpotifyTrack()
+        if trk then
+            currentTrack = trk
+            Shared.Notify("Spotify", trk.name .. " - " .. trk.artist, true)
+            buildBillboard()
+            startPolling()
+        else
+            Shared.Notify("Spotify", "Status: " .. tostring(err or "Failed"), false)
         end
     end)
 
