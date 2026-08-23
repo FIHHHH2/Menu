@@ -32,6 +32,7 @@ return function(Shared)
         isPlaying = false,
         source    = "None"
     }
+    Shared.GetCurrentTrack = function() return currentTrack end
 
     local billboard   = nil
     local hudWidget   = nil

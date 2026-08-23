@@ -307,74 +307,89 @@ return function(Shared)
     -- ── RIGHT COLUMN: UNIVERSAL ESP & CROSS-PLAYER DETECTION ──────
     MkSection(rightCol, "Universal ESP & Peer Radar", 35)
 
-    local peerUsers = {}          -- [UserId] = true
+    local peerUsers = {}          -- [UserId] = { isPeer = true, song = "", artist = "" }
     local universalESPList = {}   -- [Player] = { gui = BillboardGui, hl = Highlight, lbl = TextLabel, bg = Frame }
     local universalESPConn = nil
 
-    -- Invisible Unicode Handshake Beacon (Hidden from Chat GUI)
-    local BEACON_SIG = "\226\128\139\226\128\140FIH_SIG\226\128\139"
+    local function getBeaconPayload()
+        local curTrack = Shared.GetCurrentTrack and Shared.GetCurrentTrack() or { name = "", artist = "" }
+        local s = (curTrack.name and curTrack.name ~= "Not Playing") and curTrack.name or ""
+        local a = (curTrack.artist and curTrack.artist ~= "No Artist") and curTrack.artist or ""
+        local data = { s = s:sub(1, 35), a = a:sub(1, 25) }
+        return "\226\128\139\226\128\140FIH_SIG:" .. HttpService:JSONEncode(data) .. "\226\128\139"
+    end
 
     local function broadcastBeacon()
         pcall(function()
+            local payload = getBeaconPayload()
             local tcs = game:GetService("TextChatService")
             if tcs and tcs.ChatVersion == Enum.ChatVersion.TextChatService then
                 local genChannel = tcs:FindFirstChild("TextChannels") and tcs.TextChannels:FindFirstChild("RBXGeneral")
-                if genChannel then genChannel:SendAsync(BEACON_SIG) end
+                if genChannel then genChannel:SendAsync(payload) end
             else
                 local sayReq = game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
                             and game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
-                if sayReq then sayReq:FireServer(BEACON_SIG, "All") end
+                if sayReq then sayReq:FireServer(payload, "All") end
             end
         end)
     end
 
-    -- Peer listener
+    local function parsePeerMessage(senderId, text)
+        if not senderId or senderId == Player.UserId or not text or not text:find("FIH_SIG") then return end
+        local rawJson = text:match("FIH_SIG:(.-)\226\128\139") or text:match("FIH_SIG:(.*)")
+        local songName, artistName = "", ""
+        if rawJson then
+            local ok, d = pcall(function() return HttpService:JSONDecode(rawJson) end)
+            if ok and d then
+                songName   = d.s or ""
+                artistName = d.a or ""
+            end
+        end
+
+        local isNew = not peerUsers[senderId]
+        peerUsers[senderId] = {
+            isPeer = true,
+            song   = songName,
+            artist = artistName
+        }
+
+        if isNew then
+            local senderPlr = Players:GetPlayerByUserId(senderId)
+            local name = senderPlr and senderPlr.DisplayName or ("User " .. tostring(senderId))
+            local songMsg = (songName ~= "") and (" (🎵 " .. songName .. ")") or ""
+            Shared.Notify("Peer Detected", name .. " is running this script!" .. songMsg, true)
+        end
+    end
+
+    -- Peer listener (TextChatService & Legacy)
     task.spawn(function()
         pcall(function()
             local tcs = game:GetService("TextChatService")
             if tcs and tcs.ChatVersion == Enum.ChatVersion.TextChatService then
                 tcs.MessageReceived:Connect(function(msg)
-                    if msg.Text and msg.Text:find("FIH_SIG") and msg.TextSource then
-                        local senderId = msg.TextSource.UserId
-                        if senderId and senderId ~= Player.UserId and not peerUsers[senderId] then
-                            peerUsers[senderId] = true
-                            local senderPlr = Players:GetPlayerByUserId(senderId)
-                            local name = senderPlr and senderPlr.DisplayName or ("User " .. tostring(senderId))
-                            Shared.Notify("Peer Detected", name .. " is running this script!", true)
-                        end
+                    if msg.TextSource and msg.Text then
+                        parsePeerMessage(msg.TextSource.UserId, msg.Text)
                     end
                 end)
             end
         end)
 
-        -- Legacy chat listener
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= Player then
-                plr.Chatted:Connect(function(msg)
-                    if msg:find("FIH_SIG") and not peerUsers[plr.UserId] then
-                        peerUsers[plr.UserId] = true
-                        Shared.Notify("Peer Detected", plr.DisplayName .. " is running this script!", true)
-                    end
-                end)
+                plr.Chatted:Connect(function(msg) parsePeerMessage(plr.UserId, msg) end)
             end
         end
         Players.PlayerAdded:Connect(function(plr)
             if plr ~= Player then
-                plr.Chatted:Connect(function(msg)
-                    if msg:find("FIH_SIG") and not peerUsers[plr.UserId] then
-                        peerUsers[plr.UserId] = true
-                        Shared.Notify("Peer Detected", plr.DisplayName .. " is running this script!", true)
-                    end
-                end)
+                plr.Chatted:Connect(function(msg) parsePeerMessage(plr.UserId, msg) end)
             end
         end)
 
-        -- Periodic invisible broadcast
         while true do
             if Shared.Flags["PeerDetect"] or Shared.Flags["UniversalESP"] then
                 broadcastBeacon()
             end
-            task.wait(12)
+            task.wait(10)
         end
     end)
 
@@ -461,8 +476,20 @@ return function(Shared)
                         local hp = math.floor(hum.Health)
                         local maxHp = math.floor(hum.MaxHealth)
 
-                        local themeCol = isPeer and Color3.fromRGB(255, 200, 0) or Color3.fromRGB(0, 190, 255)
+                        local peerInfo = peerUsers[plr.UserId]
+                        local isPeer = (peerInfo ~= nil and peerInfo.isPeer == true)
+
+                        local themeCol = isPeer and Color3.fromRGB(255, 205, 30) or Color3.fromRGB(0, 190, 255)
                         local tagPrefix = isPeer and "[👑 FIH USER] " or ""
+
+                        local songLine = ""
+                        if isPeer and peerInfo.song and peerInfo.song ~= "" then
+                            local artTxt = (peerInfo.artist ~= "") and (" - " .. peerInfo.artist) or ""
+                            songLine = "\n🎵 " .. peerInfo.song .. artTxt
+                            entry.gui.Size = UDim2.new(0, 160, 0, 46)
+                        else
+                            entry.gui.Size = UDim2.new(0, 140, 0, 34)
+                        end
 
                         if entry.hl and entry.hl.Parent then
                             entry.hl.FillColor    = themeCol
@@ -471,7 +498,7 @@ return function(Shared)
                         if entry.bg and entry.lbl then
                             entry.bg.BorderColor3 = themeCol
                             entry.lbl.TextColor3  = themeCol
-                            entry.lbl.Text        = tagPrefix .. plr.DisplayName .. "\n" .. hp .. "/" .. maxHp .. " HP | " .. dist .. "m"
+                            entry.lbl.Text        = tagPrefix .. plr.DisplayName .. songLine .. "\n" .. hp .. "/" .. maxHp .. " HP | " .. dist .. "m"
                         end
                     end
                 end
