@@ -1,6 +1,6 @@
 -- Music_Handler.lua
 -- Robust Music Engine: Spotify + Last.fm Live Scrobbler with Dynamic Cache-Busted Album Covers,
--- Bold Typography, Respawn Tracking, and Resizable Bottom-Left Info Widget
+-- Scaled Cover Art, Crisp Well-Spaced Text, Respawn Tracking, and Resizable Bottom-Left Info Widget
 
 return function(Shared)
     local Http        = Shared.Services.Http
@@ -239,7 +239,7 @@ return function(Shared)
 
         billboard = Instance.new("BillboardGui")
         billboard.Name          = "MusicBillboard"
-        billboard.Size          = UDim2.new(0, 250, 0, 56)
+        billboard.Size          = UDim2.new(0, 260, 0, 58)
         billboard.StudsOffset   = Vector3.new(0, 3.8, 0)
         billboard.AlwaysOnTop   = false
         billboard.Adornee       = hrp
@@ -256,7 +256,7 @@ return function(Shared)
         local cover = Instance.new("ImageLabel")
         cover.Name                = "CoverArt"
         cover.Size                = UDim2.new(0, 48, 0, 48)
-        cover.Position            = UDim2.new(0, 4, 0, 4)
+        cover.Position            = UDim2.new(0, 5, 0, 5)
         cover.BackgroundColor3    = Color3.fromRGB(25, 28, 35)
         cover.BorderSizePixel     = 1
         cover.BorderColor3        = Color3.fromRGB(60, 80, 110)
@@ -264,9 +264,10 @@ return function(Shared)
         cover.Parent              = bg
         bbCoverImg = cover
 
+        -- Text moved a bit down and spaced to prevent clipping
         local songLbl = Instance.new("TextLabel")
-        songLbl.Size                  = UDim2.new(1, -60, 0, 22)
-        songLbl.Position              = UDim2.new(0, 56, 0, 4)
+        songLbl.Size                  = UDim2.new(1, -62, 0, 20)
+        songLbl.Position              = UDim2.new(0, 58, 0, 7)
         songLbl.BackgroundTransparency = 1
         songLbl.Text                  = currentTrack.name
         songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
@@ -278,8 +279,8 @@ return function(Shared)
         bbSongLbl = songLbl
 
         local artistLbl = Instance.new("TextLabel")
-        artistLbl.Size                  = UDim2.new(1, -60, 0, 18)
-        artistLbl.Position              = UDim2.new(0, 56, 0, 26)
+        artistLbl.Size                  = UDim2.new(1, -62, 0, 16)
+        artistLbl.Position              = UDim2.new(0, 58, 0, 30)
         artistLbl.BackgroundTransparency = 1
         artistLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
         artistLbl.TextColor3            = Color3.fromRGB(0, 220, 140)
@@ -312,8 +313,8 @@ return function(Shared)
 
         local frame = Instance.new("Frame")
         frame.Name             = "Fih_BottomHUD"
-        frame.Size             = UDim2.new(0, 280, 0, 108)
-        frame.Position         = UDim2.new(0, 16, 1, -126)
+        frame.Size             = UDim2.new(0, 290, 0, 114)
+        frame.Position         = UDim2.new(0, 16, 1, -130)
         frame.BackgroundColor3 = C.BodyBg
         frame.BorderSizePixel  = 2
         frame.BorderColor3     = C.WinBorder
@@ -363,6 +364,113 @@ return function(Shared)
             end)
         end
 
+        local content = Instance.new("Frame")
+        content.Name             = "HUDContent"
+        content.Size             = UDim2.new(1, 0, 1, -20)
+        content.Position         = UDim2.new(0, 0, 0, 20)
+        content.BackgroundTransparency = 1
+        content.ZIndex           = 51
+        content.Parent           = frame
+
+        -- 1. Album Cover Art: Scales dynamically with HUD height
+        local cover = Instance.new("ImageLabel")
+        cover.Name                = "CoverArt"
+        cover.Position            = UDim2.new(0, 6, 0, 6)
+        cover.BackgroundColor3    = Color3.fromRGB(225, 230, 240)
+        cover.BorderSizePixel     = 1
+        cover.BorderColor3        = C.BorderCol
+        cover.ScaleType           = Enum.ScaleType.Fit
+        cover.ZIndex              = 52
+        cover.Parent              = content
+        hudCoverImg = cover
+
+        -- 2. Right Text Container (holds crisp text moved down so nothing clips)
+        local rightBox = Instance.new("Frame")
+        rightBox.Name                   = "TextContainer"
+        rightBox.BackgroundTransparency = 1
+        rightBox.ZIndex                 = 52
+        rightBox.Parent                 = content
+
+        -- Bold Song Title (Fixed clean size, positioned down)
+        local sLbl = Instance.new("TextLabel")
+        sLbl.Size                  = UDim2.new(1, 0, 0, 18)
+        sLbl.Position              = UDim2.new(0, 0, 0, 6)
+        sLbl.BackgroundTransparency = 1
+        sLbl.Text                  = currentTrack.name
+        sLbl.TextColor3            = C.TextDark
+        sLbl.Font                  = Enum.Font.ArimoBold
+        sLbl.TextSize              = 12
+        sLbl.TextXAlignment        = Enum.TextXAlignment.Left
+        sLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+        sLbl.ZIndex                = 53
+        sLbl.Parent                = rightBox
+        hudSongLbl = sLbl
+
+        -- Bold Artist / Source
+        local aLbl = Instance.new("TextLabel")
+        aLbl.Size                  = UDim2.new(1, 0, 0, 16)
+        aLbl.Position              = UDim2.new(0, 0, 0, 26)
+        aLbl.BackgroundTransparency = 1
+        aLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
+        aLbl.TextColor3            = C.Accent
+        aLbl.Font                  = Enum.Font.Code
+        aLbl.TextSize              = 10
+        aLbl.TextXAlignment        = Enum.TextXAlignment.Left
+        aLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+        aLbl.ZIndex                = 53
+        aLbl.Parent                = rightBox
+        hudArtistLbl = aLbl
+
+        -- Divider Line
+        local div = Instance.new("Frame")
+        div.Size             = UDim2.new(1, 0, 0, 1)
+        div.Position         = UDim2.new(0, 0, 0, 46)
+        div.BackgroundColor3 = C.BorderCol
+        div.BorderSizePixel  = 0
+        div.ZIndex           = 53
+        div.Parent           = rightBox
+
+        -- Place Info (Moved down)
+        local pLbl = Instance.new("TextLabel")
+        pLbl.Size                  = UDim2.new(1, 0, 0, 15)
+        pLbl.Position              = UDim2.new(0, 0, 0, 52)
+        pLbl.BackgroundTransparency = 1
+        pLbl.Text                  = "Map: " .. placeTitle .. " (ID: " .. tostring(game.PlaceId) .. ")"
+        pLbl.TextColor3            = C.SubText
+        pLbl.Font                  = Enum.Font.Code
+        pLbl.TextSize              = 10
+        pLbl.TextXAlignment        = Enum.TextXAlignment.Left
+        pLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+        pLbl.ZIndex                = 53
+        pLbl.Parent                = rightBox
+        hudPlaceLbl = pLbl
+
+        -- User Info (Moved down)
+        local uLbl = Instance.new("TextLabel")
+        uLbl.Size                  = UDim2.new(1, 0, 0, 15)
+        uLbl.Position              = UDim2.new(0, 0, 0, 69)
+        uLbl.BackgroundTransparency = 1
+        uLbl.Text                  = "User: " .. Player.DisplayName .. " (@" .. Player.Name .. ")"
+        uLbl.TextColor3            = C.SubText
+        uLbl.Font                  = Enum.Font.Code
+        uLbl.TextSize              = 10
+        uLbl.TextXAlignment        = Enum.TextXAlignment.Left
+        uLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+        uLbl.ZIndex                = 53
+        uLbl.Parent                = rightBox
+        hudUserLbl = uLbl
+
+        -- Function to adjust cover size & text layout on resize
+        local function updateHUDLayout()
+            local totalH = frame.AbsoluteSize.Y
+            local coverDim = math.clamp(totalH - 34, 44, 200)
+            cover.Size = UDim2.new(0, coverDim, 0, coverDim)
+
+            rightBox.Position = UDim2.new(0, coverDim + 14, 0, 0)
+            rightBox.Size     = UDim2.new(1, -(coverDim + 22), 1, 0)
+        end
+        updateHUDLayout()
+
         -- Resizing corner grip for HUD
         do
             local resizeGrip = Instance.new("TextButton")
@@ -393,94 +501,13 @@ return function(Shared)
             UserInput.InputChanged:Connect(function(i)
                 if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
                     local d = i.Position - rStartPos
-                    local newW = math.clamp(rStartSize.X + d.X, 220, 600)
-                    local newH = math.clamp(rStartSize.Y + d.Y, 85, 300)
+                    local newW = math.clamp(rStartSize.X + d.X, 240, 700)
+                    local newH = math.clamp(rStartSize.Y + d.Y, 95, 320)
                     frame.Size = UDim2.new(0, newW, 0, newH)
+                    updateHUDLayout()
                 end
             end)
         end
-
-        local content = Instance.new("Frame")
-        content.Size             = UDim2.new(1, 0, 1, -20)
-        content.Position         = UDim2.new(0, 0, 0, 20)
-        content.BackgroundTransparency = 1
-        content.ZIndex           = 51
-        content.Parent           = frame
-
-        local cover = Instance.new("ImageLabel")
-        cover.Size                = UDim2.new(0, 48, 0, 48)
-        cover.Position            = UDim2.new(0, 6, 0, 6)
-        cover.BackgroundColor3    = Color3.fromRGB(225, 230, 240)
-        cover.BorderSizePixel     = 1
-        cover.BorderColor3        = C.BorderCol
-        cover.ScaleType           = Enum.ScaleType.Fit
-        cover.ZIndex              = 52
-        cover.Parent              = content
-        hudCoverImg = cover
-
-        local sLbl = Instance.new("TextLabel")
-        sLbl.Size                  = UDim2.new(1, -62, 0, 18)
-        sLbl.Position              = UDim2.new(0, 58, 0, 4)
-        sLbl.BackgroundTransparency = 1
-        sLbl.Text                  = currentTrack.name
-        sLbl.TextColor3            = C.TextDark
-        sLbl.Font                  = Enum.Font.ArimoBold
-        sLbl.TextSize              = 12
-        sLbl.TextXAlignment        = Enum.TextXAlignment.Left
-        sLbl.TextTruncate          = Enum.TextTruncate.AtEnd
-        sLbl.ZIndex                = 52
-        sLbl.Parent                = content
-        hudSongLbl = sLbl
-
-        local aLbl = Instance.new("TextLabel")
-        aLbl.Size                  = UDim2.new(1, -62, 0, 16)
-        aLbl.Position              = UDim2.new(0, 58, 0, 22)
-        aLbl.BackgroundTransparency = 1
-        aLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
-        aLbl.TextColor3            = C.Accent
-        aLbl.Font                  = Enum.Font.Code
-        aLbl.TextSize              = 10
-        aLbl.TextXAlignment        = Enum.TextXAlignment.Left
-        aLbl.TextTruncate          = Enum.TextTruncate.AtEnd
-        aLbl.ZIndex                = 52
-        aLbl.Parent                = content
-        hudArtistLbl = aLbl
-
-        local div = Instance.new("Frame")
-        div.Size             = UDim2.new(1, -12, 0, 1)
-        div.Position         = UDim2.new(0, 6, 0, 58)
-        div.BackgroundColor3 = C.BorderCol
-        div.BorderSizePixel  = 0
-        div.ZIndex           = 52
-        div.Parent           = content
-
-        local pLbl = Instance.new("TextLabel")
-        pLbl.Size                  = UDim2.new(1, -12, 0, 14)
-        pLbl.Position              = UDim2.new(0, 6, 0, 62)
-        pLbl.BackgroundTransparency = 1
-        pLbl.Text                  = "Map: " .. placeTitle .. " (ID: " .. tostring(game.PlaceId) .. ")"
-        pLbl.TextColor3            = C.SubText
-        pLbl.Font                  = Enum.Font.Code
-        pLbl.TextSize              = 10
-        pLbl.TextXAlignment        = Enum.TextXAlignment.Left
-        pLbl.TextTruncate          = Enum.TextTruncate.AtEnd
-        pLbl.ZIndex                = 52
-        pLbl.Parent                = content
-        hudPlaceLbl = pLbl
-
-        local uLbl = Instance.new("TextLabel")
-        uLbl.Size                  = UDim2.new(1, -12, 0, 14)
-        uLbl.Position              = UDim2.new(0, 6, 0, 76)
-        uLbl.BackgroundTransparency = 1
-        uLbl.Text                  = "User: " .. Player.DisplayName .. " (@" .. Player.Name .. ")"
-        uLbl.TextColor3            = C.SubText
-        uLbl.Font                  = Enum.Font.Code
-        uLbl.TextSize              = 10
-        uLbl.TextXAlignment        = Enum.TextXAlignment.Left
-        uLbl.TextTruncate          = Enum.TextTruncate.AtEnd
-        uLbl.ZIndex                = 52
-        uLbl.Parent                = content
-        hudUserLbl = uLbl
 
         applyImage(hudCoverImg, currentTrack.cover)
     end
@@ -645,5 +672,5 @@ return function(Shared)
         Shared.Notify("Spotify", "Next track command sent", true)
     end)
 
-    print("[Music_Handler] Loaded -- Dynamic Cache-Busted Covers, Resizable HUD, Bold Fonts, Respawn Tracking Online")
+    print("[Music_Handler] Loaded -- Scaled Covers, Non-Scaling Clean Typography, Respawn Tracking Online")
 end
