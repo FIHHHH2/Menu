@@ -1,5 +1,5 @@
 -- MM2_Functions.lua
--- Unrestricted Kill Aura, Velocity-Based Knife Prediction, Lobby-Safe Auto Grab, Role ESP
+-- Unrestricted Kill Aura, Non-Intrusive Silent Aim Targeting Murderer, Knife Prediction, Lobby-Safe Auto Grab, Role ESP
 
 return function(Shared)
     local Players    = Shared.Services.Players
@@ -34,13 +34,11 @@ return function(Shared)
         return hum and hum.Health > 0
     end
 
-    -- Checks whether our character is alive and NOT in the Lobby model
     local function selfAliveInRound()
         local c = getChar()
         if not c then return false end
         local hum = c:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then return false end
-        -- If we are a descendant of the Lobby model we're in lobby
         local lobby = Workspace:FindFirstChild("Lobby")
         if lobby and c:IsDescendantOf(lobby) then return false end
         return true
@@ -50,10 +48,19 @@ return function(Shared)
         if not plr then return "Innocent" end
         local bp   = plr:FindFirstChild("Backpack")
         local char = plr.Character
-        if (bp and bp:FindFirstChild("Knife"))   or (char and char:FindFirstChild("Knife"))   then return "Murderer" end
+        if (bp and bp:FindFirstChild("Knife")) or (char and char:FindFirstChild("Knife")) then return "Murderer" end
         if (bp and (bp:FindFirstChild("Gun") or bp:FindFirstChild("Revolver")))
         or (char and (char:FindFirstChild("Gun") or char:FindFirstChild("Revolver"))) then return "Sheriff" end
         return "Innocent"
+    end
+
+    local function getMurderer()
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= Player and isAlive(plr) and getRole(plr) == "Murderer" then
+                return plr
+            end
+        end
+        return nil
     end
 
     local function getMyKnife()
@@ -66,30 +73,56 @@ return function(Shared)
             or (bp and (bp:FindFirstChild("Gun") or bp:FindFirstChild("Revolver")))
     end
 
-    -- ── LEFT COLUMN ───────────────────────────────────────────────
+    -- Target resolver for Silent Aim:
+    -- If Sheriff / Innocent -> prioritize Murderer
+    -- If Murderer -> prioritize closest living innocent/sheriff
+    local function getSilentAimTarget()
+        local myHRP = getHRP()
+        if not myHRP then return nil end
+
+        local myRole = getRole(Player)
+        if myRole ~= "Murderer" then
+            local murd = getMurderer()
+            if murd and murd.Character then
+                local mHRP = murd.Character:FindFirstChild("HumanoidRootPart")
+                if mHRP then return mHRP end
+            end
+        end
+
+        -- Fallback to nearest living enemy
+        local best, bestDist = nil, math.huge
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= Player and isAlive(plr) then
+                local tHRP = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+                if tHRP then
+                    local d = (tHRP.Position - myHRP.Position).Magnitude
+                    if d < bestDist then bestDist = d; best = tHRP end
+                end
+            end
+        end
+        return best
+    end
+
+    -- ── LEFT COLUMN: KILL AURA & SILENT AIM ───────────────────────
     MkSection(leftCol, "Kill Aura Engine", 1)
 
-    -- Aura visualizer box
     local auraBoxPart = nil
     MkToggle(leftCol, "Kill Aura Box Visualizer", "KillAuraBox", 2, function(state)
-        if not state then
-            if auraBoxPart then auraBoxPart:Destroy(); auraBoxPart = nil end
+        if not state and auraBoxPart then
+            auraBoxPart:Destroy(); auraBoxPart = nil
         end
     end)
 
     MkSlider(leftCol, "Aura Radius (studs)", "KillAuraRadius", 5, 80, 20, 3, nil)
 
-    -- Kill Aura — fires firetouchinterest between knife handle and each target's HRP.
-    -- Falls back to direct Humanoid damage if needed.
     MkToggle(leftCol, "Kill Aura (All Players)", "KillAura", 4, function(state)
-        if not state then
-            if auraBoxPart then auraBoxPart:Destroy(); auraBoxPart = nil end
+        if not state and auraBoxPart then
+            auraBoxPart:Destroy(); auraBoxPart = nil
         end
     end)
 
     -- Aura heartbeat
-    local auraConn
-    auraConn = RunService.Heartbeat:Connect(function()
+    RunService.Heartbeat:Connect(function()
         if not Shared.Flags["KillAura"] then return end
         if not selfAliveInRound() then return end
 
@@ -97,7 +130,6 @@ return function(Shared)
         if not hrp then return end
         local radius = Shared.Flags["KillAuraRadius"] or 20
 
-        -- Visualizer
         if Shared.Flags["KillAuraBox"] then
             if not auraBoxPart then
                 auraBoxPart = Instance.new("Part")
@@ -113,18 +145,16 @@ return function(Shared)
                 sel.Adornee = auraBoxPart; sel.Color3 = Color3.fromRGB(255,50,50); sel.LineThickness = 0.06
                 sel.Parent = auraBoxPart
             end
-            auraBoxPart.Size     = Vector3.new(radius*2, radius*2, radius*2)
-            auraBoxPart.CFrame   = hrp.CFrame
+            auraBoxPart.Size   = Vector3.new(radius*2, radius*2, radius*2)
+            auraBoxPart.CFrame = hrp.CFrame
         elseif auraBoxPart then
             auraBoxPart:Destroy(); auraBoxPart = nil
         end
 
-        -- Kill everyone in radius — no role restriction
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= Player and isAlive(plr) then
                 local tHRP = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
                 if tHRP and (tHRP.Position - hrp.Position).Magnitude <= radius then
-                    -- Method 1: firetouchinterest with knife handle
                     local knife = getMyKnife()
                     if knife then
                         local handle = knife:FindFirstChild("Handle") or knife:FindFirstChildOfClass("BasePart")
@@ -133,7 +163,6 @@ return function(Shared)
                             pcall(function() firetouchinterest(tHRP, handle, 1) end)
                         end
                     end
-                    -- Method 2: gun firetouchinterest
                     local gun = getMyGun()
                     if gun then
                         local handle = gun:FindFirstChild("Handle") or gun:FindFirstChildOfClass("BasePart")
@@ -141,7 +170,6 @@ return function(Shared)
                             pcall(function() firetouchinterest(tHRP, handle, 0) end)
                         end
                     end
-                    -- Method 3: BindableEvent KnifeKill/GunKill
                     pcall(function()
                         local kk = game:GetService("ReplicatedStorage").Remotes.Gameplay:FindFirstChild("KnifeKill")
                         if kk and getMyKnife() then kk:Fire() end
@@ -153,70 +181,101 @@ return function(Shared)
         end
     end)
 
-    MkSection(leftCol, "Silent Aim", 10)
+    -- ── NON-INTRUSIVE SILENT AIM ───────────────────────────────────
+    -- Hooks Mouse.Hit / Mouse.Target and Raycast/FireServer without touching camera or player orientation.
+    MkSection(leftCol, "Silent Aim (Direct Bullet Redirection)", 10)
 
-    -- Silent Aim via __namecall hook
-    local silentAimConn = nil
-    local originalNC    = nil
-    MkToggle(leftCol, "Silent Aim", "SilentAim", 11, function(state)
-        if state then
-            local mt = getrawmetatable and getrawmetatable(game)
-            if mt then
-                originalNC = rawget(mt, "__namecall")
-                local function findTarget()
-                    local myHRP = getHRP()
-                    if not myHRP then return nil end
-                    local best, bestDist = nil, math.huge
-                    for _, plr in ipairs(Players:GetPlayers()) do
-                        if plr ~= Player and isAlive(plr) then
-                            local tHRP = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
-                            if tHRP then
-                                local dist = (tHRP.Position - myHRP.Position).Magnitude
-                                if dist < bestDist then bestDist = dist; best = tHRP end
-                            end
+    local hooksInstalled = false
+    local function installSilentAimHooks()
+        if hooksInstalled then return end
+        hooksInstalled = true
+
+        local mt = getrawmetatable and getrawmetatable(game)
+        if not mt then return end
+
+        local oldIndex    = rawget(mt, "__index")
+        local oldNamecall = rawget(mt, "__namecall")
+
+        setreadonly(mt, false)
+
+        -- Hook Mouse.Hit & Mouse.Target
+        rawset(mt, "__index", function(self, key)
+            if Shared.Flags["SilentAim"] and typeof(self) == "Instance" and self:IsA("Mouse") then
+                local target = getSilentAimTarget()
+                if target then
+                    if key == "Hit" or key == "hit" then
+                        return target.CFrame
+                    elseif key == "Target" or key == "target" then
+                        return target
+                    elseif key == "UnitRay" then
+                        local cam = Workspace.CurrentCamera
+                        if cam then
+                            local dir = (target.Position - cam.CFrame.Position).Unit
+                            return Ray.new(cam.CFrame.Position, dir)
                         end
                     end
-                    return best
                 end
-                setreadonly(mt, false)
-                rawset(mt, "__namecall", function(self, ...)
-                    if not Shared.Flags["SilentAim"] then return originalNC(self, ...) end
-                    local method = getnamecallmethod()
-                    local args   = {...}
-                    if method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
-                        local target = findTarget()
+            end
+            return oldIndex(self, key)
+        end)
+
+        -- Hook Raycasts & Remote Events
+        rawset(mt, "__namecall", function(self, ...)
+            if Shared.Flags["SilentAim"] then
+                local method = getnamecallmethod()
+                local args   = {...}
+
+                -- Redirect raycast bullets straight to target
+                if method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "findPartOnRay" then
+                    local target = getSilentAimTarget()
+                    if target then
+                        local origin = args[1]
+                        if typeof(origin) == "Vector3" then
+                            args[2] = (target.Position - origin).Unit * 1000
+                        end
+                    end
+                    return oldNamecall(self, table.unpack(args))
+                end
+
+                -- Redirect MM2 gun remotes
+                if method == "FireServer" or method == "InvokeServer" then
+                    local n = self.Name:lower()
+                    if n:find("gun") or n:find("shoot") or n:find("bullet") or n:find("beam") then
+                        local target = getSilentAimTarget()
                         if target then
-                            local origin = args[1]
-                            if typeof(origin) == "Vector3" then
-                                args[2] = (target.Position - origin)
+                            for i, v in ipairs(args) do
+                                if typeof(v) == "Vector3" then
+                                    args[i] = target.Position
+                                elseif typeof(v) == "CFrame" then
+                                    args[i] = target.CFrame
+                                end
                             end
                         end
                     end
-                    return originalNC(self, table.unpack(args))
-                end)
-                setreadonly(mt, true)
+                    return oldNamecall(self, table.unpack(args))
+                end
             end
-        else
-            local mt = getrawmetatable and getrawmetatable(game)
-            if mt and originalNC then
-                setreadonly(mt, false)
-                rawset(mt, "__namecall", originalNC)
-                setreadonly(mt, true)
-                originalNC = nil
-            end
+            return oldNamecall(self, ...)
+        end)
+
+        setreadonly(mt, true)
+    end
+
+    MkToggle(leftCol, "Silent Aim (Auto Hit Murderer)", "SilentAim", 11, function(state)
+        if state then
+            installSilentAimHooks()
         end
     end)
 
     MkSection(leftCol, "Auto Grab Gun (Dead Drop)", 20)
 
-    -- Auto Grab Gun — lobby-safe: only fires while alive in a round
     local autoGrabConn
     MkToggle(leftCol, "Auto Grab Dropped Gun", "AutoGrabGun", 21, function(state)
         if autoGrabConn then autoGrabConn:Disconnect(); autoGrabConn = nil end
         if state then
             autoGrabConn = RunService.Heartbeat:Connect(function()
-                if not selfAliveInRound() then return end       -- not in lobby / not dead
-                if getMyGun() then return end                   -- already have gun
+                if not selfAliveInRound() then return end
+                if getMyGun() then return end
                 local myHRP = getHRP(); if not myHRP then return end
                 for _, obj in ipairs(Workspace:GetDescendants()) do
                     if (obj.Name == "GunDrop" or (obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver")))
@@ -235,22 +294,18 @@ return function(Shared)
         end
     end)
 
-    -- ── RIGHT COLUMN ──────────────────────────────────────────────
+    -- ── RIGHT COLUMN: KNIFE & COMBAT TOOLS ────────────────────────
     MkSection(rightCol, "Knife Controls", 1)
 
-    -- Knife Prediction — redirects thrown knife toward target's future predicted position
-    -- based on their current velocity extrapolation.
     local knifeThrowConn
     MkToggle(rightCol, "Knife Velocity Prediction", "KnifePrediction", 2, function(state)
         if knifeThrowConn then knifeThrowConn:Disconnect(); knifeThrowConn = nil end
         if state then
             knifeThrowConn = Workspace.ChildAdded:Connect(function(obj)
                 if not Shared.Flags["KnifePrediction"] then return end
-                -- Detect a thrown knife (usually a Part/Model named "Knife" or containing "Knife")
                 if obj.Name:find("Knife") or obj.Name:find("knife") then
-                    task.wait()  -- let physics initialize
+                    task.wait()
                     local myHRP = getHRP(); if not myHRP then return end
-                    -- Find nearest living enemy to predict toward
                     local target, bestDist = nil, math.huge
                     for _, plr in ipairs(Players:GetPlayers()) do
                         if plr ~= Player and isAlive(plr) then
@@ -262,12 +317,10 @@ return function(Shared)
                         end
                     end
                     if not target then return end
-                    -- Predict target future position based on their velocity
                     local vel = target.AssemblyLinearVelocity
                     local dist = (target.Position - myHRP.Position).Magnitude
-                    local travelTime = dist / 80  -- knife travels ~80 studs/sec
+                    local travelTime = dist / 80
                     local predictedPos = target.Position + vel * travelTime
-                    -- Steer the knife: set CFrame toward predicted position
                     local knifeBase = obj:FindFirstChildOfClass("BasePart") or (obj:IsA("BasePart") and obj)
                     if knifeBase then
                         pcall(function()
@@ -283,9 +336,9 @@ return function(Shared)
         end
     end)
 
+    -- Auto Throw: uses firetouchinterest WITHOUT rotating player CFrame/Camera
     MkToggle(rightCol, "Auto Throw Knife at Nearest", "AutoThrow", 3, function(state) end)
 
-    local autoThrowConn
     RunService.Heartbeat:Connect(function()
         if not Shared.Flags["AutoThrow"] then return end
         if not selfAliveInRound() then return end
@@ -302,17 +355,13 @@ return function(Shared)
             end
         end
         if target and bestDist < 60 then
-            -- Aim HRP toward target and simulate throw by firing touch
             local knife = getMyKnife()
             if knife then
                 local handle = knife:FindFirstChild("Handle") or knife:FindFirstChildOfClass("BasePart")
                 if handle then
                     pcall(function()
-                        local vel = target.AssemblyLinearVelocity
-                        local dist2 = bestDist
-                        local predicted = target.Position + vel * (dist2 / 80)
-                        myHRP.CFrame = CFrame.new(myHRP.Position, predicted)
                         firetouchinterest(target, handle, 0)
+                        firetouchinterest(target, handle, 1)
                     end)
                 end
             end
@@ -324,8 +373,7 @@ return function(Shared)
     local espHighlights = {}
     local espConn
     MkToggle(rightCol, "Role ESP (Billboard)", "RoleESP", 21, function(state)
-        -- Clear old
-        for _, h in pairs(espHighlights) do pcall(function() h:Destroy() end) end
+        for _, h in pairs(espHighlights) do pcall(function() h.gui:Destroy() end) end
         espHighlights = {}
         if espConn then espConn:Disconnect(); espConn = nil end
         if not state then return end
@@ -362,6 +410,7 @@ return function(Shared)
 
     MkSection(rightCol, "Sheriff Tools", 30)
 
+    -- Auto Shoot Murderer WITHOUT rotating camera
     MkToggle(rightCol, "Auto Shoot Murderer", "AutoShoot", 31, function(state) end)
     RunService.Heartbeat:Connect(function()
         if not Shared.Flags["AutoShoot"] then return end
@@ -369,12 +418,16 @@ return function(Shared)
         if getRole(Player) ~= "Sheriff" then return end
         local gun = getMyGun(); if not gun then return end
         local myHRP = getHRP(); if not myHRP then return end
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= Player and getRole(plr) == "Murderer" and isAlive(plr) then
-                local tHRP = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
-                if tHRP then
-                    local handle = gun:FindFirstChild("Handle") or gun:FindFirstChildOfClass("BasePart")
-                    if handle then pcall(function() firetouchinterest(tHRP, handle, 0) end) end
+        local murd = getMurderer()
+        if murd and murd.Character then
+            local tHRP = murd.Character:FindFirstChild("HumanoidRootPart")
+            if tHRP then
+                local handle = gun:FindFirstChild("Handle") or gun:FindFirstChildOfClass("BasePart")
+                if handle then
+                    pcall(function()
+                        firetouchinterest(tHRP, handle, 0)
+                        firetouchinterest(tHRP, handle, 1)
+                    end)
                 end
             end
         end
@@ -401,5 +454,5 @@ return function(Shared)
         end
     end)
 
-    print("[MM2_Functions] Loaded -- Kill Aura, Box Visualizer, Combat Online")
+    print("[MM2_Functions] Loaded -- Non-Intrusive Silent Aim & Combat Online")
 end

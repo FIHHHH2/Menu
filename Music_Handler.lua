@@ -1,5 +1,5 @@
 -- Music_Handler.lua
--- Robust Music Engine: Spotify + Last.fm Live Scrobbler with Album Covers, Bold Typography,
+-- Robust Music Engine: Spotify + Last.fm Live Scrobbler with Dynamic Album Covers, Bold Typography,
 -- Respawn Tracking, and Draggable Bottom-Left Info Widget
 
 return function(Shared)
@@ -26,17 +26,19 @@ return function(Shared)
     -- Verified working Last.fm public API key
     local LASTFM_API_KEY = "b25b959554ed76058ac220b7b2e0a026"
     local currentTrack = {
-        name     = "Not Playing",
-        artist   = "No Artist",
-        cover    = "",
+        name      = "Not Playing",
+        artist    = "No Artist",
+        cover     = "",
         isPlaying = false,
-        source   = "None"
+        source    = "None"
     }
 
     local billboard   = nil
     local hudWidget   = nil
     local pollConn    = nil
     local placeTitle  = "Roblox Place"
+    local lastCoverUrl = ""
+    local coverFileCounter = 0
 
     -- Fetch place name asynchronously
     task.spawn(function()
@@ -46,22 +48,27 @@ return function(Shared)
         end
     end)
 
-    -- Image downloader/loader helper
+    -- Dynamic image downloader with cache-busting per track cover
     local function applyImage(imgLabel, url)
         if not url or url == "" then
             imgLabel.Visible = false
+            imgLabel.Image = ""
             return
         end
         imgLabel.Visible = true
+
         if getcustomasset and writefile then
             task.spawn(function()
+                coverFileCounter = (coverFileCounter + 1) % 10
+                local fName = "fih_cover_" .. tostring(coverFileCounter) .. ".png"
                 local ok, res = pcall(function()
                     return Shared.HttpRequest({ Url = url, Method = "GET" })
                 end)
                 if ok and res and res.Body and #res.Body > 0 then
                     pcall(function()
-                        local fName = "fih_album_cache.png"
                         writefile(fName, res.Body)
+                        imgLabel.Image = ""
+                        task.wait()
                         imgLabel.Image = getcustomasset(fName)
                     end)
                 else
@@ -167,8 +174,13 @@ return function(Shared)
 
         local coverUrl = ""
         if track.image and type(track.image) == "table" and #track.image > 0 then
-            local lastImg = track.image[#track.image]
-            coverUrl = (type(lastImg) == "table" and lastImg["#text"]) or ""
+            for i = #track.image, 1, -1 do
+                local imgObj = track.image[i]
+                if type(imgObj) == "table" and imgObj["#text"] and #imgObj["#text"] > 0 then
+                    coverUrl = imgObj["#text"]
+                    break
+                end
+            end
         end
 
         return {
@@ -208,7 +220,6 @@ return function(Shared)
         bg.BorderColor3         = Color3.fromRGB(0, 160, 255)
         bg.Parent               = billboard
 
-        -- Cover Art Box
         local cover = Instance.new("ImageLabel")
         cover.Name                = "CoverArt"
         cover.Size                = UDim2.new(0, 48, 0, 48)
@@ -220,7 +231,6 @@ return function(Shared)
         cover.Parent              = bg
         bbCoverImg = cover
 
-        -- Bold Song Title
         local songLbl = Instance.new("TextLabel")
         songLbl.Size                  = UDim2.new(1, -60, 0, 22)
         songLbl.Position              = UDim2.new(0, 56, 0, 4)
@@ -234,7 +244,6 @@ return function(Shared)
         songLbl.Parent                = bg
         bbSongLbl = songLbl
 
-        -- Bold Artist + Source
         local artistLbl = Instance.new("TextLabel")
         artistLbl.Size                  = UDim2.new(1, -60, 0, 18)
         artistLbl.Position              = UDim2.new(0, 56, 0, 26)
@@ -280,7 +289,6 @@ return function(Shared)
         frame.Parent           = Shared.GUI
         hudWidget = frame
 
-        -- Title bar (draggable)
         local tBar = Instance.new("Frame")
         tBar.Size             = UDim2.new(1, 0, 0, 20)
         tBar.BackgroundColor3 = C.TitleBar
@@ -301,7 +309,6 @@ return function(Shared)
         tLbl.ZIndex                 = 52
         tLbl.Parent                 = tBar
 
-        -- Draggable logic
         do
             local drag, ds, sp = false, nil, nil
             tBar.InputBegan:Connect(function(i)
@@ -322,7 +329,6 @@ return function(Shared)
             end)
         end
 
-        -- Body Area
         local content = Instance.new("Frame")
         content.Size             = UDim2.new(1, 0, 1, -20)
         content.Position         = UDim2.new(0, 0, 0, 20)
@@ -330,7 +336,6 @@ return function(Shared)
         content.ZIndex           = 51
         content.Parent           = frame
 
-        -- Album Cover
         local cover = Instance.new("ImageLabel")
         cover.Size                = UDim2.new(0, 48, 0, 48)
         cover.Position            = UDim2.new(0, 6, 0, 6)
@@ -342,7 +347,6 @@ return function(Shared)
         cover.Parent              = content
         hudCoverImg = cover
 
-        -- Bold Song Title
         local sLbl = Instance.new("TextLabel")
         sLbl.Size                  = UDim2.new(1, -62, 0, 18)
         sLbl.Position              = UDim2.new(0, 58, 0, 4)
@@ -357,7 +361,6 @@ return function(Shared)
         sLbl.Parent                = content
         hudSongLbl = sLbl
 
-        -- Bold Artist / Source
         local aLbl = Instance.new("TextLabel")
         aLbl.Size                  = UDim2.new(1, -62, 0, 16)
         aLbl.Position              = UDim2.new(0, 58, 0, 22)
@@ -372,7 +375,6 @@ return function(Shared)
         aLbl.Parent                = content
         hudArtistLbl = aLbl
 
-        -- Divider
         local div = Instance.new("Frame")
         div.Size             = UDim2.new(1, -12, 0, 1)
         div.Position         = UDim2.new(0, 6, 0, 58)
@@ -381,7 +383,6 @@ return function(Shared)
         div.ZIndex           = 52
         div.Parent           = content
 
-        -- Place Info
         local pLbl = Instance.new("TextLabel")
         pLbl.Size                  = UDim2.new(1, -12, 0, 14)
         pLbl.Position              = UDim2.new(0, 6, 0, 62)
@@ -396,7 +397,6 @@ return function(Shared)
         pLbl.Parent                = content
         hudPlaceLbl = pLbl
 
-        -- User Info
         local uLbl = Instance.new("TextLabel")
         uLbl.Size                  = UDim2.new(1, -12, 0, 14)
         uLbl.Position              = UDim2.new(0, 6, 0, 76)
@@ -414,16 +414,19 @@ return function(Shared)
         applyImage(hudCoverImg, currentTrack.cover)
     end
 
-    -- Update all visual elements
+    -- Update all visual elements & apply new cover image when URL changes
     local function updateVisuals(track)
+        local coverChanged = (track.cover ~= lastCoverUrl)
         currentTrack = track
+        lastCoverUrl = track.cover
+
         if bbSongLbl then bbSongLbl.Text = track.name end
         if bbArtistLbl then bbArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
-        if bbCoverImg then applyImage(bbCoverImg, track.cover) end
+        if bbCoverImg and coverChanged then applyImage(bbCoverImg, track.cover) end
 
         if hudSongLbl then hudSongLbl.Text = track.name end
         if hudArtistLbl then hudArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
-        if hudCoverImg then applyImage(hudCoverImg, track.cover) end
+        if hudCoverImg and coverChanged then applyImage(hudCoverImg, track.cover) end
     end
 
     -- Persistent Polling Engine
@@ -571,5 +574,5 @@ return function(Shared)
         Shared.Notify("Spotify", "Next track command sent", true)
     end)
 
-    print("[Music_Handler] Loaded -- Covers, HUD, Bold Fonts, Respawn Tracking Online")
+    print("[Music_Handler] Loaded -- Dynamic Covers, HUD, Bold Fonts, Respawn Tracking Online")
 end
