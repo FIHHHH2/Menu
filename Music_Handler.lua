@@ -264,7 +264,6 @@ return function(Shared)
         cover.Parent              = bg
         bbCoverImg = cover
 
-        -- Text moved a bit down and spaced to prevent clipping
         local songLbl = Instance.new("TextLabel")
         songLbl.Size                  = UDim2.new(1, -62, 0, 20)
         songLbl.Position              = UDim2.new(0, 58, 0, 7)
@@ -587,7 +586,7 @@ return function(Shared)
             updateVisuals(trk)
             Shared.Notify("Last.fm", trk.name .. " - " .. trk.artist, true)
             if Shared.Flags["MusicBillboard"] then buildBillboard() end
-            if Shared.Flags["MusicHUD"] then buildHUD() end
+            if not hudWidget then buildHUD() end
             startPolling()
         else
             Shared.Notify("Last.fm", "No track found / scrobbling", false)
@@ -605,12 +604,22 @@ return function(Shared)
         end
     end)
 
-    MkToggle(leftCol, "Bottom-Left Info HUD", "MusicHUD", 12, function(state)
+    local _, setHudToggle = MkToggle(leftCol, "Bottom-Left Info HUD", "MusicHUD", 12, function(state)
         if state then
             buildHUD()
             startPolling()
         else
             if hudWidget then hudWidget:Destroy(); hudWidget = nil end
+        end
+    end)
+
+    -- Auto-launch HUD by default
+    task.delay(0.5, function()
+        if setHudToggle then
+            setHudToggle(true, true)
+        else
+            buildHUD()
+            startPolling()
         end
     end)
 
@@ -645,7 +654,7 @@ return function(Shared)
             updateVisuals(trk)
             Shared.Notify("Spotify", trk.name .. " - " .. trk.artist, true)
             if Shared.Flags["MusicBillboard"] then buildBillboard() end
-            if Shared.Flags["MusicHUD"] then buildHUD() end
+            if not hudWidget then buildHUD() end
             startPolling()
         else
             Shared.Notify("Spotify", "Status: " .. tostring(err or "Failed"), false)
@@ -672,5 +681,5 @@ return function(Shared)
         Shared.Notify("Spotify", "Next track command sent", true)
     end)
 
-    print("[Music_Handler] Loaded -- Scaled Covers, Non-Scaling Clean Typography, Respawn Tracking Online")
+    print("[Music_Handler] Loaded -- Dynamic Covers, Scaled HUD, Clean Typography Online")
 end

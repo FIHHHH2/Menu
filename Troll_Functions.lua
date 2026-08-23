@@ -1,6 +1,6 @@
 -- Troll_Functions.lua
--- Server-Replicated Physics Trolls: Player Selector, Solid Platform Mode, Physics Push Booster,
--- Path Blocker Wall, Orbit Swarm, Head Stand, and Shadow Leash
+-- Server-Replicated Physics Trolls: Player Selector, Solid Anchored Air Platform, Immovable Path Blocker Wall,
+-- PreSimulation Physics Push Booster, Orbit Swarm, Head Stand, and Shadow Leash
 
 return function(Shared)
     local Players      = Shared.Services.Players
@@ -24,7 +24,7 @@ return function(Shared)
     local rightCol = cols.Right
 
     -- ── State & Target Selection ─────────────────────────────────
-    local selectedTargetPlr = nil  -- nil means closest player
+    local selectedTargetPlr = nil
     local targetDisplayLbl  = nil
 
     local function getChar()  return Shared.Character or Player.Character end
@@ -145,7 +145,7 @@ return function(Shared)
             else
                 local nextIdx = currIdx + direction
                 if nextIdx > #plrs then
-                    selectedTargetPlr = nil  -- wraps back to Closest Player
+                    selectedTargetPlr = nil
                 elseif nextIdx < 1 then
                     selectedTargetPlr = nil
                 else
@@ -171,87 +171,136 @@ return function(Shared)
     -- 1. Push Player (Physics Booster)
     -- Hits target from behind in their facing direction at high velocity, launching them forward
     local pushConn
+    local pushBV
     MkToggle(leftCol, "Push Player (Speed Booster)", "PushPlayer", 11, function(state)
         if pushConn then pushConn:Disconnect(); pushConn = nil end
+        if pushBV then pushBV:Destroy(); pushBV = nil end
         if state then
             enableAllCollisions()
-            pushConn = RunService.Heartbeat:Connect(function()
+            local hrp = getHRP()
+            if hrp then
+                pushBV = Instance.new("BodyVelocity")
+                pushBV.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+                pushBV.Velocity = Vector3.zero
+                pushBV.Parent   = hrp
+            end
+
+            pushConn = RunService.Stepped:Connect(function()
                 local myHRP = getHRP()
                 if not myHRP then return end
                 local target = getActiveTarget()
                 if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
                     local tHRP = target.Character.HumanoidRootPart
                     local look = tHRP.CFrame.LookVector
-                    local power = Shared.Flags["PushForce"] or 180
+                    local power = Shared.Flags["PushForce"] or 200
 
                     enableAllCollisions()
-                    -- Place character 1.1 studs behind them and slam forward into their torso
-                    myHRP.CFrame = CFrame.new(tHRP.Position - look * 1.1, tHRP.Position + look)
-                    myHRP.AssemblyLinearVelocity = look * power + Vector3.new(0, 15, 0)
+                    myHRP.CFrame = CFrame.new(tHRP.Position - look * 0.8, tHRP.Position + look)
+                    if pushBV then
+                        pushBV.Velocity = look * power + Vector3.new(0, 20, 0)
+                    else
+                        myHRP.AssemblyLinearVelocity = look * power + Vector3.new(0, 20, 0)
+                    end
                 end
             end)
         else
+            if pushBV then pushBV:Destroy(); pushBV = nil end
             local myHRP = getHRP()
             if myHRP then myHRP.AssemblyLinearVelocity = Vector3.zero end
         end
     end)
 
-    MkSlider(leftCol, "Push Force", "PushForce", 50, 400, 180, 12, function(val)
+    MkSlider(leftCol, "Push Force", "PushForce", 50, 450, 200, 12, function(val)
         Shared.Flags["PushForce"] = val
     end)
 
-    -- 2. Platform Mode (Infinite Air Jump Pad)
-    -- Keeps character firmly underneath target feet so they can walk/jump in mid-air
-    local platformConn
+    -- 2. Solid Platform Mode (Infinite Air Jump Pad)
+    -- Creates a solid anchored platform under target feet that stays locked to their horizontal movement
+    local platformPart = nil
+    local platformConn = nil
+
     MkToggle(leftCol, "Platform Mode (Air Jump Pad)", "PlatformMode", 13, function(state)
         if platformConn then platformConn:Disconnect(); platformConn = nil end
-        if state then
-            enableAllCollisions()
-            platformConn = RunService.Heartbeat:Connect(function()
-                local myHRP = getHRP()
-                if not myHRP then return end
-                local hum = getHuman()
-                if hum then hum:ChangeState(Enum.HumanoidStateType.Physics) end
+        if platformPart then platformPart:Destroy(); platformPart = nil end
 
+        if state then
+            -- Solid physics platform part
+            platformPart = Instance.new("Part")
+            platformPart.Name         = "Fih_AirPlatform"
+            platformPart.Size         = Vector3.new(7, 1, 7)
+            platformPart.Anchored     = true
+            platformPart.CanCollide   = true
+            platformPart.Transparency = 0.4
+            platformPart.Material     = Enum.Material.Neon
+            platformPart.BrickColor   = BrickColor.new("Cyan")
+            platformPart.TopSurface   = Enum.SurfaceType.Smooth
+            platformPart.BottomSurface= Enum.SurfaceType.Smooth
+            platformPart.CustomPhysicalProperties = PhysicalProperties.new(0.7, 2.0, 0.0, 1.0, 1.0)
+            platformPart.Parent       = Workspace
+
+            enableAllCollisions()
+
+            platformConn = RunService.Stepped:Connect(function()
                 local target = getActiveTarget()
                 if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
                     local tHRP = target.Character.HumanoidRootPart
-                    enableAllCollisions()
+                    local feetPos = tHRP.Position - Vector3.new(0, 3.1, 0)
+                    if platformPart then
+                        platformPart.CFrame = CFrame.new(feetPos)
+                    end
 
-                    -- Place our flat top directly underneath their feet (2.7 studs below target HRP)
-                    myHRP.CFrame = CFrame.new(tHRP.Position - Vector3.new(0, 2.7, 0))
-                    -- Match their horizontal velocity, cancel vertical downward gravity drop
-                    myHRP.AssemblyLinearVelocity = Vector3.new(tHRP.AssemblyLinearVelocity.X, 0, tHRP.AssemblyLinearVelocity.Z)
+                    -- Also position our character directly underneath to carry
+                    local myHRP = getHRP()
+                    if myHRP then
+                        enableAllCollisions()
+                        myHRP.CFrame = CFrame.new(feetPos - Vector3.new(0, 1.2, 0))
+                        myHRP.AssemblyLinearVelocity = Vector3.zero
+                    end
                 end
             end)
-        else
-            local hum = getHuman()
-            if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
-            local myHRP = getHRP()
-            if myHRP then myHRP.AssemblyLinearVelocity = Vector3.zero end
         end
     end)
 
-    -- 3. Path Blocker (Physics Wall)
-    -- Teleports directly in front of target's walking direction to physically block movement
-    local blockConn
+    -- 3. Immovable Path Blocker (Physics Wall)
+    -- Spawns an anchored solid barrier right in target walking path
+    local blockerPart = nil
+    local blockConn   = nil
+
     MkToggle(leftCol, "Path Blocker (Invisible Wall)", "PathBlocker", 14, function(state)
         if blockConn then blockConn:Disconnect(); blockConn = nil end
+        if blockerPart then blockerPart:Destroy(); blockerPart = nil end
+
         if state then
+            blockerPart = Instance.new("Part")
+            blockerPart.Name         = "Fih_BlockerWall"
+            blockerPart.Size         = Vector3.new(6, 8, 2)
+            blockerPart.Anchored     = true
+            blockerPart.CanCollide   = true
+            blockerPart.Transparency = 0.5
+            blockerPart.Material     = Enum.Material.ForceField
+            blockerPart.BrickColor   = BrickColor.new("Bright red")
+            blockerPart.Parent       = Workspace
+
             enableAllCollisions()
-            blockConn = RunService.Heartbeat:Connect(function()
-                local myHRP = getHRP()
-                if not myHRP then return end
+
+            blockConn = RunService.Stepped:Connect(function()
                 local target = getActiveTarget()
                 if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
                     local tHRP = target.Character.HumanoidRootPart
                     local vel = tHRP.AssemblyLinearVelocity
                     local dir = vel.Magnitude > 1.5 and vel.Unit or tHRP.CFrame.LookVector
+                    local wallPos = tHRP.Position + (dir * 2.2)
 
-                    enableAllCollisions()
-                    -- Stand directly in front of their path facing them
-                    myHRP.CFrame = CFrame.new(tHRP.Position + dir * 1.8, tHRP.Position)
-                    myHRP.AssemblyLinearVelocity = Vector3.zero
+                    if blockerPart then
+                        blockerPart.CFrame = CFrame.new(wallPos, wallPos + dir)
+                    end
+
+                    local myHRP = getHRP()
+                    if myHRP then
+                        enableAllCollisions()
+                        myHRP.CFrame = CFrame.new(wallPos, tHRP.Position)
+                        myHRP.AssemblyLinearVelocity = Vector3.zero
+                    end
                 end
             end)
         end
