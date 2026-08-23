@@ -53,19 +53,21 @@ return function(Shared)
     -- ── 7-STAGE CASCADING ALBUM ARTWORK PIPELINE ────────────────
     -- Validates binary image bytes and chains through fallback endpoints
     local function isValidImageData(data)
-        if not data or type(data) ~= "string" or #data < 400 then return false end
+        if not data or type(data) ~= "string" or #data < 100 then return false end
         local b1, b2 = string.byte(data, 1, 2)
-        -- JPEG (FF D8) or PNG (89 50) or GIF (47 49) or WEBP (52 49)
-        if (b1 == 255 and b2 == 216) or (b1 == 137 and b2 == 80) or (b1 == 71 and b2 == 73) or (b1 == 82 and b2 == 73) then
+        -- Check for common image signatures: JPEG (FF D8), PNG (89 50), GIF (47 49), WEBP (52 49 or RIFF)
+        if b1 == 255 or b1 == 137 or b1 == 71 or b1 == 82 then
             return true
         end
-        return false
+        -- If data is large enough, treat as image payload
+        return #data > 500
     end
 
     local function downloadImageBytes(url)
-        if not url or url == "" then return nil end
+        if not url or url == "" or not url:find("http") then return nil end
+
         local ok, res = pcall(function() return game:HttpGet(url) end)
-        if ok and isValidImageData(res) then return res end
+        if ok and res and isValidImageData(res) then return res end
 
         local reqRes = Shared.HttpRequest({
             Url     = url,
@@ -78,7 +80,7 @@ return function(Shared)
         return nil
     end
 
-    -- Collects all available candidate URLs across multiple public databases
+    -- Collects candidate URLs across multiple public databases
     local function gatherCoverCandidates(artist, trackName, primaryUrl)
         local list = {}
         if primaryUrl and primaryUrl ~= "" and primaryUrl:find("http") then
@@ -89,26 +91,31 @@ return function(Shared)
             return list
         end
 
+        -- Cleaned search term (strip parentheses, feat., remaster, etc.)
         local cleanArtist = tostring(artist):gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-        local cleanTrack  = tostring(trackName):gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-        local term = Http:UrlEncode(cleanArtist .. " " .. cleanTrack)
+        local cleanTrack  = tostring(trackName):gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("%-.*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+        local termClean = Http:UrlEncode(cleanArtist .. " " .. cleanTrack)
+        local termRaw   = Http:UrlEncode(tostring(artist) .. " " .. tostring(trackName))
 
         -- 1. Apple iTunes Search API (HD 600x600)
-        pcall(function()
-            local res = game:HttpGet("https://itunes.apple.com/search?term=" .. term .. "&media=music&entity=song&limit=1")
-            if res and #res > 0 then
-                local data = Http:JSONDecode(res)
-                if data and data.results and data.results[1] and data.results[1].artworkUrl100 then
-                    local art = data.results[1].artworkUrl100:gsub("100x100bb", "600x600bb")
-                    table.insert(list, art)
-                    table.insert(list, data.results[1].artworkUrl100)
+        for _, term in ipairs({ termClean, termRaw }) do
+            pcall(function()
+                local res = game:HttpGet("https://itunes.apple.com/search?term=" .. term .. "&media=music&entity=song&limit=1")
+                if res and #res > 0 then
+                    local data = Http:JSONDecode(res)
+                    if data and data.results and data.results[1] and data.results[1].artworkUrl100 then
+                        local art = data.results[1].artworkUrl100:gsub("100x100bb", "600x600bb")
+                        table.insert(list, art)
+                        table.insert(list, data.results[1].artworkUrl100)
+                    end
                 end
-            end
-        end)
+            end)
+            if #list > 1 then break end
+        end
 
         -- 2. Deezer Search API
         pcall(function()
-            local res = game:HttpGet("https://api.deezer.com/search?q=" .. term .. "&limit=1")
+            local res = game:HttpGet("https://api.deezer.com/search?q=" .. termClean .. "&limit=1")
             if res and #res > 0 then
                 local data = Http:JSONDecode(res)
                 if data and data.data and data.data[1] and data.data[1].album then
@@ -139,7 +146,7 @@ return function(Shared)
 
         -- 4. Genius Multi-Search API
         pcall(function()
-            local res = game:HttpGet("https://genius.com/api/search/multi?q=" .. term)
+            local res = game:HttpGet("https://genius.com/api/search/multi?q=" .. termClean)
             if res and #res > 0 then
                 local data = Http:JSONDecode(res)
                 if data and data.response and data.response.sections then
@@ -202,8 +209,6 @@ return function(Shared)
             local writefile      = writefile or (getgenv and getgenv().writefile)
             local delfile        = delfile or (getgenv and getgenv().delfile)
 
-            local ContentProvider = game:GetService("ContentProvider")
-
             for _, candidateUrl in ipairs(candidates) do
                 if myToken ~= currentLoadingToken then return end
                 local imgBytes = downloadImageBytes(candidateUrl)
@@ -216,32 +221,17 @@ return function(Shared)
                             local okA, newAsset = pcall(function() return getcustomasset(uniqueName) end)
                             if okA and newAsset and newAsset ~= "" then
                                 if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
+                                    if previousCoverFile ~= "" and previousCoverFile ~= uniqueName and delfile then
+                                        pcall(function() delfile(previousCoverFile) end)
+                                    end
+                                    previousCoverFile = uniqueName
+                                    currentCoverAsset = newAsset
+                                    lastLoadedCoverUrl = candidateUrl
+
                                     imgLabel.Image = newAsset
                                     imgLabel.BackgroundTransparency = 1
                                     imgLabel.Visible = true
-
-                                    -- Verify texture renders successfully
-                                    local loaded = true
-                                    local okPreload = pcall(function()
-                                        ContentProvider:PreloadAsync({ imgLabel })
-                                    end)
-                                    task.wait(0.05)
-                                    if imgLabel.IsLoaded == false then
-                                        loaded = false
-                                    end
-
-                                    if loaded then
-                                        if previousCoverFile ~= "" and previousCoverFile ~= uniqueName and delfile then
-                                            pcall(function() delfile(previousCoverFile) end)
-                                        end
-                                        previousCoverFile = uniqueName
-                                        currentCoverAsset = newAsset
-                                        lastLoadedCoverUrl = candidateUrl
-                                        return
-                                    else
-                                        -- Texture failed to render, try next candidate stage
-                                        if delfile then pcall(function() delfile(uniqueName) end) end
-                                    end
+                                    return
                                 end
                             end
                         end
@@ -250,16 +240,13 @@ return function(Shared)
                             imgLabel.Image = candidateUrl
                             imgLabel.BackgroundTransparency = 1
                             imgLabel.Visible = true
-                            task.wait(0.05)
-                            if imgLabel.IsLoaded ~= false then
-                                return
-                            end
+                            return
                         end
                     end
                 end
             end
 
-            -- If all candidate downloads failed, clear image cleanly without white box
+            -- If all candidates failed, clear image cleanly without white box
             if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
                 imgLabel.Image = ""
                 imgLabel.Visible = true
