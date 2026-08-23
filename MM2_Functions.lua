@@ -140,20 +140,73 @@ return function(Shared)
     MkSection(leftCol, "Kill Aura Engine", 1)
 
     local auraBoxPart = nil
+
+    local function updateVisualizer(hrp, radius)
+        if not auraBoxPart then
+            auraBoxPart = Instance.new("Part")
+            auraBoxPart.Name          = "Fih_AuraBox"
+            auraBoxPart.Anchored      = true
+            auraBoxPart.CanCollide    = false
+            auraBoxPart.CanTouch      = false
+            auraBoxPart.CastShadow    = false
+            auraBoxPart.Transparency  = 0.75
+            auraBoxPart.Material      = Enum.Material.ForceField
+            auraBoxPart.BrickColor    = BrickColor.new("Bright red")
+            auraBoxPart.Parent        = Workspace
+
+            local sel = Instance.new("SelectionBox")
+            sel.Name          = "AuraSelection"
+            sel.Adornee       = auraBoxPart
+            sel.Color3        = Color3.fromRGB(255, 50, 50)
+            sel.SurfaceColor3 = Color3.fromRGB(255, 30, 30)
+            sel.SurfaceTransparency = 0.85
+            sel.LineThickness = 0.05
+            sel.Parent        = auraBoxPart
+        end
+        auraBoxPart.Size   = Vector3.new(radius * 2, radius * 2, radius * 2)
+        auraBoxPart.CFrame = hrp.CFrame
+    end
+
+    local function clearVisualizer()
+        if auraBoxPart then
+            auraBoxPart:Destroy()
+            auraBoxPart = nil
+        end
+    end
+
     MkToggle(leftCol, "Kill Aura Box Visualizer", "KillAuraBox", 2, function(state)
-        if not state and auraBoxPart then
-            auraBoxPart:Destroy(); auraBoxPart = nil
+        if not state then
+            clearVisualizer()
         end
     end)
 
-    MkSlider(leftCol, "Aura Radius (studs)", "KillAuraRadius", 5, 80, 20, 3, nil)
+    MkSlider(leftCol, "Aura Radius (studs)", "KillAuraRadius", 5, 80, 20, 3, function(val)
+        Shared.Flags["KillAuraRadius"] = val
+        if Shared.Flags["KillAuraBox"] then
+            local hrp = getHRP()
+            if hrp then updateVisualizer(hrp, val) end
+        end
+    end)
 
     MkToggle(leftCol, "Kill Aura (All Players)", "KillAura", 4, function(state)
-        if not state and auraBoxPart then
-            auraBoxPart:Destroy(); auraBoxPart = nil
+    end)
+
+    -- Dedicated Independent Visualizer Loop (Always works regardless of KillAura attack state)
+    RunService.RenderStepped:Connect(function()
+        if Shared.Flags["KillAuraBox"] then
+            local hrp = getHRP()
+            if hrp then
+                local radius = Shared.Flags["KillAuraRadius"] or 20
+                updateVisualizer(hrp, radius)
+            else
+                clearVisualizer()
+            end
+        else
+            clearVisualizer()
         end
     end)
 
+    -- Attack Loop
     RunService.Heartbeat:Connect(function()
         if not Shared.Flags["KillAura"] then return end
         if not selfAliveInRound() then return end
@@ -161,27 +214,6 @@ return function(Shared)
         local hrp = getHRP()
         if not hrp then return end
         local radius = Shared.Flags["KillAuraRadius"] or 20
-
-        if Shared.Flags["KillAuraBox"] then
-            if not auraBoxPart then
-                auraBoxPart = Instance.new("Part")
-                auraBoxPart.Name          = "AuraBox"
-                auraBoxPart.Anchored      = true
-                auraBoxPart.CanCollide    = false
-                auraBoxPart.CanTouch      = false
-                auraBoxPart.Transparency  = 0.7
-                auraBoxPart.Material      = Enum.Material.Neon
-                auraBoxPart.BrickColor    = BrickColor.new("Bright red")
-                auraBoxPart.Parent        = Workspace
-                local sel = Instance.new("SelectionBox")
-                sel.Adornee = auraBoxPart; sel.Color3 = Color3.fromRGB(255,50,50); sel.LineThickness = 0.06
-                sel.Parent = auraBoxPart
-            end
-            auraBoxPart.Size   = Vector3.new(radius*2, radius*2, radius*2)
-            auraBoxPart.CFrame = hrp.CFrame
-        elseif auraBoxPart then
-            auraBoxPart:Destroy(); auraBoxPart = nil
-        end
 
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= Player and isAlive(plr) then
