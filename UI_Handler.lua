@@ -114,19 +114,23 @@ return function(Shared)
     Shared.IsDark = function() return isDark end
     Shared.GetTheme = function() return C end
 
-        -- ── ROBLOX CORE UI (CHECKERED LEADERBOARD & AERO CHAT ENGINE) ──
+        -- ── ROBLOX CORE UI (CLEAN RETRO AERO LEADERBOARD & CHAT) ──────
     local function styleRobloxCoreUI(targetTheme, isDarkMode)
         local theme = targetTheme or C
         local dark  = (isDarkMode ~= nil) and isDarkMode or isDark
 
         local bgCol     = dark and Color3.fromRGB(16, 20, 30) or Color3.fromRGB(240, 244, 252)
-        local cellA     = dark and Color3.fromRGB(22, 26, 34) or Color3.fromRGB(210, 210, 210)
-        local cellB     = dark and Color3.fromRGB(28, 32, 42) or Color3.fromRGB(240, 240, 240)
-        local borderCol = dark and Color3.fromRGB(30, 75, 130) or Color3.fromRGB(140, 170, 210)
-        local textCol   = dark and Color3.fromRGB(225, 235, 255) or Color3.fromRGB(15, 25, 60)
+        local cardBg    = dark and Color3.fromRGB(22, 28, 42) or Color3.fromRGB(228, 234, 246)
+        local borderCol = dark and Color3.fromRGB(40, 85, 145) or Color3.fromRGB(140, 170, 210)
+        local textWhite = dark and Color3.fromRGB(245, 250, 255) or Color3.fromRGB(15, 25, 60)
         local inputCol  = dark and Color3.fromRGB(24, 30, 44) or Color3.fromRGB(255, 255, 255)
-        local accentCol = dark and Color3.fromRGB(0, 160, 255) or Color3.fromRGB(0, 120, 215)
-        local CELL_SZ   = 9
+
+        -- Clean any obsolete grid artifacts
+        for _, d in ipairs(CoreGui:GetDescendants()) do
+            if d.Name == "Fih_LeaderboardGrid" or d.Name == "Fih_ChatGrid" then
+                d:Destroy()
+            end
+        end
 
         -- 0. Universal Squircles Killer (0px corner radius across CoreGui)
         for _, d in ipairs(CoreGui:GetDescendants()) do
@@ -135,41 +139,20 @@ return function(Shared)
             end
         end
 
-        -- 1. Leaderboard (PlayerList) - Wide, Checkered, No Scrollbar, Pinned X
+        -- 1. Leaderboard (PlayerList) - Wide, Clean Aero Card, No Scrollbar, Pinned X
         pcall(function()
             local pl = CoreGui:FindFirstChild("PlayerList")
             if pl then
                 local children = pl:FindFirstChild("Children", true)
                 if children and children:IsA("Frame") then
-                    children.Size = UDim2.new(0, 240, 0.65, 0)
-                    children.Position = UDim2.new(1, -6, 0, 56)
-                    children.AnchorPoint = Vector2.new(1, 0)
-                    children.BorderSizePixel = 1
-                    children.BorderColor3 = borderCol
-                    children.ClipsDescendants = true
-
-                    -- Checkered Grid Background
-                    local bgGrid = children:FindFirstChild("Fih_LeaderboardGrid")
-                    if not bgGrid then
-                        bgGrid = Instance.new("Frame")
-                        bgGrid.Name = "Fih_LeaderboardGrid"
-                        bgGrid.Size = UDim2.new(1, 0, 1, 0)
-                        bgGrid.BackgroundColor3 = bgCol
-                        bgGrid.BorderSizePixel = 0
-                        bgGrid.ZIndex = 0
-                        bgGrid.Parent = children
-                        for r = 0, 60 do
-                            for c = 0, 28 do
-                                local cell = Instance.new("Frame")
-                                cell.Size = UDim2.new(0, CELL_SZ, 0, CELL_SZ)
-                                cell.Position = UDim2.new(0, c * CELL_SZ, 0, r * CELL_SZ)
-                                cell.BorderSizePixel = 0
-                                cell.BackgroundColor3 = ((r + c) % 2 == 0) and cellA or cellB
-                                cell.ZIndex = 0
-                                cell.Parent = bgGrid
-                            end
-                        end
-                    end
+                    children.Size                   = UDim2.new(0, 200, 0.65, 0)
+                    children.Position               = UDim2.new(1, -6, 0, 56)
+                    children.AnchorPoint            = Vector2.new(1, 0)
+                    children.BackgroundColor3       = bgCol
+                    children.BackgroundTransparency = 0.15
+                    children.BorderSizePixel        = 1
+                    children.BorderColor3           = borderCol
+                    children.ClipsDescendants       = true
                 end
 
                 for _, obj in ipairs(pl:GetDescendants()) do
@@ -178,16 +161,12 @@ return function(Shared)
                         obj.ScrollBarThickness = 0
                         obj.ScrollBarImageTransparency = 1
                         obj.BackgroundTransparency = 1
-                        obj.ZIndex = 2
                     end
-                    if obj:IsA("Frame") and obj.Name ~= "Fih_LeaderboardGrid" and obj.Parent and obj.Parent.Name ~= "Fih_LeaderboardGrid" then
-                        if obj.Name:find("Entry") or obj.Name:find("Player") or obj.Name:find("Row") or obj.Name:find("Item") then
-                            obj.BackgroundColor3 = bgCol
-                            obj.BackgroundTransparency = 0.2
-                            obj.BorderSizePixel = 1
-                            obj.BorderColor3 = borderCol
-                            obj.ZIndex = 3
-                        end
+                    if obj:IsA("Frame") and (obj.Name:find("Entry") or obj.Name:find("Player") or obj.Name:find("Row") or obj.Name:find("Item")) then
+                        obj.BackgroundColor3       = cardBg
+                        obj.BackgroundTransparency = 0.2
+                        obj.BorderSizePixel        = 1
+                        obj.BorderColor3           = borderCol
                     end
                     if obj:IsA("UIStroke") then
                         obj.Color = borderCol
@@ -195,38 +174,37 @@ return function(Shared)
                     end
                     if obj:IsA("TextLabel") then
                         obj.Font = Enum.Font.Code
-                        obj.TextColor3 = textCol
-                        obj.ZIndex = 4
+                        obj.TextColor3 = textWhite
                     end
-                    if obj:IsA("ImageButton") or obj:IsA("TextButton") then
-                        obj.ZIndex = 5
-                        if obj.Name:lower():find("close") or obj.Name == "X" or (obj:IsA("TextButton") and obj.Text:lower() == "x") then
-                            obj.Size = UDim2.new(0, 18, 0, 18)
-                            obj.Position = UDim2.new(1, -22, 0, 4)
-                            obj.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-                            obj.BorderSizePixel = 1
-                            obj.BorderColor3 = Color3.fromRGB(240, 80, 80)
-                        end
+                    if obj:IsA("TextButton") and obj.Text:lower() == "x" then
+                        obj.Size             = UDim2.new(0, 16, 0, 16)
+                        obj.Position         = UDim2.new(1, -20, 0, 4)
+                        obj.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+                        obj.TextColor3       = Color3.fromRGB(255, 255, 255)
+                        obj.Font             = Enum.Font.GothamBold
+                        obj.TextSize         = 10
+                        obj.BorderSizePixel  = 1
+                        obj.BorderColor3     = borderCol
                     end
                 end
             end
         end)
 
-        -- 2. Chat (ExperienceChat & TextChatService) - Checkered Aero Frame, Code Font
+        -- 2. Chat (ExperienceChat & TextChatService) - Clean Aero Glass, Code Font
         pcall(function()
             local TextChatService = game:GetService("TextChatService")
             local cwc = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
             if cwc then
                 cwc.BackgroundColor3       = bgCol
                 cwc.BackgroundTransparency = 0.15
-                cwc.TextColor3             = textCol
+                cwc.TextColor3             = textWhite
                 cwc.FontFace               = Font.fromEnum(Enum.Font.Code)
             end
             local cibc = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
             if cibc then
                 cibc.BackgroundColor3       = inputCol
                 cibc.BackgroundTransparency = 0.1
-                cibc.TextColor3             = textCol
+                cibc.TextColor3             = textWhite
                 cibc.PlaceholderColor3      = dark and Color3.fromRGB(120, 150, 190) or Color3.fromRGB(130, 140, 160)
             end
 
@@ -247,38 +225,17 @@ return function(Shared)
                 if appLayout then
                     local chatWindow = appLayout:FindFirstChild("chatWindow")
                     if chatWindow then
-                        chatWindow.BackgroundColor3 = bgCol
+                        chatWindow.BackgroundColor3       = bgCol
                         chatWindow.BackgroundTransparency = 0.15
-                        chatWindow.BorderSizePixel = 1
-                        chatWindow.BorderColor3 = borderCol
-
-                        if not chatWindow:FindFirstChild("Fih_ChatGrid") then
-                            local cg = Instance.new("Frame")
-                            cg.Name = "Fih_ChatGrid"
-                            cg.Size = UDim2.new(1, 0, 1, 0)
-                            cg.BackgroundColor3 = bgCol
-                            cg.BorderSizePixel = 0
-                            cg.ZIndex = 0
-                            cg.Parent = chatWindow
-                            for r = 0, 30 do
-                                for c = 0, 40 do
-                                    local cell = Instance.new("Frame")
-                                    cell.Size = UDim2.new(0, CELL_SZ, 0, CELL_SZ)
-                                    cell.Position = UDim2.new(0, c * CELL_SZ, 0, r * CELL_SZ)
-                                    cell.BorderSizePixel = 0
-                                    cell.BackgroundColor3 = ((r + c) % 2 == 0) and cellA or cellB
-                                    cell.ZIndex = 0
-                                    cell.Parent = cg
-                                end
-                            end
-                        end
+                        chatWindow.BorderSizePixel        = 1
+                        chatWindow.BorderColor3           = borderCol
                     end
 
                     local chatInputRow = appLayout:FindFirstChild("chatInputRow", true)
                     if chatInputRow and chatInputRow:IsA("Frame") then
-                        chatInputRow.BackgroundColor3 = inputCol
-                        chatInputRow.BorderSizePixel = 1
-                        chatInputRow.BorderColor3 = borderCol
+                        chatInputRow.BackgroundColor3 = cardBg
+                        chatInputRow.BorderSizePixel  = 1
+                        chatInputRow.BorderColor3     = borderCol
                     end
                 end
             end
@@ -304,7 +261,7 @@ return function(Shared)
         end)
     end
 
-    -- Persistent Watcher: Re-enforces sharp square styling when Chat or Leaderboard are toggled
+    -- Persistent Watcher: Re-enforces clean retro styling continuously
     task.spawn(function()
         task.wait(0.3)
         styleRobloxCoreUI(C, isDark)
