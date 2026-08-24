@@ -211,10 +211,22 @@ return function(Shared)
         return false
     end
 
-    -- ── PARRY EXECUTION MECHANISMS ────────────────────────────────
-    local function executeParry()
+    -- ── PARRY EXECUTION MECHANISMS (SPEED-AWARE ANTI-DOUBLE PARRY) ──
+    local function executeParry(currentSpeed)
         local now = os.clock()
-        if now - lastParryTime < 0.04 then return end
+        local spd = currentSpeed or 0
+
+        -- Dynamic Cooldown Guard: Strict 0.55s cooldown for slow/normal balls, rapid for high velocity
+        local minCooldown = 0.55
+        if spd >= 140 then
+            minCooldown = 0.05
+        elseif spd >= 100 then
+            minCooldown = 0.15
+        elseif spd >= 70 then
+            minCooldown = 0.35
+        end
+
+        if now - lastParryTime < minCooldown then return false end
         lastParryTime = now
         lastParryTick = now
         hasParriedCurrentVolley = true
@@ -253,6 +265,8 @@ return function(Shared)
         pcall(function()
             if mouse1click then mouse1click() end
         end)
+
+        return true
     end
 
     local function executeAbility()
@@ -598,31 +612,38 @@ return function(Shared)
         -- Reset volley flag when ball is deflected or moving away
         if hasParriedCurrentVolley then
             local timeSinceParry = now - lastParryTick
-            if not isTarget or approachSpeed < -2 or timeSinceParry > 0.22 then
+            if not isTarget or approachSpeed < -2.5 then
+                hasParriedCurrentVolley = false
+            elseif speed >= 110 and timeSinceParry > 0.08 then
+                -- Ultra-high speed volleys / clashes can reset rapidly
                 hasParriedCurrentVolley = false
             end
         end
 
-        -- 8. COMPREHENSIVE MULTI-FACTOR PARRY TRIGGER
+        -- 8. SPEED-ADAPTIVE PARRY TRIGGER (Zero Double-Parrying on Slow Speeds)
         if Shared.Flags["BB_AutoParry"] then
             local shouldParry = false
 
             if isTarget and not hasParriedCurrentVolley then
-                -- Scenario A: Standard approach collision window
-                if approachSpeed > 1 or speed < 5 then
+                if speed < 65 then
+                    -- Slow ball: Precise trigger when inside hit window (single authoritative click)
+                    local slowHitDist = math.min(baseDist, 22)
+                    if dist <= slowHitDist or timeToImpact <= (serverLeadTime + 0.06) then
+                        shouldParry = true
+                    end
+                elseif speed < 120 then
+                    -- Medium ball: Standard approach collision window
                     if dist <= dynamicParryDistance or predictedDist <= dynamicParryDistance or timeToImpact <= dynamicReactionTime then
                         shouldParry = true
                     end
-                end
-
-                -- Scenario B: High speed curve ball or fast standoff
-                if Shared.Flags["BB_ClashSpam"] and dist <= 24 then
-                    shouldParry = true
-                end
-
-                -- Scenario C: Extreme curve trajectory threshold (ball within danger threshold)
-                if dist <= (baseDist * 0.85) then
-                    shouldParry = true
+                else
+                    -- High velocity (> 120): Instant predictive trigger & standoff clash
+                    if dist <= dynamicParryDistance or predictedDist <= dynamicParryDistance or timeToImpact <= dynamicReactionTime then
+                        shouldParry = true
+                    end
+                    if Shared.Flags["BB_ClashSpam"] and dist <= 28 then
+                        shouldParry = true
+                    end
                 end
             end
 
@@ -635,7 +656,7 @@ return function(Shared)
                     end
                 end
 
-                executeParry()
+                executeParry(speed)
 
                 -- 9. Ball Velocity Physics Modifier Execution
                 if Shared.Flags["BB_CustomVelocityEnabled"] then
