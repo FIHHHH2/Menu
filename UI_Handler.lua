@@ -19,6 +19,9 @@ return function(Shared)
     local UserInput    = Shared.Services.UserInput
     local CoreGui      = Shared.Services.CoreGui
     local Http         = Shared.Services.Http
+    local RunService   = Shared.Services.RunService or game:GetService("RunService")
+    local Players      = Shared.Services.Players or game:GetService("Players")
+    local StarterGui   = game:GetService("StarterGui")
 
     if CoreGui:FindFirstChild("IE7_Menu") then
         CoreGui:FindFirstChild("IE7_Menu"):Destroy()
