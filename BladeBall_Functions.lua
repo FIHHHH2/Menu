@@ -316,14 +316,33 @@ return function(Shared)
     MkSection(rightCol, "Visualizer & Ball Radar", 30)
 
     local ballHighlight = nil
+    local zoneRingAdorn  = nil
+    local zoneSphereAdorn = nil
 
     local function clearBallVisuals()
         if ballHighlight then pcall(function() ballHighlight:Destroy() end); ballHighlight = nil end
+        if zoneRingAdorn then pcall(function() zoneRingAdorn:Destroy() end); zoneRingAdorn = nil end
+        if zoneSphereAdorn then pcall(function() zoneSphereAdorn:Destroy() end); zoneSphereAdorn = nil end
     end
 
     MkToggle(rightCol, "Ball ESP Highlight & Status", "BB_BallESP", 31, function(state)
         Shared.Flags["BB_BallESP"] = state
-        if not state then clearBallVisuals() end
+        if not state and ballHighlight then
+            pcall(function() ballHighlight:Destroy() end)
+            ballHighlight = nil
+        end
+    end)
+
+    MkToggle(rightCol, "Parry Hit-Zone Area Visualizer", "BB_ParryZone", 32, function(state)
+        Shared.Flags["BB_ParryZone"] = state
+        if not state then
+            if zoneRingAdorn then pcall(function() zoneRingAdorn:Destroy() end); zoneRingAdorn = nil end
+            if zoneSphereAdorn then pcall(function() zoneSphereAdorn:Destroy() end); zoneSphereAdorn = nil end
+        end
+    end)
+
+    MkSlider(rightCol, "Hit-Zone Transparency (%)", "BB_ZoneAlpha", 20, 90, 55, 33, function(val)
+        Shared.Flags["BB_ZoneAlpha"] = val
     end)
 
     MkSection(rightCol, "Movement & Spacing", 40)
@@ -395,6 +414,10 @@ return function(Shared)
             statusFrame.BorderColor3 = Color3.fromRGB(0, 160, 255)
         end
 
+        -- Dynamic hit-zone radius calculation based on velocity, distance slider & ping
+        local baseDist = Shared.Flags["BB_ParryDist"] or 28
+        local dynamicParryDistance = math.clamp(baseDist + math.max(approachSpeed, speed) * (0.28 + pingOffsetSec), 12, 85)
+
         -- 1. Ball Visualizer ESP & Highlight
         if Shared.Flags["BB_BallESP"] then
             if not ballHighlight or ballHighlight.Adornee ~= ball then
@@ -413,7 +436,44 @@ return function(Shared)
             if ballHighlight then pcall(function() ballHighlight:Destroy() end); ballHighlight = nil end
         end
 
-        -- 2. AUTO PARRY ENGINE (Velocity & Physics-Driven)
+        -- 2. Dynamic Parry Hit-Zone Area 3D Visualizer
+        if Shared.Flags["BB_ParryZone"] and hrp then
+            local alphaPercent = Shared.Flags["BB_ZoneAlpha"] or 55
+            local transparency = alphaPercent / 100
+            local themeColor = isTarget and Color3.fromRGB(255, 45, 45) or Color3.fromRGB(0, 190, 255)
+
+            -- Ground Disc / Ring
+            if not zoneRingAdorn or zoneRingAdorn.Adornee ~= hrp then
+                if zoneRingAdorn then pcall(function() zoneRingAdorn:Destroy() end) end
+                zoneRingAdorn = Instance.new("CylinderHandleAdornment")
+                zoneRingAdorn.Name = "BB_HitZoneRing"
+                zoneRingAdorn.Adornee = hrp
+                zoneRingAdorn.AlwaysOnTop = true
+                zoneRingAdorn.ZIndex = 5
+                zoneRingAdorn.Parent = Shared.GUI or hrp
+            end
+            zoneRingAdorn.Radius = dynamicParryDistance
+            zoneRingAdorn.Height = 0.4
+            zoneRingAdorn.CFrame = CFrame.new(0, -2.8, 0) * CFrame.Angles(math.rad(90), 0, 0)
+            zoneRingAdorn.Color3 = themeColor
+            zoneRingAdorn.Transparency = math.clamp(transparency * 0.8, 0.1, 0.95)
+
+            -- Spherical Hitbox Aura
+            if not zoneSphereAdorn or zoneSphereAdorn.Adornee ~= hrp then
+                if zoneSphereAdorn then pcall(function() zoneSphereAdorn:Destroy() end) end
+                zoneSphereAdorn = Instance.new("SelectionSphere")
+                zoneSphereAdorn.Name = "BB_HitZoneSphere"
+                zoneSphereAdorn.Adornee = hrp
+                zoneSphereAdorn.Parent = Shared.GUI or hrp
+            end
+            zoneSphereAdorn.Color3 = themeColor
+            zoneSphereAdorn.Transparency = math.clamp(transparency, 0.3, 0.98)
+        else
+            if zoneRingAdorn then pcall(function() zoneRingAdorn:Destroy() end); zoneRingAdorn = nil end
+            if zoneSphereAdorn then pcall(function() zoneSphereAdorn:Destroy() end); zoneSphereAdorn = nil end
+        end
+
+        -- 3. AUTO PARRY ENGINE (Velocity & Physics-Driven)
         if Shared.Flags["BB_AutoParry"] then
             local shouldParry = false
 
@@ -421,9 +481,6 @@ return function(Shared)
             if isTarget then
                 -- If ball is traveling away from the player at speed, do not parry prematurely
                 if approachSpeed > 0 or speed < 5 then
-                    -- Velocity-scaled dynamic parry distance
-                    local dynamicParryDistance = math.clamp(math.max(approachSpeed, speed) * (0.28 + pingOffsetSec), 12, 85)
-
                     -- Trigger parry based on calculated time to impact or velocity distance window
                     if timeToImpact <= (0.36 + pingOffsetSec) or dist <= dynamicParryDistance then
                         shouldParry = true
