@@ -358,13 +358,44 @@ return function(Shared)
             if item.inst and item.inst.Parent then
                 local goal = {}
                 for propName, themeKey in pairs(item.props) do
-                    if C[themeKey] then
+                    if C[themeKey] ~= nil then
                         goal[propName] = C[themeKey]
                     end
                 end
                 TweenService:Create(item.inst, tweenInfo, goal):Play()
             end
         end
+
+        -- Handle semi-translucency for Adaptive Theme vs solid for Light/Dark
+        local isAdaptive = (targetTheme.IsAdaptive == true)
+        local winTrans   = isAdaptive and 0.12 or 0
+        local bodyTrans  = isAdaptive and 0.18 or 0
+        local navTrans   = isAdaptive and 0.12 or 0
+        local drawerTrans= isAdaptive and 0.15 or 0
+
+        pcall(function()
+            if Window and Window.Parent then
+                TweenService:Create(Window, tweenInfo, { BackgroundTransparency = winTrans }):Play()
+            end
+            if Body and Body.Parent then
+                TweenService:Create(Body, tweenInfo, { BackgroundTransparency = bodyTrans }):Play()
+            end
+            if NavBar and NavBar.Parent then
+                TweenService:Create(NavBar, tweenInfo, { BackgroundTransparency = navTrans }):Play()
+            end
+            if Sidebar and Sidebar.Parent then
+                TweenService:Create(Sidebar, tweenInfo, { BackgroundTransparency = bodyTrans }):Play()
+            end
+            if Drawer and Drawer.Parent then
+                TweenService:Create(Drawer, tweenInfo, { BackgroundTransparency = drawerTrans }):Play()
+            end
+            if DrawerScroll and DrawerScroll.Parent then
+                TweenService:Create(DrawerScroll, tweenInfo, { BackgroundTransparency = drawerTrans }):Play()
+            end
+            if ContentArea and ContentArea.Parent then
+                TweenService:Create(ContentArea, tweenInfo, { BackgroundTransparency = isAdaptive and 0.10 or 0 }):Play()
+            end
+        end)
 
         -- Notify external modules (Music_Handler HUD, Billboard, etc.)
         for _, cb in ipairs(themeCallbacks) do
@@ -708,7 +739,7 @@ return function(Shared)
             local pal = generateAdaptivePalette(currentAdaptiveTrack or (Shared.CurrentTrack and Shared.CurrentTrack()))
             applyThemeTransition(pal, 0.65)
             updateThemeButtonIcon()
-            sendNotification("Theme Engine", "🎨 Opaque Adaptive UI (Song Cover Sync) Active", true)
+            sendNotification("Theme Engine", "🎨 Semi-Translucent Adaptive UI Active", true)
         else
             themeMode = "Dark"
             applyThemeTransition(DarkTheme, 0.25)
@@ -1269,13 +1300,13 @@ return function(Shared)
             sendNotification("Core UI Engine", "Default Roblox Core UI restored", false)
         end
     end)
-    makeToggle(DrawerScroll, "Opaque Adaptive UI (Song Cover Sync)", "AdaptiveTheme", 3, function(state)
+    makeToggle(DrawerScroll, "Semi-Translucent Adaptive UI (Song Cover Sync)", "AdaptiveTheme", 3, function(state)
         if state then
             themeMode = "Adaptive"
             local pal = generateAdaptivePalette(currentAdaptiveTrack or (Shared.CurrentTrack and Shared.CurrentTrack()))
             applyThemeTransition(pal, 0.65)
             updateThemeButtonIcon()
-            sendNotification("Theme Engine", "🎨 Opaque Adaptive UI Enabled", true)
+            sendNotification("Theme Engine", "🎨 Semi-Translucent Adaptive UI Enabled", true)
         else
             themeMode = isDark and "Dark" or "Light"
             applyThemeTransition(isDark and DarkTheme or LightTheme, 0.25)
