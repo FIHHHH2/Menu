@@ -40,10 +40,20 @@ end
 local function httpRequest(opt)
     local req = (getgenv and (getgenv().request or getgenv().http_request)) or request or http_request or (syn and syn.request)
     if req then
-        local ok, res = pcall(function() return req(opt) end)
-        if ok and res then return res end
+        local ok1, res1 = pcall(function() return req(opt) end)
+        if ok1 and res1 then return res1 end
+
+        -- Some executors require lowercase parameters
+        local lowerOpt = {
+            url     = opt.Url or opt.url,
+            method  = opt.Method or opt.method or "GET",
+            headers = opt.Headers or opt.headers or {},
+            body    = opt.Body or opt.body
+        }
+        local ok2, res2 = pcall(function() return req(lowerOpt) end)
+        if ok2 and res2 then return res2 end
     end
-    if opt.Method == "GET" or not opt.Method then
+    if (opt.Method == "GET" or not opt.Method) and opt.Url then
         local ok, res = pcall(function() return game:HttpGet(opt.Url) end)
         if ok and res then return { StatusCode = 200, Body = res } end
     end

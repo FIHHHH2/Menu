@@ -293,16 +293,19 @@ return function(Shared)
 
     local function spotifyRequest(endpoint, method, body)
         local token = cleanToken(Shared.Config.SpotifyToken)
-        if not token or token == "" then return nil end
-        return Shared.HttpRequest({
+        if not token or token == "" then return nil, "No Token" end
+        local payload = body and Http:JSONEncode(body) or ""
+        local resp = Shared.HttpRequest({
             Url     = "https://api.spotify.com/v1/me/player" .. endpoint,
             Method  = method or "GET",
             Headers = {
-                ["Authorization"] = "Bearer " .. token,
-                ["Content-Type"]  = "application/json",
+                ["Authorization"]  = "Bearer " .. token,
+                ["Content-Type"]   = "application/json",
+                ["Content-Length"] = tostring(#payload),
             },
-            Body    = body and Http:JSONEncode(body) or nil,
+            Body    = payload ~= "" and payload or nil,
         })
+        return resp
     end
 
     local function getSpotifyTrack()
@@ -895,22 +898,61 @@ return function(Shared)
 
     MkSection(rightCol, "Playback Controls", 10)
     MkButton(rightCol, "⏮  Previous Track", 11, function()
-        spotifyRequest("/previous", "POST")
-        Shared.Notify("Spotify", "Previous track command sent", true)
+        task.spawn(function()
+            local res, err = spotifyRequest("/previous", "POST")
+            if res and (res.StatusCode == 204 or res.StatusCode == 200) then
+                Shared.Notify("Spotify", "Skipped to previous track", true)
+            elseif res and res.StatusCode == 403 then
+                Shared.Notify("Spotify", "Error: Missing modify permissions on token", false)
+            elseif res and res.StatusCode == 404 then
+                Shared.Notify("Spotify", "Error: No active Spotify player found", false)
+            else
+                Shared.Notify("Spotify", "Previous track command sent", true)
+            end
+            task.wait(0.35)
+            local trk = getSpotifyTrack()
+            if trk then updateVisuals(trk) end
+        end)
     end)
     MkButton(rightCol, "⏯  Play / Pause", 12, function()
-        local t = getSpotifyTrack()
-        if t and t.isPlaying then
-            spotifyRequest("/pause", "PUT")
-            Shared.Notify("Spotify", "Playback paused", false)
-        else
-            spotifyRequest("/play", "PUT")
-            Shared.Notify("Spotify", "Playback resumed", true)
-        end
+        task.spawn(function()
+            local t = getSpotifyTrack()
+            if t and t.isPlaying then
+                local res = spotifyRequest("/pause", "PUT")
+                if res and (res.StatusCode == 204 or res.StatusCode == 200) then
+                    Shared.Notify("Spotify", "Playback paused", false)
+                else
+                    Shared.Notify("Spotify", "Pause command sent", false)
+                end
+            else
+                local res = spotifyRequest("/play", "PUT")
+                if res and (res.StatusCode == 204 or res.StatusCode == 200) then
+                    Shared.Notify("Spotify", "Playback resumed", true)
+                else
+                    Shared.Notify("Spotify", "Play command sent", true)
+                end
+            end
+            task.wait(0.35)
+            local trk = getSpotifyTrack()
+            if trk then updateVisuals(trk) end
+        end)
     end)
     MkButton(rightCol, "⏭  Next Track", 13, function()
-        spotifyRequest("/next", "POST")
-        Shared.Notify("Spotify", "Next track command sent", true)
+        task.spawn(function()
+            local res = spotifyRequest("/next", "POST")
+            if res and (res.StatusCode == 204 or res.StatusCode == 200) then
+                Shared.Notify("Spotify", "Skipped to next track", true)
+            elseif res and res.StatusCode == 403 then
+                Shared.Notify("Spotify", "Error: Missing modify permissions on token", false)
+            elseif res and res.StatusCode == 404 then
+                Shared.Notify("Spotify", "Error: No active Spotify player found", false)
+            else
+                Shared.Notify("Spotify", "Next track command sent", true)
+            end
+            task.wait(0.35)
+            local trk = getSpotifyTrack()
+            if trk then updateVisuals(trk) end
+        end)
     end)
 
     -- ── DARK MODE THEME CALLBACK ──────────────────────────────────
