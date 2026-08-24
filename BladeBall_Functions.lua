@@ -119,44 +119,45 @@ return function(Shared)
 
     local function isTargetingMe(ball)
         if not ball then return false end
+
+        -- 1. Check exact match target attributes
         local t = ball:GetAttribute("target") or ball:GetAttribute("Target")
         if t then
             local tStr = tostring(t)
-            if tStr == Player.Name or tStr == Player.DisplayName or tStr == tostring(Player.UserId) or tStr == "all" or tStr:lower():find("training") then
+            if tStr == Player.Name or tStr == Player.DisplayName or tStr == tostring(Player.UserId) or tStr == "all" then
                 return true
+            end
+            -- If target is set to another specific player, it is definitely NOT targeting us
+            if tStr ~= "" and tStr ~= "None" and tStr ~= "nil" and not tStr:lower():find("train") then
+                return false
             end
         end
 
+        -- 2. Check target ValueObject
         local targetVal = ball:FindFirstChild("target") or ball:FindFirstChild("Target")
         if targetVal and targetVal:IsA("ValueBase") then
             if tostring(targetVal.Value) == Player.Name or targetVal.Value == Player.Character then
                 return true
+            elseif targetVal.Value ~= nil and tostring(targetVal.Value) ~= "" then
+                return false
             end
         end
 
-        -- Check if it's a Training Ball near the player
+        -- 3. Check Training Ball specifics (only when training ball is moving toward player)
         local pName = ball.Parent and ball.Parent.Name:lower() or ""
         local bName = ball.Name:lower()
-        if pName:find("train") or bName:find("train") or ball:GetAttribute("Training") or ball:GetAttribute("practice") then
+        local isTraining = pName:find("train") or bName:find("train") or ball:GetAttribute("Training") or ball:GetAttribute("practice")
+        if isTraining then
             local hrp = getHRP()
-            if hrp then
-                local dist = (ball.Position - hrp.Position).Magnitude
-                if dist < 65 then return true end
-            end
-        end
-
-        -- Proximity & Velocity fallback
-        local hrp = getHRP()
-        if hrp then
-            local dist = (ball.Position - hrp.Position).Magnitude
-            if dist < 24 then return true end
-            if dist < 50 and ball.AssemblyLinearVelocity then
-                local toMe = (hrp.Position - ball.Position).Unit
-                if toMe:Dot(ball.AssemblyLinearVelocity.Unit) > 0.75 then
+            if hrp and ball.AssemblyLinearVelocity then
+                local toMe = (hrp.Position - ball.Position)
+                local dist = toMe.Magnitude
+                if dist < 65 and toMe.Unit:Dot(ball.AssemblyLinearVelocity.Unit) > 0.65 then
                     return true
                 end
             end
         end
+
         return false
     end
 
@@ -412,19 +413,27 @@ return function(Shared)
             if ballHighlight then pcall(function() ballHighlight:Destroy() end); ballHighlight = nil end
         end
 
-        -- 2. AUTO PARRY ENGINE
+        -- 2. AUTO PARRY ENGINE (Velocity & Physics-Driven)
         if Shared.Flags["BB_AutoParry"] then
             local shouldParry = false
 
+            -- STRICT RULE: ONLY parry if the ball is actually targeted on local player
             if isTarget then
-                if dist <= dynamicParryDistance or timeToImpact <= (0.42 + pingOffsetSec) then
-                    shouldParry = true
-                end
-            end
+                -- If ball is traveling away from the player at speed, do not parry prematurely
+                if approachSpeed > 0 or speed < 5 then
+                    -- Velocity-scaled dynamic parry distance
+                    local dynamicParryDistance = math.clamp(math.max(approachSpeed, speed) * (0.28 + pingOffsetSec), 12, 85)
 
-            -- Clash Standoff Mode
-            if Shared.Flags["BB_ClashSpam"] and dist <= 16 then
-                shouldParry = true
+                    -- Trigger parry based on calculated time to impact or velocity distance window
+                    if timeToImpact <= (0.36 + pingOffsetSec) or dist <= dynamicParryDistance then
+                        shouldParry = true
+                    end
+
+                    -- Clash / Standoff close-range trigger (only when targeted)
+                    if Shared.Flags["BB_ClashSpam"] and dist <= 18 then
+                        shouldParry = true
+                    end
+                end
             end
 
             if shouldParry then
