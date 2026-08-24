@@ -113,6 +113,9 @@ Shared.IsMM2 = isMM2
 local isNDS = (game.PlaceId == 189707 or game.GameId == 65241)
 Shared.IsNDS = isNDS
 
+local isBladeBall = (game.PlaceId == 13772394625 or game.PlaceId == 14732610803 or game.PlaceId == 15131065025 or game.PlaceId == 15264892126 or game.PlaceId == 17135832729 or game.PlaceId == 15552588147 or game.GameId == 4777817887)
+Shared.IsBladeBall = isBladeBall
+
 -- Load order
 loadModule("UI_Handler")(Shared)
 loadModule("Main_Functions")(Shared)
@@ -121,6 +124,9 @@ if isMM2 then
 end
 if isNDS then
     loadModule("NDS_Functions")(Shared)
+end
+if isBladeBall or (Shared.Tabs and (Shared.Tabs["Blade Ball"] or Shared.Tabs["BladeBall"])) then
+    loadModule("BladeBall_Functions")(Shared)
 end
 loadModule("Troll_Functions")(Shared)
 loadModule("Music_Handler")(Shared)

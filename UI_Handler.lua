@@ -766,6 +766,9 @@ return function(Shared)
     local isNDS = (game.PlaceId == 189707 or game.GameId == 65241)
     if Shared.IsNDS ~= nil then isNDS = Shared.IsNDS end
 
+    local isBladeBall = (game.PlaceId == 13772394625 or game.PlaceId == 14732610803 or game.PlaceId == 15131065025 or game.PlaceId == 15264892126 or game.PlaceId == 17135832729 or game.PlaceId == 15552588147 or game.GameId == 4777817887)
+    if Shared.IsBladeBall ~= nil then isBladeBall = Shared.IsBladeBall end
+
     local tabDefs = {
         {name="Main",     order=1},
     }
@@ -776,6 +779,10 @@ return function(Shared)
     end
     if isNDS then
         table.insert(tabDefs, {name="Disasters", order=curOrder})
+        curOrder = curOrder + 1
+    end
+    if isBladeBall or (not isMM2 and not isNDS) then
+        table.insert(tabDefs, {name="Blade Ball", order=curOrder})
         curOrder = curOrder + 1
     end
     table.insert(tabDefs, {name="Music",    order=curOrder})
