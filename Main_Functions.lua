@@ -353,15 +353,40 @@ return function(Shared)
         local info = peerUsers[plr.UserId]
         if not info then return end
 
+    -- Ronald Cat Asset Loader for Peer Billboards
+    local ronaldAsset = nil
+    local function getRonaldAsset()
+        if ronaldAsset then return ronaldAsset end
+        local gca = getcustomasset or getsynasset or (getgenv and (getgenv().getcustomasset or getgenv().getsynasset))
+        local wf  = writefile or (getgenv and getgenv().writefile)
+        local isf = isfile or (getgenv and getgenv().isfile)
+        local fname = "fih_ronald.png"
+        if gca and wf then
+            pcall(function()
+                if not (isf and isf(fname)) then
+                    local bytes = game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu/main/ronald_cat.png")
+                    if bytes and #bytes > 1000 then wf(fname, bytes) end
+                end
+            end)
+            local ok, a = pcall(function() return gca(fname) end)
+            if ok and a and a ~= "" then
+                ronaldAsset = a
+                return a
+            end
+        end
+        return "https://raw.githubusercontent.com/FIHHHH2/Menu/main/ronald_cat.png"
+    end
         if not info.billboard or not info.billboard.Parent or info.billboard.Adornee ~= hrp then
             if info.billboard then pcall(function() info.billboard:Destroy() end) end
 
             local bb = Instance.new("BillboardGui")
             bb.Name          = "PeerMusicBillboard_" .. tostring(plr.UserId)
-            bb.Size          = UDim2.new(0, 260, 0, 58)
-            bb.StudsOffset   = Vector3.new(0, 4.8, 0)
+            bb.Size          = UDim2.new(0, 280, 0, 64)
+            bb.StudsOffset   = Vector3.new(0, 5.6, 0)
             bb.AlwaysOnTop   = true
+            bb.Active        = true
             bb.MaxDistance   = 1200
+            bb.ClipsDescendants = false
             bb.Adornee       = hrp
             bb.Parent        = Shared.GUI
 
@@ -371,13 +396,26 @@ return function(Shared)
             bg.BackgroundTransparency = 0.15
             bg.BorderSizePixel        = 1
             bg.BorderColor3           = Color3.fromRGB(255, 205, 30)
+            bg.ClipsDescendants       = false
             bg.Parent                 = bb
+
+            -- ── RONALD CAT OVERLAY ON TOP OF BG ──
+            local ronaldImg = Instance.new("ImageLabel")
+            ronaldImg.Name                   = "RonaldCatOverlay"
+            ronaldImg.Size                   = UDim2.new(0, 36, 0, 50)
+            ronaldImg.Position               = UDim2.new(1, -44, 0, -44)
+            ronaldImg.BackgroundTransparency = 1
+            ronaldImg.BorderSizePixel        = 0
+            ronaldImg.ScaleType              = Enum.ScaleType.Fit
+            ronaldImg.ZIndex                 = 25
+            ronaldImg.Image                  = getRonaldAsset()
+            ronaldImg.Parent                 = bg
 
             -- Dark vinyl note frame
             local coverFrame = Instance.new("Frame")
             coverFrame.Name             = "CoverContainer"
-            coverFrame.Size             = UDim2.new(0, 44, 0, 44)
-            coverFrame.Position         = UDim2.new(0, 6, 0, 7)
+            coverFrame.Size             = UDim2.new(0, 48, 0, 48)
+            coverFrame.Position         = UDim2.new(0, 6, 0, 8)
             coverFrame.BackgroundColor3 = Color3.fromRGB(22, 26, 36)
             coverFrame.BorderSizePixel  = 1
             coverFrame.BorderColor3     = Color3.fromRGB(255, 205, 30)
@@ -387,14 +425,14 @@ return function(Shared)
             note.Size                   = UDim2.new(1, 0, 1, 0)
             note.BackgroundTransparency = 1
             note.Text                   = "🎵"
-            note.TextSize               = 22
+            note.TextSize               = 24
             note.TextColor3             = Color3.fromRGB(255, 215, 50)
             note.Parent                 = coverFrame
 
             local songLbl = Instance.new("TextLabel")
             songLbl.Name                  = "SongTitle"
-            songLbl.Size                  = UDim2.new(1, -60, 0, 18)
-            songLbl.Position              = UDim2.new(0, 58, 0, 6)
+            songLbl.Size                  = UDim2.new(1, -95, 0, 18)
+            songLbl.Position              = UDim2.new(0, 60, 0, 8)
             songLbl.BackgroundTransparency = 1
             songLbl.Text                  = (songName ~= "") and songName or "No Active Playback"
             songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
@@ -406,8 +444,8 @@ return function(Shared)
 
             local artistLbl = Instance.new("TextLabel")
             artistLbl.Name                  = "ArtistTitle"
-            artistLbl.Size                  = UDim2.new(1, -60, 0, 15)
-            artistLbl.Position              = UDim2.new(0, 58, 0, 24)
+            artistLbl.Size                  = UDim2.new(1, -95, 0, 16)
+            artistLbl.Position              = UDim2.new(0, 60, 0, 26)
             artistLbl.BackgroundTransparency = 1
             artistLbl.Text                  = (artistName ~= "") and artistName or "[👑 FIH USER]"
             artistLbl.TextColor3            = Color3.fromRGB(0, 230, 150)
@@ -418,8 +456,8 @@ return function(Shared)
             artistLbl.Parent                = bg
 
             local badgeLbl = Instance.new("TextLabel")
-            badgeLbl.Size                  = UDim2.new(1, -60, 0, 12)
-            badgeLbl.Position              = UDim2.new(0, 58, 0, 40)
+            badgeLbl.Size                  = UDim2.new(1, -95, 0, 14)
+            badgeLbl.Position              = UDim2.new(0, 60, 0, 44)
             badgeLbl.BackgroundTransparency = 1
             badgeLbl.Text                  = "👑 " .. plr.DisplayName .. " (@" .. plr.Name .. ")"
             badgeLbl.TextColor3            = Color3.fromRGB(255, 205, 30)

@@ -505,8 +505,8 @@ return function(Shared)
 
         billboard = Instance.new("BillboardGui")
         billboard.Name          = "MusicBillboard"
-        billboard.Size          = UDim2.new(0, 275, 0, 62)
-        billboard.StudsOffset   = Vector3.new(0, 3.8, 0)
+        billboard.Size          = UDim2.new(0, 275, 0, 64)
+        billboard.StudsOffset   = Vector3.new(0, 5.6, 0)
         billboard.AlwaysOnTop   = true
         billboard.Active        = true
         billboard.MaxDistance   = 150
