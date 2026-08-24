@@ -472,22 +472,22 @@ return function(Shared)
             statusFrame.BorderColor3 = Color3.fromRGB(0, 160, 255)
         end
 
-        -- Dynamic hit-zone radius: base distance + dynamic velocity scaling above threshold
+        -- Dynamic hit-zone radius: base distance + subtle velocity micro-adjustments
         local baseDist = Shared.Flags["BB_ParryDist"] or 28
         local velScaling = Shared.Flags["BB_VelScaling"] ~= false
-        local velThreshold = Shared.Flags["BB_VelThreshold"] or 70
+        local velThreshold = Shared.Flags["BB_VelThreshold"] or 80
 
         local velocityBonus = 0
         local reactionWindow = 0.12 + pingOffsetSec
 
         if velScaling and approachSpeed > velThreshold then
             local excessSpeed = approachSpeed - velThreshold
-            -- Scale extra distance linearly with speed excess to give reaction room at high velocity
-            velocityBonus = (excessSpeed * 0.16) + math.clamp(approachSpeed * (pingOffsetSec * 0.4), 0, 15)
-            -- Expand the reaction time-to-impact window slightly at extreme speeds
-            reactionWindow = reactionWindow + math.clamp(excessSpeed / 1200, 0, 0.07)
+            -- Small micro-adjustment: max +6 studs extra even at ultra speeds
+            velocityBonus = math.clamp(excessSpeed * 0.035 + (approachSpeed * (pingOffsetSec * 0.1)), 0, 6)
+            -- Subtle reaction window micro-adjustment (max +0.02s)
+            reactionWindow = reactionWindow + math.clamp(excessSpeed / 4000, 0, 0.02)
         else
-            velocityBonus = math.clamp(approachSpeed * (pingOffsetSec * 0.2), 0, 4)
+            velocityBonus = math.clamp(approachSpeed * (pingOffsetSec * 0.05), 0, 2)
         end
 
         local dynamicParryDistance = math.clamp(baseDist + velocityBonus, 5, 100)
