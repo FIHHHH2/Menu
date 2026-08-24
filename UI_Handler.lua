@@ -513,19 +513,26 @@ return function(Shared)
 
     local isOpen = true
     local function animClose()
-        Window:TweenSize(UDim2.new(0,Window.AbsoluteSize.X,0,0), Enum.EasingDirection.In, Enum.EasingStyle.Quad, 0.2, true, function() Window.Visible=false end)
+        pcall(function()
+            Window.Size = UDim2.new(0, Window.AbsoluteSize.X, 0, 0)
+            Window.Visible = false
+        end)
         isOpen = false
     end
     local function animOpen()
-        Window.Visible = true
-        Window:TweenSize(UDim2.new(0,Window.AbsoluteSize.X,0,Window.AbsoluteSize.Y > 50 and Window.AbsoluteSize.Y or WIN_H), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.25, true)
+        pcall(function()
+            Window.Visible = true
+            Window.Size = UDim2.new(0, Window.AbsoluteSize.X, 0, Window.AbsoluteSize.Y > 50 and Window.AbsoluteSize.Y or WIN_H)
+        end)
         isOpen = true
     end
     local minimized = false
     winBtns["close"].MouseButton1Click:Connect(animClose)
     winBtns["min"].MouseButton1Click:Connect(function()
         minimized = not minimized
-        Window:TweenSize(minimized and UDim2.new(0,Window.AbsoluteSize.X,0,TITLE_H) or UDim2.new(0,Window.AbsoluteSize.X,0,WIN_H), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.18, true)
+        pcall(function()
+            Window.Size = minimized and UDim2.new(0, Window.AbsoluteSize.X, 0, TITLE_H) or UDim2.new(0, Window.AbsoluteSize.X, 0, WIN_H)
+        end)
     end)
     winBtns["max"].MouseButton1Click:Connect(function() if isOpen then animClose() else animOpen() end end)
     UserInput.InputBegan:Connect(function(i, gpe)
@@ -735,9 +742,12 @@ return function(Shared)
         drawerOpen = not drawerOpen
         if drawerOpen then
             Drawer.Visible = true
-            Drawer:TweenPosition(UDim2.new(0,SIDEBAR_W,0,0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.25, true)
+            pcall(function() Drawer.Position = UDim2.new(0, SIDEBAR_W, 0, 0) end)
         else
-            Drawer:TweenPosition(UDim2.new(0,SIDEBAR_W,-1,0), Enum.EasingDirection.In, Enum.EasingStyle.Quad, 0.2, true, function() Drawer.Visible=false end)
+            pcall(function()
+                Drawer.Position = UDim2.new(0, SIDEBAR_W, -1, 0)
+                Drawer.Visible = false
+            end)
         end
     end
     DClose.MouseButton1Click:Connect(toggleDrawer)
@@ -1329,18 +1339,23 @@ return function(Shared)
         local targetH = getLbTargetHeight(#Players:GetPlayers())
         if isLbOpen then
             lbWindow.Visible = true
-            lbWindow.Position = UDim2.new(1, -242, 0, 36)
-            lbWindow.BackgroundTransparency = 1
-            TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                Position = UDim2.new(1, -242, 0, 48),
-                Size     = UDim2.new(0, 230, 0, targetH),
-                BackgroundTransparency = 0.50
-            }):Play()
+            lbWindow.Position = UDim2.new(1, -242, 0, 48)
+            lbWindow.Size     = UDim2.new(0, 230, 0, targetH)
+            lbWindow.BackgroundTransparency = 0.50
+            pcall(function()
+                TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Position = UDim2.new(1, -242, 0, 48),
+                    Size     = UDim2.new(0, 230, 0, targetH),
+                    BackgroundTransparency = 0.50
+                }):Play()
+            end)
         else
-            TweenSvc:Create(lbWindow, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-                Position = UDim2.new(1, -242, 0, 36),
-                BackgroundTransparency = 1
-            }):Play()
+            pcall(function()
+                TweenSvc:Create(lbWindow, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                    Position = UDim2.new(1, -242, 0, 36),
+                    BackgroundTransparency = 1
+                }):Play()
+            end)
             task.delay(0.18, function()
                 if not isLbOpen then
                     lbWindow.Visible = false
@@ -1456,9 +1471,12 @@ return function(Shared)
         -- Dynamically scale window height to fit player count smoothly
         local targetH = getLbTargetHeight(#allPlrs)
         if isLbOpen and lbWindow.Visible then
-            TweenSvc:Create(lbWindow, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                Size = UDim2.new(0, 230, 0, targetH)
-            }):Play()
+            lbWindow.Size = UDim2.new(0, 230, 0, targetH)
+            pcall(function()
+                TweenSvc:Create(lbWindow, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Size = UDim2.new(0, 230, 0, targetH)
+                }):Play()
+            end)
         end
 
         for i, plr in ipairs(allPlrs) do
