@@ -676,8 +676,8 @@ return function(Shared)
         -- ── BILLBOARD AUDIO EQUALIZER VISUALIZER ──
         local bbVisualizer = Instance.new("Frame")
         bbVisualizer.Name                   = "BB_Visualizer"
-        bbVisualizer.Size                   = UDim2.new(0, 52, 0, 14)
-        bbVisualizer.Position               = UDim2.new(0, 62, 0, 45)
+        bbVisualizer.Size                   = UDim2.new(0, 52, 0, 18)
+        bbVisualizer.Position               = UDim2.new(0, 62, 0, 43)
         bbVisualizer.BackgroundTransparency = 1
         bbVisualizer.BorderSizePixel        = 0
         bbVisualizer.Parent                 = bg
@@ -931,8 +931,8 @@ return function(Shared)
         -- ── HUD AUDIO EQUALIZER VISUALIZER ──
         local hudVisualizer = Instance.new("Frame")
         hudVisualizer.Name                   = "HUD_Visualizer"
-        hudVisualizer.Size                   = UDim2.new(0, 72, 0, 18)
-        hudVisualizer.Position               = UDim2.new(1, -78, 0, 44)
+        hudVisualizer.Size                   = UDim2.new(0, 72, 0, 24)
+        hudVisualizer.Position               = UDim2.new(1, -78, 0, 40)
         hudVisualizer.BackgroundTransparency = 1
         hudVisualizer.BorderSizePixel        = 0
         hudVisualizer.ZIndex                 = 54
@@ -1430,10 +1430,12 @@ return function(Shared)
         local function calculateTargetLevel(barIdx, totalBars)
             if not isPlaying then return 0 end
 
+            local rawLevel = 0
+
             -- 1. Precision Spotify Pitch & Loudness Segment Vector
             if activeSegment and activeSegment.pitches then
                 local loudnessDb = activeSegment.loudness_max or -18
-                local normVol = math.clamp((loudnessDb + 45) / 45, 0.15, 1)
+                local normVol = math.clamp((loudnessDb + 45) / 45, 0.1, 1)
 
                 local pitches = activeSegment.pitches
                 local pVal = 0
@@ -1453,16 +1455,19 @@ return function(Shared)
                     pVal = (pitches[12] or 0.5) * 0.5 + (pitches[1] or 0.5) * 0.5
                 end
 
-                local noiseMod = math.noise(barIdx * 0.6, songSec * 4.2, trackSeed) * 0.25
-                return math.clamp((pVal * 0.70 + normVol * 0.30 + noiseMod) * normVol + beatKick, 0.15, 1)
+                local noiseMod = math.noise(barIdx * 0.5, songSec * 3.6, trackSeed) * 0.18
+                rawLevel = math.clamp((pVal * 0.72 + normVol * 0.28 + noiseMod) * normVol + beatKick, 0, 1)
+            else
+                -- 2. Organic Multi-Octave Perlin Audio Spectrum
+                local n1 = (math.noise(barIdx * 0.5, songSec * 4.2, trackSeed) + 1) * 0.5
+                local n2 = (math.noise(barIdx * 1.0, songSec * 8.4, trackSeed + 50) + 1) * 0.25
+                local n3 = math.abs(math.sin(songSec * 2.8 + barIdx * 0.65)) * 0.2
+                rawLevel = math.clamp(n1 * 0.6 + n2 + n3, 0, 1)
             end
 
-            -- 2. Organic Multi-Octave Perlin Audio Spectrum (Non-repeating, timestamp-driven)
-            local n1 = (math.noise(barIdx * 0.55, songSec * 5.0, trackSeed) + 1) * 0.5
-            local n2 = (math.noise(barIdx * 1.1, songSec * 10.5, trackSeed + 50) + 1) * 0.25
-            local n3 = math.abs(math.sin(songSec * 3.14 + barIdx * 0.7)) * 0.25
-            local combined = math.clamp(n1 * 0.55 + n2 + n3, 0.12, 1)
-            return combined
+            -- Non-linear power curve: Filters out jittery micro-noise, highlights solid rhythmic beats
+            local shaped = math.clamp(rawLevel ^ 1.6, 0.05, 1)
+            return shaped
         end
 
         -- Update HUD Equalizer Bars with snappy attack & physics gravity decay
@@ -1472,15 +1477,13 @@ return function(Shared)
                     local target = calculateTargetLevel(i, #hudVisBars)
                     local cur = hudBarLevels[i] or 0
                     if target > cur then
-                        -- Snappy attack (80% instant snap)
-                        cur = cur + (target - cur) * math.clamp(dt * 22, 0.2, 0.95)
+                        cur = cur + (target - cur) * math.clamp(dt * 14, 0.15, 0.85)
                     else
-                        -- Physics gravity falloff
-                        cur = math.max(target, cur - dt * 2.8)
+                        cur = math.max(target, cur - dt * 1.8)
                     end
                     hudBarLevels[i] = cur
 
-                    local barH = isPlaying and math.clamp(math.floor(cur * 18) + 2, 2, 18) or 3
+                    local barH = isPlaying and math.clamp(math.floor(cur * 24) + 2, 2, 24) or 3
                     bar.Size = UDim2.new(0, 6, 0, barH)
                     bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.55 + i * 0.03) % 1, 0.85, 1) or Color3.fromRGB(60, 75, 100)
                 end
@@ -1494,13 +1497,13 @@ return function(Shared)
                     local target = calculateTargetLevel(i, #bbVisBars)
                     local cur = bbBarLevels[i] or 0
                     if target > cur then
-                        cur = cur + (target - cur) * math.clamp(dt * 22, 0.2, 0.95)
+                        cur = cur + (target - cur) * math.clamp(dt * 14, 0.15, 0.85)
                     else
-                        cur = math.max(target, cur - dt * 2.8)
+                        cur = math.max(target, cur - dt * 1.8)
                     end
                     bbBarLevels[i] = cur
 
-                    local barH = isPlaying and math.clamp(math.floor(cur * 14) + 2, 2, 14) or 2
+                    local barH = isPlaying and math.clamp(math.floor(cur * 18) + 2, 2, 18) or 2
                     bar.Size = UDim2.new(0, 5, 0, barH)
                     bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.36 + i * 0.04) % 1, 0.9, 0.95) or Color3.fromRGB(70, 85, 110)
                 end
