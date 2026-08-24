@@ -55,6 +55,8 @@ return function(Shared)
     local lastBallTime = os.clock()
     local hasParriedCurrentVolley = false
     local lastParryTick = 0
+    local lastUIUpdate = 0
+    local lastTargetState = nil
 
     -- Hook Blade Ball's parry confirmation events to acknowledge deflected state
     pcall(function()
@@ -77,73 +79,83 @@ return function(Shared)
         end
     end)
 
+    -- ── HIGH PERFORMANCE BALL TRACKING ENGINE ────────────────────
+    local cachedBall = nil
+
     local function findActiveBall()
+        if cachedBall and cachedBall.Parent and cachedBall:IsA("BasePart") then
+            return cachedBall
+        end
+
         local myHRP = getHRP()
         local myPos = myHRP and myHRP.Position or Vector3.zero
 
         -- 1. Priority 1: Check active match balls in workspace.Balls
         local folder = Workspace:FindFirstChild("Balls")
         if folder and #folder:GetChildren() > 0 then
-            -- Pass A: Look for child with realBall == true
             for _, b in ipairs(folder:GetChildren()) do
                 if b:IsA("BasePart") and b:GetAttribute("realBall") == true then
+                    cachedBall = b
                     return b
                 end
             end
-            -- Pass B: Look for child with a non-empty target attribute
             for _, b in ipairs(folder:GetChildren()) do
                 if b:IsA("BasePart") and b.Name ~= "Temp" then
                     local t = b:GetAttribute("target")
                     if t and t ~= "" and t ~= "None" then
+                        cachedBall = b
                         return b
                     end
                 end
             end
-            -- Pass C: Any BasePart in Balls folder
             for _, b in ipairs(folder:GetChildren()) do
                 if b:IsA("BasePart") and b.Name ~= "Temp" then
+                    cachedBall = b
                     return b
                 end
             end
         end
 
-        -- 2. Priority 2: Check Workspace.TrainingBalls (if in training area)
+        -- 2. Priority 2: Check Workspace.TrainingBalls (Lobby / Practice)
         local tBalls = Workspace:FindFirstChild("TrainingBalls") or Workspace:FindFirstChild("Training")
         if tBalls and #tBalls:GetChildren() > 0 then
             for _, b in ipairs(tBalls:GetChildren()) do
-                if b:IsA("BasePart") and (b:GetAttribute("realBall") == true or b:GetAttribute("target") ~= nil) then
-                    local d = (b.Position - myPos).Magnitude
-                    if d < 120 then return b end
-                end
-            end
-            for _, b in ipairs(tBalls:GetChildren()) do
                 if b:IsA("BasePart") then
-                    local d = (b.Position - myPos).Magnitude
-                    if d < 120 then return b end
+                    cachedBall = b
+                    return b
                 end
             end
         end
 
-        -- 3. Priority 3: Check LobbyTraining descendants
-        local lTraining = Workspace:FindFirstChild("Spawn") and Workspace.Spawn:FindFirstChild("LobbyTraining")
-        if lTraining then
-            for _, d in ipairs(lTraining:GetDescendants()) do
-                if d:IsA("BasePart") and (d.Name:lower():find("ball") or d:GetAttribute("Training") ~= nil) then
-                    local dist = (d.Position - myPos).Magnitude
-                    if dist < 90 then return d end
-                end
-            end
-        end
-
-        -- 4. Fallback: Any ball in Workspace
-        for _, b in ipairs(Workspace:GetChildren()) do
-            if (b.Name == "Ball" or b.Name:find("Ball") or b.Name:find("Training")) and b:IsA("BasePart") then
-                return b
-            end
-        end
-
+        cachedBall = nil
         return nil
     end
+
+    -- Event listener for instant zero-latency ball detection
+    pcall(function()
+        local ballsFolder = Workspace:FindFirstChild("Balls")
+        if ballsFolder then
+            ballsFolder.ChildAdded:Connect(function(child)
+                if child:IsA("BasePart") then
+                    if child:GetAttribute("realBall") == true or not cachedBall then
+                        cachedBall = child
+                    end
+                end
+            end)
+            ballsFolder.ChildRemoved:Connect(function(child)
+                if cachedBall == child then cachedBall = nil end
+            end)
+        end
+        local tFolder = Workspace:FindFirstChild("TrainingBalls")
+        if tFolder then
+            tFolder.ChildAdded:Connect(function(child)
+                if child:IsA("BasePart") then cachedBall = child end
+            end)
+            tFolder.ChildRemoved:Connect(function(child)
+                if cachedBall == child then cachedBall = nil end
+            end)
+        end
+    end)
 
     local function isTargetingMe(ball)
         if not ball then return false end
@@ -217,42 +229,29 @@ return function(Shared)
         lastParryTick = now
         hasParriedCurrentVolley = true
 
-        -- Method 1: BindableEvent internal parry & training tester triggers
-        pcall(function()
-            if parryButtonPress then parryButtonPress:Fire() end
-        end)
-        pcall(function()
-            if parryTester then parryTester:Fire() end
-        end)
+        -- Method 1: BindableEvent internal trigger (Zero Latency)
+        if parryButtonPress then
+            pcall(function() parryButtonPress:Fire() end)
+        end
+        if parryTester then
+            pcall(function() parryTester:Fire() end)
+        end
 
         -- Method 2: RemoteEvent server parry attempt
-        pcall(function()
-            if parryAttempt then parryAttempt:FireServer(0.5, CFrame.new(), {}, Vector2.new()) end
-        end)
+        if parryAttempt then
+            pcall(function() parryAttempt:FireServer(0.5, CFrame.new(), {}, Vector2.new()) end)
+        end
+        if customParry then
+            pcall(function() customParry:FireServer() end)
+        end
 
-        -- Method 3: CustomParry remote fallback
-        pcall(function()
-            if customParry then customParry:FireServer() end
-        end)
-
-        -- Method 4: Virtual Input Simulation (F key + mouse click)
-        pcall(function()
-            if VirtualInputManager then
+        -- Method 3: Virtual Input (Instantaneous Key Deflect)
+        if VirtualInputManager then
+            pcall(function()
                 VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
-                task.delay(0.01, function()
-                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
-                end)
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                task.delay(0.01, function()
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-                end)
-            end
-        end)
-
-        -- Method 5: Executor mouse click
-        pcall(function()
-            if mouse1click then mouse1click() end
-        end)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+            end)
+        end
     end
 
     local function executeAbility()
@@ -460,16 +459,20 @@ return function(Shared)
         local customDist = Shared.Flags["BB_ParryDist"] or 30
         local dynamicParryDistance = customDist + math.clamp(speed * (0.35 + pingOffsetSec), 0, 55)
 
-        -- Status Banner update
-        local targetName = tostring(ball:GetAttribute("target") or "None")
-        if isTarget then
-            statusText.Text = string.format("🔴 INCOMING! Dist: %dm | Spd: %d | Time: %.2fs", math.floor(dist), math.floor(speed), math.max(0, timeToImpact))
-            statusText.TextColor3 = Color3.fromRGB(255, 60, 60)
-            statusFrame.BorderColor3 = Color3.fromRGB(255, 60, 60)
-        else
-            statusText.Text = string.format("🟢 Target: %s | Dist: %dm | Spd: %d", targetName:sub(1, 10), math.floor(dist), math.floor(speed))
-            statusText.TextColor3 = Color3.fromRGB(0, 220, 140)
-            statusFrame.BorderColor3 = Color3.fromRGB(0, 160, 255)
+        -- Status Banner update (Throttled to eliminate GUI render pipeline stutter)
+        if isTarget ~= lastTargetState or (now - lastUIUpdate > 0.08) then
+            lastUIUpdate = now
+            lastTargetState = isTarget
+            local targetName = tostring(ball:GetAttribute("target") or "None")
+            if isTarget then
+                statusText.Text = string.format("🔴 INCOMING! Dist: %dm | Spd: %d | Time: %.2fs", math.floor(dist), math.floor(speed), math.max(0, timeToImpact))
+                statusText.TextColor3 = Color3.fromRGB(255, 60, 60)
+                statusFrame.BorderColor3 = Color3.fromRGB(255, 60, 60)
+            else
+                statusText.Text = string.format("🟢 Target: %s | Dist: %dm | Spd: %d", targetName:sub(1, 10), math.floor(dist), math.floor(speed))
+                statusText.TextColor3 = Color3.fromRGB(0, 220, 140)
+                statusFrame.BorderColor3 = Color3.fromRGB(0, 160, 255)
+            end
         end
 
         -- Dynamic hit-zone radius: base distance + subtle velocity micro-adjustments
