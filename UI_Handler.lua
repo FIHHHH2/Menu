@@ -1267,7 +1267,156 @@ return function(Shared)
     Shared.GUI = ScreenGui; Shared.Tabs = Tabs; Shared.QuadCols = QuadCols
     Shared.MakeSection = makeSection; Shared.MakeToggle = makeToggle
     Shared.MakeSlider = makeSlider; Shared.MakeButton = makeButton
-    Shared.SwitchTab = switchTab; Shared.RebuildKeybinds = buildKeybindsUI
+    -- ── CUSTOM FIH UI THEMED LEADERBOARD (ZERO-CLIPPING RETRO WINDOW) ──
+    local StarterGui = game:GetService("StarterGui")
+    local Players    = game:GetService("Players")
+
+    -- Disable default buggy Roblox playerlist
+    pcall(function()
+        StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
+    end)
+
+    local lbWindow = Instance.new("Frame")
+    lbWindow.Name = "Fih_CustomLeaderboard"
+    lbWindow.Size = UDim2.new(0, 230, 0, 360)
+    lbWindow.Position = UDim2.new(1, -242, 0, 48)
+    lbWindow.BackgroundColor3 = C.BodyBg
+    lbWindow.BorderSizePixel = 1
+    lbWindow.BorderColor3 = C.WinBorder
+    lbWindow.ClipsDescendants = true
+    lbWindow.ZIndex = 40
+    lbWindow.Parent = ScreenGui
+    registerThemed(lbWindow, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
+
+    -- TitleBar
+    local lbTitleBar = Instance.new("Frame")
+    lbTitleBar.Size = UDim2.new(1, 0, 0, 24)
+    lbTitleBar.BackgroundColor3 = C.TitleBar
+    lbTitleBar.BorderSizePixel = 1
+    lbTitleBar.BorderColor3 = C.WinBorder
+    lbTitleBar.ZIndex = 41
+    lbTitleBar.Parent = lbWindow
+    registerThemed(lbTitleBar, { BackgroundColor3 = "TitleBar", BorderColor3 = "WinBorder" })
+
+    local lbTitleText = Instance.new("TextLabel")
+    lbTitleText.Size = UDim2.new(1, -30, 1, 0)
+    lbTitleText.Position = UDim2.new(0, 8, 0, 0)
+    lbTitleText.BackgroundTransparency = 1
+    lbTitleText.Text = "Players (" .. tostring(#Players:GetPlayers()) .. ")"
+    lbTitleText.TextColor3 = C.TitleText
+    lbTitleText.Font = Enum.Font.ArimoBold
+    lbTitleText.TextSize = 11
+    lbTitleText.TextXAlignment = Enum.TextXAlignment.Left
+    lbTitleText.ZIndex = 42
+    lbTitleText.Parent = lbTitleBar
+    registerThemed(lbTitleText, { TextColor3 = "TitleText" })
+
+    local lbCloseBtn = Instance.new("TextButton")
+    lbCloseBtn.Size = UDim2.new(0, 18, 0, 18)
+    lbCloseBtn.Position = UDim2.new(1, -21, 0, 3)
+    lbCloseBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    lbCloseBtn.BorderSizePixel = 1
+    lbCloseBtn.BorderColor3 = Color3.fromRGB(220, 70, 70)
+    lbCloseBtn.Text = "X"
+    lbCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    lbCloseBtn.Font = Enum.Font.GothamBold
+    lbCloseBtn.TextSize = 10
+    lbCloseBtn.ZIndex = 43
+    lbCloseBtn.Parent = lbTitleBar
+    lbCloseBtn.MouseButton1Click:Connect(function()
+        lbWindow.Visible = not lbWindow.Visible
+    end)
+
+    -- Scroll Area
+    local lbScroll = Instance.new("ScrollingFrame")
+    lbScroll.Size = UDim2.new(1, 0, 1, -24)
+    lbScroll.Position = UDim2.new(0, 0, 0, 24)
+    lbScroll.BackgroundTransparency = 1
+    lbScroll.BorderSizePixel = 0
+    lbScroll.ScrollBarThickness = 0
+    lbScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    lbScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    lbScroll.ZIndex = 41
+    lbScroll.Parent = lbWindow
+
+    local lbLayout = Instance.new("UIListLayout")
+    lbLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    lbLayout.Padding = UDim.new(0, 3)
+    lbLayout.Parent = lbScroll
+
+    local lbPad = Instance.new("UIPadding")
+    lbPad.PaddingTop = UDim.new(0, 4)
+    lbPad.PaddingLeft = UDim.new(0, 4)
+    lbPad.PaddingRight = UDim.new(0, 4)
+    lbPad.Parent = lbScroll
+
+    local function renderLeaderboardPlayers()
+        for _, child in ipairs(lbScroll:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+
+        local allPlrs = Players:GetPlayers()
+        lbTitleText.Text = "Players (" .. tostring(#allPlrs) .. ")"
+
+        for i, plr in ipairs(allPlrs) do
+            local row = Instance.new("Frame")
+            row.Size = UDim2.new(1, 0, 0, 28)
+            row.BackgroundColor3 = C.RowBg
+            row.BorderSizePixel = 1
+            row.BorderColor3 = C.RowBorder
+            row.LayoutOrder = i
+            row.ZIndex = 42
+            row.Parent = lbScroll
+            registerThemed(row, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder" })
+
+            local avatar = Instance.new("ImageLabel")
+            avatar.Size = UDim2.new(0, 22, 0, 22)
+            avatar.Position = UDim2.new(0, 3, 0, 3)
+            avatar.BackgroundTransparency = 1
+            avatar.BorderSizePixel = 0
+            avatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. tostring(plr.UserId) .. "&width=48&height=48&format=png"
+            avatar.ZIndex = 43
+            avatar.Parent = row
+
+            local dName = Instance.new("TextLabel")
+            dName.Size = UDim2.new(1, -32, 0, 13)
+            dName.Position = UDim2.new(0, 28, 0, 2)
+            dName.BackgroundTransparency = 1
+            dName.Text = plr.DisplayName
+            dName.TextColor3 = C.BtnText
+            dName.Font = Enum.Font.ArimoBold
+            dName.TextSize = 11
+            dName.TextXAlignment = Enum.TextXAlignment.Left
+            dName.TextTruncate = Enum.TextTruncate.AtEnd
+            dName.ZIndex = 43
+            dName.Parent = row
+            registerThemed(dName, { TextColor3 = "BtnText" })
+
+            local uName = Instance.new("TextLabel")
+            uName.Size = UDim2.new(1, -32, 0, 12)
+            uName.Position = UDim2.new(0, 28, 0, 14)
+            uName.BackgroundTransparency = 1
+            uName.Text = "@" .. plr.Name
+            uName.TextColor3 = (plr == Players.LocalPlayer) and Color3.fromRGB(0, 220, 140) or C.BannerSub
+            uName.Font = Enum.Font.Code
+            uName.TextSize = 9
+            uName.TextXAlignment = Enum.TextXAlignment.Left
+            uName.TextTruncate = Enum.TextTruncate.AtEnd
+            uName.ZIndex = 43
+            uName.Parent = row
+        end
+    end
+
+    renderLeaderboardPlayers()
+    Players.PlayerAdded:Connect(renderLeaderboardPlayers)
+    Players.PlayerRemoving:Connect(renderLeaderboardPlayers)
+
+    -- Tab Key Toggle for Leaderboard
+    UserInput.InputBegan:Connect(function(input, gpe)
+        if input.KeyCode == Enum.KeyCode.Tab and not gpe then
+            lbWindow.Visible = not lbWindow.Visible
+        end
+    end)
 
     switchTab("Main")
     print("[UI_Handler] Loaded -- Dark Mode Engine, Smooth Transitions, Hover Effects Active")
