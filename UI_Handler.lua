@@ -114,16 +114,18 @@ return function(Shared)
     Shared.IsDark = function() return isDark end
     Shared.GetTheme = function() return C end
 
-        -- ── ROBLOX CORE UI (CLEAN RETRO AERO LEADERBOARD & CHAT) ──────
+        -- ── ROBLOX CORE UI (HIGH-CONTRAST TOPBAR & SEMI-TRANSPARENT CHAT) ──
     local function styleRobloxCoreUI(targetTheme, isDarkMode)
         local theme = targetTheme or C
         local dark  = (isDarkMode ~= nil) and isDarkMode or isDark
 
-        local bgCol     = dark and Color3.fromRGB(16, 20, 30) or Color3.fromRGB(240, 244, 252)
-        local cardBg    = dark and Color3.fromRGB(22, 28, 42) or Color3.fromRGB(228, 234, 246)
+        local bgCol     = dark and Color3.fromRGB(16, 20, 30) or Color3.fromRGB(242, 246, 252)
+        local cardBg    = dark and Color3.fromRGB(22, 28, 42) or Color3.fromRGB(230, 236, 248)
         local borderCol = dark and Color3.fromRGB(40, 85, 145) or Color3.fromRGB(140, 170, 210)
-        local textWhite = dark and Color3.fromRGB(245, 250, 255) or Color3.fromRGB(15, 25, 60)
-        local inputCol  = dark and Color3.fromRGB(24, 30, 44) or Color3.fromRGB(255, 255, 255)
+        local textCol   = dark and Color3.fromRGB(245, 250, 255) or Color3.fromRGB(15, 25, 55)
+        local iconCol   = dark and Color3.fromRGB(245, 250, 255) or Color3.fromRGB(20, 25, 40)
+        local inputBg   = dark and Color3.fromRGB(24, 30, 44) or Color3.fromRGB(255, 255, 255)
+        local placeCol  = dark and Color3.fromRGB(120, 150, 190) or Color3.fromRGB(100, 120, 150)
 
         -- Clean any obsolete grid artifacts
         for _, d in ipairs(CoreGui:GetDescendants()) do
@@ -139,31 +141,14 @@ return function(Shared)
             end
         end
 
-        -- 1. Leaderboard (PlayerList) - Wide, Clean Aero Card, No Scrollbar, Pinned X
+        -- 1. TopBarApp (Frames & High-Contrast Icons in both Light and Dark mode)
         pcall(function()
-            local pl = CoreGui:FindFirstChild("PlayerList")
-            if pl then
-                local children = pl:FindFirstChild("Children", true)
-                if children and children:IsA("Frame") then
-                    children.Size                   = UDim2.new(0, 200, 0.65, 0)
-                    children.Position               = UDim2.new(1, -6, 0, 56)
-                    children.AnchorPoint            = Vector2.new(1, 0)
-                    children.BackgroundColor3       = bgCol
-                    children.BackgroundTransparency = 0.15
-                    children.BorderSizePixel        = 1
-                    children.BorderColor3           = borderCol
-                    children.ClipsDescendants       = true
-                end
-
-                for _, obj in ipairs(pl:GetDescendants()) do
+            local topbar = CoreGui:FindFirstChild("TopBarApp")
+            if topbar then
+                for _, obj in ipairs(topbar:GetDescendants()) do
                     if obj:IsA("UICorner") then obj.CornerRadius = UDim.new(0, 0) end
-                    if obj:IsA("ScrollingFrame") then
-                        obj.ScrollBarThickness = 0
-                        obj.ScrollBarImageTransparency = 1
-                        obj.BackgroundTransparency = 1
-                    end
-                    if obj:IsA("Frame") and (obj.Name:find("Entry") or obj.Name:find("Player") or obj.Name:find("Row") or obj.Name:find("Item")) then
-                        obj.BackgroundColor3       = cardBg
+                    if obj:IsA("Frame") and obj.BackgroundTransparency < 0.95 then
+                        obj.BackgroundColor3       = bgCol
                         obj.BackgroundTransparency = 0.2
                         obj.BorderSizePixel        = 1
                         obj.BorderColor3           = borderCol
@@ -173,43 +158,52 @@ return function(Shared)
                         obj.Thickness = 1
                     end
                     if obj:IsA("TextLabel") then
-                        obj.Font = Enum.Font.Code
-                        obj.TextColor3 = textWhite
+                        obj.TextColor3 = iconCol
                     end
-                    if obj:IsA("TextButton") and obj.Text:lower() == "x" then
-                        obj.Size             = UDim2.new(0, 16, 0, 16)
-                        obj.Position         = UDim2.new(1, -20, 0, 4)
-                        obj.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-                        obj.TextColor3       = Color3.fromRGB(255, 255, 255)
-                        obj.Font             = Enum.Font.GothamBold
-                        obj.TextSize         = 10
-                        obj.BorderSizePixel  = 1
-                        obj.BorderColor3     = borderCol
+                    if obj:IsA("ImageLabel") then
+                        obj.ImageColor3 = iconCol
                     end
                 end
             end
         end)
 
-        -- 2. Chat (ExperienceChat & TextChatService) - Clean Aero Glass, Preserves BuilderIcons
+        -- 2. ExperienceChat (Semi-transparent Top Tab Bar, Clean Aero Frame)
         pcall(function()
-            local TextChatService = game:GetService("TextChatService")
-            local cwc = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
-            if cwc then
-                cwc.BackgroundColor3       = bgCol
-                cwc.BackgroundTransparency = 0.15
-                cwc.TextColor3             = textWhite
-                cwc.FontFace               = Font.fromEnum(Enum.Font.Code)
-            end
-            local cibc = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
-            if cibc then
-                cibc.BackgroundColor3       = inputCol
-                cibc.BackgroundTransparency = 0.1
-                cibc.TextColor3             = textWhite
-                cibc.PlaceholderColor3      = dark and Color3.fromRGB(120, 150, 190) or Color3.fromRGB(130, 140, 160)
-            end
-
             local expChat = CoreGui:FindFirstChild("ExperienceChat")
-            if expChat then
+            if expChat and expChat:FindFirstChild("appLayout") then
+                local app = expChat.appLayout
+
+                -- Semi-transparent top channel tab bar
+                local topPanel = app:FindFirstChild("topPanel")
+                if topPanel then
+                    topPanel.BackgroundColor3       = cardBg
+                    topPanel.BackgroundTransparency = 0.25
+                    topPanel.BorderSizePixel        = 1
+                    topPanel.BorderColor3           = borderCol
+                    for _, lbl in ipairs(topPanel:GetDescendants()) do
+                        if lbl:IsA("TextLabel") or lbl:IsA("TextButton") then
+                            lbl.TextColor3 = textCol
+                            lbl.Font = Enum.Font.Code
+                        end
+                    end
+                end
+
+                local chatWindow = app:FindFirstChild("chatWindow")
+                if chatWindow then
+                    chatWindow.BackgroundColor3       = bgCol
+                    chatWindow.BackgroundTransparency = 0.15
+                    chatWindow.BorderSizePixel        = 1
+                    chatWindow.BorderColor3           = borderCol
+                end
+
+                local chatInputRow = app:FindFirstChild("chatInputRow", true)
+                if chatInputRow and chatInputRow:IsA("Frame") then
+                    chatInputRow.BackgroundColor3       = inputBg
+                    chatInputRow.BackgroundTransparency = 0.1
+                    chatInputRow.BorderSizePixel        = 1
+                    chatInputRow.BorderColor3           = borderCol
+                end
+
                 for _, d in ipairs(expChat:GetDescendants()) do
                     if d:IsA("UICorner") then d.CornerRadius = UDim.new(0, 0) end
                     if d:IsA("ScrollingFrame") then
@@ -220,43 +214,25 @@ return function(Shared)
                         pcall(function() d.Visible = false end)
                     end
                 end
-
-                local appLayout = expChat:FindFirstChild("appLayout")
-                if appLayout then
-                    local chatWindow = appLayout:FindFirstChild("chatWindow")
-                    if chatWindow then
-                        chatWindow.BackgroundColor3       = bgCol
-                        chatWindow.BackgroundTransparency = 0.15
-                        chatWindow.BorderSizePixel        = 1
-                        chatWindow.BorderColor3           = borderCol
-                    end
-
-                    local chatInputRow = appLayout:FindFirstChild("chatInputRow", true)
-                    if chatInputRow and chatInputRow:IsA("Frame") then
-                        chatInputRow.BackgroundColor3 = cardBg
-                        chatInputRow.BorderSizePixel  = 1
-                        chatInputRow.BorderColor3     = borderCol
-                    end
-                end
             end
         end)
 
-        -- 3. TopBarApp & Notification Toasts
+        -- 3. TextChatService Configurations
         pcall(function()
-            local topbar = CoreGui:FindFirstChild("TopBarApp")
-            if topbar then
-                for _, obj in ipairs(topbar:GetDescendants()) do
-                    if obj:IsA("UICorner") then obj.CornerRadius = UDim.new(0, 0) end
-                    if obj:IsA("Frame") and obj.BackgroundTransparency < 0.95 then
-                        obj.BackgroundColor3 = bgCol
-                        obj.BorderSizePixel  = 1
-                        obj.BorderColor3     = borderCol
-                    end
-                    if obj:IsA("UIStroke") then
-                        obj.Color = borderCol
-                        obj.Thickness = 1
-                    end
-                end
+            local TextChatService = game:GetService("TextChatService")
+            local cwc = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
+            if cwc then
+                cwc.BackgroundColor3       = bgCol
+                cwc.BackgroundTransparency = 0.15
+                cwc.TextColor3             = textCol
+                cwc.FontFace               = Font.fromEnum(Enum.Font.Code)
+            end
+            local cibc = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
+            if cibc then
+                cibc.BackgroundColor3       = inputBg
+                cibc.BackgroundTransparency = 0.1
+                cibc.TextColor3             = textCol
+                cibc.PlaceholderColor3      = placeCol
             end
         end)
     end
