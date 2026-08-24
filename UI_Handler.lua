@@ -698,33 +698,35 @@ return function(Shared)
     NavTabLabel.Parent = NavBar
     registerThemed(NavTabLabel, { TextColor3 = "NavText" })
 
-    -- ── THEME SWITCHER BUTTON (Clean Transparent Sun / Moon Emoji) ──
+    -- ── THEME SWITCHER BUTTON (Clean Text Variant) ──────────────────
     local themeBtn = Instance.new("TextButton")
     themeBtn.Name                   = "ThemeToggleBtn"
-    themeBtn.Size                   = UDim2.new(0, 24, 0, 24)
-    themeBtn.Position               = UDim2.new(1, -118, 0.5, -12)
+    themeBtn.Size                   = UDim2.new(0, 60, 0, 20)
+    themeBtn.Position               = UDim2.new(1, -150, 0.5, -10)
     themeBtn.BackgroundTransparency = 1
     themeBtn.BorderSizePixel        = 0
-    themeBtn.Text                   = "🌙"
-    themeBtn.Font                   = Enum.Font.SourceSans
-    themeBtn.TextSize               = 18
+    themeBtn.Text                   = "[Dark]"
+    themeBtn.Font                   = Enum.Font.Code
+    themeBtn.TextSize               = 11
+    themeBtn.TextColor3             = C.NavLink
     themeBtn.ZIndex                 = 15
     themeBtn.Parent                 = NavBar
+    registerThemed(themeBtn, { TextColor3 = "NavLink" })
 
     themeBtn.MouseEnter:Connect(function()
-        TweenService:Create(themeBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { TextSize = 21 }):Play()
+        TweenService:Create(themeBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { TextColor3 = C.NavLinkHover }):Play()
     end)
     themeBtn.MouseLeave:Connect(function()
-        TweenService:Create(themeBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { TextSize = 18 }):Play()
+        TweenService:Create(themeBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { TextColor3 = C.NavLink }):Play()
     end)
 
     local function updateThemeButtonIcon()
         if themeMode == "Light" then
-            themeBtn.Text = "☀️"
+            themeBtn.Text = "[Light]"
         elseif themeMode == "Adaptive" then
-            themeBtn.Text = "🎨"
+            themeBtn.Text = "[Adapt]"
         else
-            themeBtn.Text = "🌙"
+            themeBtn.Text = "[Dark]"
         end
     end
 
@@ -733,18 +735,18 @@ return function(Shared)
             themeMode = "Light"
             applyThemeTransition(LightTheme, 0.25)
             updateThemeButtonIcon()
-            sendNotification("Theme Engine", "Light Theme Applied", true)
+            sendNotification("Theme Engine", "[Light] Theme Applied", true)
         elseif themeMode == "Light" then
             themeMode = "Adaptive"
             local pal = generateAdaptivePalette(currentAdaptiveTrack or (Shared.CurrentTrack and Shared.CurrentTrack()))
             applyThemeTransition(pal, 0.65)
             updateThemeButtonIcon()
-            sendNotification("Theme Engine", "🎨 Semi-Translucent Adaptive UI Active", true)
+            sendNotification("Theme Engine", "[Adapt] Semi-Translucent UI Active", true)
         else
             themeMode = "Dark"
             applyThemeTransition(DarkTheme, 0.25)
             updateThemeButtonIcon()
-            sendNotification("Theme Engine", "Dark Theme Applied", true)
+            sendNotification("Theme Engine", "[Dark] Theme Applied", true)
         end
         saveConfigDebounced()
     end)
@@ -1306,7 +1308,7 @@ return function(Shared)
             local pal = generateAdaptivePalette(currentAdaptiveTrack or (Shared.CurrentTrack and Shared.CurrentTrack()))
             applyThemeTransition(pal, 0.65)
             updateThemeButtonIcon()
-            sendNotification("Theme Engine", "🎨 Semi-Translucent Adaptive UI Enabled", true)
+            sendNotification("Theme Engine", "[Adapt] Semi-Translucent UI Enabled", true)
         else
             themeMode = isDark and "Dark" or "Light"
             applyThemeTransition(isDark and DarkTheme or LightTheme, 0.25)

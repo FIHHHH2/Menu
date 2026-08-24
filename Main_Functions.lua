@@ -401,8 +401,9 @@ return function(Shared)
             note.Name                   = "NoteFallback"
             note.Size                   = UDim2.new(1, 0, 1, 0)
             note.BackgroundTransparency = 1
-            note.Text                   = "🎵"
-            note.TextSize               = 22
+            note.Text                   = "[♪]"
+            note.Font                   = Enum.Font.Code
+            note.TextSize               = 14
             note.TextColor3             = Color3.fromRGB(255, 215, 50)
             note.ZIndex                 = 1
             note.Parent                 = coverFrame
@@ -524,7 +525,7 @@ return function(Shared)
         updatePeerBillboard(p, song or "", artist or "", cover or "")
 
         if isNew then
-            local songMsg = (song and song ~= "" and song ~= "Not Playing") and (" (🎵 " .. song .. ")") or ""
+            local songMsg = (song and song ~= "" and song ~= "Not Playing") and (" ([♪] " .. song .. ")") or ""
             Shared.Notify("Peer Detected", p.DisplayName .. " is running FIH UI!" .. songMsg, true)
         end
     end

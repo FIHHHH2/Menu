@@ -636,8 +636,9 @@ return function(Shared)
         local bbNote = Instance.new("TextLabel")
         bbNote.Size                   = UDim2.new(1, 0, 1, 0)
         bbNote.BackgroundTransparency = 1
-        bbNote.Text                   = "🎵"
-        bbNote.TextSize               = 22
+        bbNote.Text                   = "[♪]"
+        bbNote.Font                   = Enum.Font.Code
+        bbNote.TextSize               = 14
         bbNote.TextColor3             = Color3.fromRGB(100, 130, 180)
         bbNote.TextTransparency       = 0.3
         bbNote.Parent                 = bbCoverContainer
@@ -844,8 +845,9 @@ return function(Shared)
         local noteIcon = Instance.new("TextLabel")
         noteIcon.Size                   = UDim2.new(1, 0, 1, 0)
         noteIcon.BackgroundTransparency = 1
-        noteIcon.Text                   = "🎵"
-        noteIcon.TextSize               = 22
+        noteIcon.Text                   = "[♪]"
+        noteIcon.Font                   = Enum.Font.Code
+        noteIcon.TextSize               = 14
         noteIcon.TextColor3             = Color3.fromRGB(110, 130, 170)
         noteIcon.TextTransparency       = 0.35
         noteIcon.ZIndex                 = 52

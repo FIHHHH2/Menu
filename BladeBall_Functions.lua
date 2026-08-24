@@ -466,11 +466,11 @@ return function(Shared)
             lastTargetState = isTarget
             local targetName = tostring(ball:GetAttribute("target") or "None")
             if isTarget then
-                statusText.Text = string.format("🔴 INCOMING! Dist: %dm | Spd: %d | Time: %.2fs", math.floor(dist), math.floor(speed), math.max(0, timeToImpact))
+                statusText.Text = string.format("[ALERT] INCOMING! Dist: %dm | Spd: %d | Time: %.2fs", math.floor(dist), math.floor(speed), math.max(0, timeToImpact))
                 statusText.TextColor3 = Color3.fromRGB(255, 60, 60)
                 statusFrame.BorderColor3 = Color3.fromRGB(255, 60, 60)
             else
-                statusText.Text = string.format("🟢 Target: %s | Dist: %dm | Spd: %d", targetName:sub(1, 10), math.floor(dist), math.floor(speed))
+                statusText.Text = string.format("[SAFE] Target: %s | Dist: %dm | Spd: %d", targetName:sub(1, 10), math.floor(dist), math.floor(speed))
                 statusText.TextColor3 = Color3.fromRGB(0, 220, 140)
                 statusFrame.BorderColor3 = Color3.fromRGB(0, 160, 255)
             end
