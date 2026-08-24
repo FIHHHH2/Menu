@@ -961,8 +961,8 @@ return function(Shared)
     ContentArea.Position             = UDim2.new(0, SIDEBAR_W, 0, 0)
     ContentArea.BackgroundColor3     = C.BodyBg
     ContentArea.BorderSizePixel      = 0
-    ContentArea.ScrollBarThickness   = 6
-    ContentArea.ScrollBarImageColor3 = Color3.fromRGB(140,160,200)
+    ContentArea.ScrollBarThickness   = 0
+    ContentArea.ScrollBarImageTransparency = 1
     ContentArea.CanvasSize           = UDim2.new(0,0,0,0)
     ContentArea.AutomaticCanvasSize  = Enum.AutomaticSize.Y
     ContentArea.ClipsDescendants     = true
@@ -1010,7 +1010,8 @@ return function(Shared)
     local DrawerScroll = Instance.new("ScrollingFrame")
     DrawerScroll.Size = UDim2.new(1,0,1,-24); DrawerScroll.Position = UDim2.new(0,0,0,24)
     DrawerScroll.BackgroundColor3 = C.DrawerBg; DrawerScroll.BorderSizePixel = 0
-    DrawerScroll.ScrollBarThickness = 6; DrawerScroll.ScrollBarImageColor3 = Color3.fromRGB(140,160,200)
+    DrawerScroll.ScrollBarThickness = 0
+    DrawerScroll.ScrollBarImageTransparency = 1
     DrawerScroll.CanvasSize = UDim2.new(0,0,0,0); DrawerScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
     DrawerScroll.ClipsDescendants = true; DrawerScroll.ZIndex = 21; DrawerScroll.Parent = Drawer
     registerThemed(DrawerScroll, { BackgroundColor3 = "DrawerBg" })
@@ -2512,8 +2513,8 @@ return function(Shared)
     chatScroll.Position = UDim2.new(0, 1, 0, 27)
     chatScroll.BackgroundTransparency = 1
     chatScroll.BorderSizePixel = 0
-    chatScroll.ScrollBarThickness = 5
-    chatScroll.ScrollBarImageColor3 = C.WinBorder
+    chatScroll.ScrollBarThickness = 0
+    chatScroll.ScrollBarImageTransparency = 1
     chatScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     chatScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
     chatScroll.ZIndex = 41
