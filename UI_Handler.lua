@@ -1490,31 +1490,6 @@ return function(Shared)
     local GuiService = game:GetService("GuiService")
     local VirtualInput = game:GetService("VirtualInputManager")
 
-    -- Helper to trigger native button clicks reliably
-    local function triggerNativeButton(buttonName)
-        local topbar = CoreGui:FindFirstChild("TopBarApp")
-        if not topbar then return false end
-        for _, d in ipairs(topbar:GetDescendants()) do
-            if d:IsA("GuiButton") and d.Name == buttonName then
-                if firesignal then
-                    pcall(function() firesignal(d.MouseButton1Click) end)
-                    pcall(function() firesignal(d.Activated) end)
-                end
-                if getconnections then
-                    for _, c in ipairs(getconnections(d.MouseButton1Click)) do pcall(function() c:Fire() end) end
-                    for _, c in ipairs(getconnections(d.Activated)) do pcall(function() c:Fire() end) end
-                end
-                pcall(function()
-                    local pos = d.AbsolutePosition + d.AbsoluteSize / 2
-                    VirtualInput:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
-                    VirtualInput:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 1)
-                end)
-                return true
-            end
-        end
-        return false
-    end
-
     local chatWindow = Instance.new("Frame")
     chatWindow.Name = "Fih_CustomChat"
     chatWindow.Size = UDim2.new(1, 0, 0, 290)
@@ -1553,7 +1528,7 @@ return function(Shared)
     leftNavHolder.ZIndex = 42
     leftNavHolder.Parent = chatTitleBar
 
-    -- 1. [Roblox Logo] Button
+    -- 1. [Roblox Logo] Button (Toggles Pause / Escape Menu)
     local rbxLogoBtn = Instance.new("ImageButton")
     rbxLogoBtn.Size = UDim2.new(0, 22, 0, 20)
     rbxLogoBtn.Position = UDim2.new(0, 0, 0, 0)
@@ -1568,11 +1543,15 @@ return function(Shared)
     registerThemed(rbxLogoBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", ImageColor3 = "BtnText" })
 
     rbxLogoBtn.MouseButton1Click:Connect(function()
-        -- GuiService:TogglePauseMenu always works regardless of topbar state
-        pcall(function() GuiService:TogglePauseMenu() end)
+        pcall(function()
+            VirtualInput:SendKeyEvent(true, Enum.KeyCode.Escape, false, game)
+            task.delay(0.03, function()
+                VirtualInput:SendKeyEvent(false, Enum.KeyCode.Escape, false, game)
+            end)
+        end)
     end)
 
-    -- 2. [≡] Three Lines Menu Button
+    -- 2. [≡] Three Lines Menu Button (Toggles In-Game Settings / Menu)
     local menuBtn = Instance.new("TextButton")
     menuBtn.Size = UDim2.new(0, 22, 0, 20)
     menuBtn.Position = UDim2.new(0, 26, 0, 0)
@@ -1588,11 +1567,15 @@ return function(Shared)
     registerThemed(menuBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
 
     menuBtn.MouseButton1Click:Connect(function()
-        -- Same as Roblox button - both open the in-game menu
-        pcall(function() GuiService:TogglePauseMenu() end)
+        pcall(function()
+            VirtualInput:SendKeyEvent(true, Enum.KeyCode.Escape, false, game)
+            task.delay(0.03, function()
+                VirtualInput:SendKeyEvent(false, Enum.KeyCode.Escape, false, game)
+            end)
+        end)
     end)
 
-    -- 3. [🎙] Voice Chat Mute/Unmute Button
+    -- 3. [🎙] Voice Chat Mute/Unmute Button (Direct VoiceChatInternal toggle)
     local vcBtn = Instance.new("TextButton")
     vcBtn.Size = UDim2.new(0, 22, 0, 20)
     vcBtn.Position = UDim2.new(0, 52, 0, 0)
@@ -1609,17 +1592,13 @@ return function(Shared)
 
     local isMicMuted = true
     vcBtn.MouseButton1Click:Connect(function()
-        -- Re-enable TopBar momentarily, click the mic, hide again
-        local topbarFolder = CoreGui:FindFirstChild("TopBarApp")
-        local topbarGui = topbarFolder and topbarFolder:FindFirstChild("TopBarApp")
-        if topbarGui then topbarGui.Enabled = true end
-        task.delay(0.05, function()
-            triggerNativeButton("IconHitArea_toggle_mic_mute")
-            task.delay(0.1, function()
-                if topbarGui then topbarGui.Enabled = false end
-            end)
-        end)
         isMicMuted = not isMicMuted
+        pcall(function()
+            local VCI = game:GetService("VoiceChatInternal")
+            if VCI then
+                VCI:PublishPause(isMicMuted)
+            end
+        end)
         vcBtn.TextColor3 = isMicMuted and C.BtnText or Color3.fromRGB(0, 220, 140)
     end)
 
