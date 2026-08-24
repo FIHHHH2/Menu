@@ -444,8 +444,11 @@ return function(Shared)
         local tweenDuration = duration or 0.25
         local tweenInfo = TweenInfo.new(tweenDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
+        -- Cleanly filter out destroyed elements to prevent memory leaks and theme resetting
+        local liveRegistry = {}
         for _, item in ipairs(themeRegistry) do
             if item.inst and item.inst.Parent then
+                table.insert(liveRegistry, item)
                 local goal = {}
                 for propName, themeKey in pairs(item.props) do
                     if C[themeKey] ~= nil then
@@ -454,6 +457,16 @@ return function(Shared)
                 end
                 TweenService:Create(item.inst, tweenInfo, goal):Play()
             end
+        end
+        themeRegistry = liveRegistry
+
+        -- Update active tab button style
+        if TabBtns and activeTab and TabBtns[activeTab] and TabBtns[activeTab].Parent then
+            TweenService:Create(TabBtns[activeTab], tweenInfo, {
+                BackgroundColor3 = C.TabActiveBg,
+                TextColor3       = C.TabActiveText,
+                BorderColor3     = C.WinBorder
+            }):Play()
         end
 
         -- Handle semi-translucency for Adaptive Theme vs solid for Light/Dark
@@ -728,11 +741,6 @@ return function(Shared)
                 resizing = true; rStartPos = i.Position; rStartSize = Window.AbsoluteSize
             end
         end)
-        UserInput.InputEnded:Connect(function(i)
-            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-                resizing = false
-            end
-        end)
         UserInput.InputChanged:Connect(function(i)
             if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
                 local d = i.Position - rStartPos
@@ -744,26 +752,56 @@ return function(Shared)
     end
 
     local isOpen = true
+    local savedWindowHeight = WIN_H
     local function animClose()
-        pcall(function()
-            Window.Size = UDim2.new(0, Window.AbsoluteSize.X, 0, 0)
-            Window.Visible = false
-        end)
+        if not isOpen then return end
         isOpen = false
-    end
-    local function animOpen()
+        savedWindowHeight = math.max(Window.AbsoluteSize.Y, WIN_H)
+        local curW = Window.AbsoluteSize.X
         pcall(function()
-            Window.Visible = true
-            Window.Size = UDim2.new(0, Window.AbsoluteSize.X, 0, Window.AbsoluteSize.Y > 50 and Window.AbsoluteSize.Y or WIN_H)
+            TweenService:Create(Window, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                Size = UDim2.new(0, curW, 0, 0),
+                BackgroundTransparency = 1
+            }):Play()
         end)
-        isOpen = true
+        task.delay(0.22, function()
+            if not isOpen then
+                Window.Visible = false
+            end
+        end)
     end
+
+    local function animOpen()
+        if isOpen then return end
+        isOpen = true
+        Window.Visible = true
+        local curW = math.max(Window.AbsoluteSize.X, WIN_W)
+        Window.Size = UDim2.new(0, curW, 0, 0)
+        Window.BackgroundTransparency = 1
+        pcall(function()
+            TweenService:Create(Window, TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, curW, 0, savedWindowHeight),
+                BackgroundTransparency = C.IsAdaptive and 0.12 or 0
+            }):Play()
+        end)
+    end
+
     local minimized = false
     winBtns["close"].MouseButton1Click:Connect(animClose)
     winBtns["min"].MouseButton1Click:Connect(function()
         minimized = not minimized
+        local curW = Window.AbsoluteSize.X
         pcall(function()
-            Window.Size = minimized and UDim2.new(0, Window.AbsoluteSize.X, 0, TITLE_H) or UDim2.new(0, Window.AbsoluteSize.X, 0, WIN_H)
+            if minimized then
+                savedWindowHeight = math.max(Window.AbsoluteSize.Y, WIN_H)
+                TweenService:Create(Window, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Size = UDim2.new(0, curW, 0, TITLE_H)
+                }):Play()
+            else
+                TweenService:Create(Window, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Size = UDim2.new(0, curW, 0, savedWindowHeight)
+                }):Play()
+            end
         end)
     end)
     winBtns["max"].MouseButton1Click:Connect(function() if isOpen then animClose() else animOpen() end end)
@@ -799,7 +837,7 @@ return function(Shared)
     themeBtn.Font                   = Enum.Font.Code
     themeBtn.TextSize               = 11
     themeBtn.TextColor3             = C.NavLink
-    themeBtn.ZIndex                 = 15
+    themeBtn.ZIndex                 = 3
     themeBtn.Parent                 = NavBar
     registerThemed(themeBtn, { TextColor3 = "NavLink" })
 
@@ -872,29 +910,27 @@ return function(Shared)
     Sidebar.BorderSizePixel = 0; Sidebar.ClipsDescendants = true; Sidebar.Parent = Body
     registerThemed(Sidebar, { BackgroundColor3 = "BodyBg" })
 
+    -- Lightweight checkered pattern (Zero startup lag)
+    local SidebarPattern = Instance.new("Frame")
+    SidebarPattern.Size = UDim2.new(1, 0, 1, 0)
+    SidebarPattern.BackgroundTransparency = 1
+    SidebarPattern.ZIndex = 2
+    SidebarPattern.Parent = Sidebar
+
     local CELL = 9
-    local cellCache = {}
-    local function updateSidebarCells()
-        local targetH = math.max(Sidebar.AbsoluteSize.Y, 1500)
-        local maxR = math.ceil(targetH / CELL) + 4
-        for r = 0, maxR do
-            for c = 0, 11 do
-                local key = r * 12 + c
-                if not cellCache[key] then
-                    local cell = Instance.new("Frame")
-                    cell.Size = UDim2.new(0, CELL, 0, CELL)
-                    cell.Position = UDim2.new(0, c * CELL, 0, r * CELL)
-                    cell.BorderSizePixel = 0
-                    cell.BackgroundColor3 = ((r + c) % 2 == 0) and C.SidebarCellA or C.SidebarCellB
-                    cell.Parent = Sidebar
-                    cellCache[key] = cell
-                    registerThemed(cell, { BackgroundColor3 = ((r + c) % 2 == 0) and "SidebarCellA" or "SidebarCellB" })
-                end
+    for r = 0, 36 do
+        for c = 0, 10 do
+            if (r + c) % 2 == 1 then
+                local cell = Instance.new("Frame")
+                cell.Size = UDim2.new(0, CELL, 0, CELL)
+                cell.Position = UDim2.new(0, c * CELL, 0, r * CELL)
+                cell.BorderSizePixel = 0
+                cell.BackgroundColor3 = C.SidebarCellB
+                cell.Parent = SidebarPattern
+                registerThemed(cell, { BackgroundColor3 = "SidebarCellB" })
             end
         end
     end
-    updateSidebarCells()
-    Sidebar:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateSidebarCells)
 
     local SBorder = Instance.new("Frame")
     SBorder.Size = UDim2.new(0,2,1,0); SBorder.Position = UDim2.new(1,-2,0,0)
@@ -1727,6 +1763,189 @@ return function(Shared)
     lbPad.PaddingRight = UDim.new(0, 4)
     lbPad.Parent = lbScroll
 
+    -- ── THEMED PLAYER PROFILE POPUP CARD ────────────────────────
+    local profileCard = Instance.new("Frame")
+    profileCard.Name = "Fih_PlayerProfileCard"
+    profileCard.Size = UDim2.new(0, 220, 0, 215)
+    profileCard.Position = UDim2.new(1, -475, 0, 48)
+    profileCard.BackgroundColor3 = C.BodyBg
+    profileCard.BackgroundTransparency = 0.15
+    profileCard.BorderSizePixel = 1
+    profileCard.BorderColor3 = C.WinBorder
+    profileCard.ZIndex = 90
+    profileCard.Visible = false
+    profileCard.ClipsDescendants = true
+    profileCard.Parent = ScreenGui
+    registerThemed(profileCard, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
+
+    local pcHeader = Instance.new("Frame")
+    pcHeader.Size = UDim2.new(1, 0, 0, 24)
+    pcHeader.BackgroundColor3 = C.TitleBar
+    pcHeader.BackgroundTransparency = 0.20
+    pcHeader.BorderSizePixel = 1
+    pcHeader.BorderColor3 = C.WinBorder
+    pcHeader.ZIndex = 91
+    pcHeader.Parent = profileCard
+    registerThemed(pcHeader, { BackgroundColor3 = "TitleBar", BorderColor3 = "WinBorder" })
+
+    local pcTitle = Instance.new("TextLabel")
+    pcTitle.Size = UDim2.new(1, -28, 1, 0)
+    pcTitle.Position = UDim2.new(0, 8, 0, 0)
+    pcTitle.BackgroundTransparency = 1
+    pcTitle.Text = "Player Profile"
+    pcTitle.TextColor3 = C.TitleText
+    pcTitle.Font = Enum.Font.ArimoBold
+    pcTitle.TextSize = 11
+    pcTitle.TextXAlignment = Enum.TextXAlignment.Left
+    pcTitle.ZIndex = 92
+    pcTitle.Parent = pcHeader
+    registerThemed(pcTitle, { TextColor3 = "TitleText" })
+
+    local pcClose = Instance.new("TextButton")
+    pcClose.Size = UDim2.new(0, 18, 0, 18)
+    pcClose.Position = UDim2.new(1, -21, 0, 3)
+    pcClose.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    pcClose.BorderSizePixel = 1
+    pcClose.BorderColor3 = Color3.fromRGB(220, 70, 70)
+    pcClose.Text = "X"
+    pcClose.TextColor3 = Color3.fromRGB(255, 255, 255)
+    pcClose.Font = Enum.Font.GothamBold
+    pcClose.TextSize = 10
+    pcClose.ZIndex = 93
+    pcClose.Parent = pcHeader
+    pcClose.MouseButton1Click:Connect(function()
+        profileCard.Visible = false
+    end)
+
+    local pcAvatar = Instance.new("ImageLabel")
+    pcAvatar.Size = UDim2.new(0, 42, 0, 42)
+    pcAvatar.Position = UDim2.new(0, 8, 0, 30)
+    pcAvatar.BackgroundTransparency = 1
+    pcAvatar.BorderSizePixel = 1
+    pcAvatar.BorderColor3 = C.WinBorder
+    pcAvatar.ZIndex = 91
+    pcAvatar.Parent = profileCard
+    registerThemed(pcAvatar, { BorderColor3 = "WinBorder" })
+
+    local pcDName = Instance.new("TextLabel")
+    pcDName.Size = UDim2.new(1, -58, 0, 15)
+    pcDName.Position = UDim2.new(0, 56, 0, 30)
+    pcDName.BackgroundTransparency = 1
+    pcDName.Text = "DisplayName"
+    pcDName.TextColor3 = C.BtnText
+    pcDName.Font = Enum.Font.ArimoBold
+    pcDName.TextSize = 11
+    pcDName.TextXAlignment = Enum.TextXAlignment.Left
+    pcDName.TextTruncate = Enum.TextTruncate.AtEnd
+    pcDName.ZIndex = 91
+    pcDName.Parent = profileCard
+    registerThemed(pcDName, { TextColor3 = "BtnText" })
+
+    local pcUName = Instance.new("TextLabel")
+    pcUName.Size = UDim2.new(1, -58, 0, 13)
+    pcUName.Position = UDim2.new(0, 56, 0, 45)
+    pcUName.BackgroundTransparency = 1
+    pcUName.Text = "@Username"
+    pcUName.TextColor3 = C.Accent
+    pcUName.Font = Enum.Font.Code
+    pcUName.TextSize = 10
+    pcUName.TextXAlignment = Enum.TextXAlignment.Left
+    pcUName.TextTruncate = Enum.TextTruncate.AtEnd
+    pcUName.ZIndex = 91
+    pcUName.Parent = profileCard
+    registerThemed(pcUName, { TextColor3 = "Accent" })
+
+    local pcInfo = Instance.new("TextLabel")
+    pcInfo.Size = UDim2.new(1, -58, 0, 13)
+    pcInfo.Position = UDim2.new(0, 56, 0, 58)
+    pcInfo.BackgroundTransparency = 1
+    pcInfo.Text = "ID: 0"
+    pcInfo.TextColor3 = C.BannerSub
+    pcInfo.Font = Enum.Font.Code
+    pcInfo.TextSize = 9
+    pcInfo.TextXAlignment = Enum.TextXAlignment.Left
+    pcInfo.ZIndex = 91
+    pcInfo.Parent = profileCard
+    registerThemed(pcInfo, { TextColor3 = "BannerSub" })
+
+    local function makePcBtn(text, yPos, callback)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -16, 0, 24)
+        btn.Position = UDim2.new(0, 8, 0, yPos)
+        btn.BackgroundColor3 = C.BtnBg
+        btn.BackgroundTransparency = 0.25
+        btn.BorderSizePixel = 1
+        btn.BorderColor3 = C.BtnBorder
+        btn.Text = text
+        btn.TextColor3 = C.BtnText
+        btn.Font = Enum.Font.Code
+        btn.TextSize = 10
+        btn.ZIndex = 92
+        btn.Parent = profileCard
+        registerThemed(btn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
+        btn.MouseEnter:Connect(function()
+            TweenService:Create(btn, TweenInfo.new(0.12), { BackgroundColor3 = C.BtnHover }):Play()
+        end)
+        btn.MouseLeave:Connect(function()
+            TweenService:Create(btn, TweenInfo.new(0.12), { BackgroundColor3 = C.BtnBg }):Play()
+        end)
+        btn.MouseButton1Click:Connect(callback)
+        return btn
+    end
+
+    local currentSelectedPlr = nil
+    local function openPlayerProfile(plr)
+        if not plr then return end
+        currentSelectedPlr = plr
+        pcTitle.Text = "Player :: @" .. plr.Name
+        pcDName.Text = plr.DisplayName
+        pcUName.Text = "@" .. plr.Name
+        pcInfo.Text = "Age: " .. tostring(plr.AccountAge) .. "d | ID: " .. tostring(plr.UserId)
+        pcAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. tostring(plr.UserId) .. "&width=150&height=150&format=png"
+        profileCard.Visible = true
+        pcall(function()
+            profileCard.Position = UDim2.new(1, -485, 0, 48)
+            TweenService:Create(profileCard, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Position = UDim2.new(1, -475, 0, 48)
+            }):Play()
+        end)
+    end
+
+    makePcBtn("🎯  Set as Troll Target", 78, function()
+        if currentSelectedPlr then
+            Shared.Flags["TrollTarget"] = currentSelectedPlr
+            Shared.Flags["TrollTargetName"] = currentSelectedPlr.Name
+            sendNotification("Troll Suite", "Target set to: @" .. currentSelectedPlr.Name, true)
+            profileCard.Visible = false
+        end
+    end)
+
+    makePcBtn("⚡  Teleport to Player", 108, function()
+        if currentSelectedPlr and currentSelectedPlr.Character and currentSelectedPlr.Character:FindFirstChild("HumanoidRootPart") then
+            local myHRP = Shared.HumanoidRP or (Shared.Player.Character and Shared.Player.Character:FindFirstChild("HumanoidRootPart"))
+            if myHRP then
+                myHRP.CFrame = currentSelectedPlr.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+                sendNotification("Teleport", "Teleported to @" .. currentSelectedPlr.Name, true)
+            end
+        end
+    end)
+
+    makePcBtn("👥  Send Friend Request", 138, function()
+        if currentSelectedPlr then
+            pcall(function()
+                StarterGui:SetCore("PromptSendFriendRequest", currentSelectedPlr)
+            end)
+        end
+    end)
+
+    makePcBtn("👁  Inspect Roblox Avatar", 168, function()
+        if currentSelectedPlr then
+            pcall(function()
+                game:GetService("GuiService"):InspectPlayerFromUserId(currentSelectedPlr.UserId)
+            end)
+        end
+    end)
+
     local function renderLeaderboardPlayers()
         for _, child in ipairs(lbScroll:GetChildren()) do
             if child:IsA("Frame") then child:Destroy() end
@@ -1738,7 +1957,6 @@ return function(Shared)
         -- Dynamically scale window height to fit player count smoothly
         local targetH = getLbTargetHeight(#allPlrs)
         if isLbOpen and lbWindow.Visible then
-            lbWindow.Size = UDim2.new(0, 230, 0, targetH)
             pcall(function()
                 TweenSvc:Create(lbWindow, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, 230, 0, targetH)
@@ -1796,6 +2014,23 @@ return function(Shared)
             uName.TextTruncate = Enum.TextTruncate.AtEnd
             uName.ZIndex = 43
             uName.Parent = row
+
+            local rowBtn = Instance.new("TextButton")
+            rowBtn.Size = UDim2.new(1, 0, 1, 0)
+            rowBtn.BackgroundTransparency = 1
+            rowBtn.Text = ""
+            rowBtn.ZIndex = 44
+            rowBtn.Parent = row
+
+            rowBtn.MouseEnter:Connect(function()
+                TweenSvc:Create(row, TweenInfo.new(0.12), { BackgroundTransparency = 0.25, BackgroundColor3 = C.RowHover }):Play()
+            end)
+            rowBtn.MouseLeave:Connect(function()
+                TweenSvc:Create(row, TweenInfo.new(0.12), { BackgroundTransparency = 0.55, BackgroundColor3 = C.RowBg }):Play()
+            end)
+            rowBtn.MouseButton1Click:Connect(function()
+                openPlayerProfile(plr)
+            end)
         end
     end
 
@@ -1830,7 +2065,7 @@ return function(Shared)
     chatWindow.BackgroundTransparency = 0.45
     chatWindow.BorderSizePixel = 1
     chatWindow.BorderColor3 = C.WinBorder
-    chatWindow.ClipsDescendants = false
+    chatWindow.ClipsDescendants = true
     chatWindow.ZIndex = 40
     chatWindow.Parent = ScreenGui
     registerThemed(chatWindow, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
@@ -2176,15 +2411,37 @@ return function(Shared)
     local savedChatHeight = 260
     local savedChatWidth  = 420
 
-    -- Minimize strictly collapses chat down to topbar only
+    -- Minimize strictly collapses chat down to topbar only with clean slide tween
     chatMinBtn.MouseButton1Click:Connect(function()
         isChatCollapsed = not isChatCollapsed
         if isChatCollapsed then
-            savedChatHeight = chatWindow.AbsoluteSize.Y
+            savedChatHeight = math.max(chatWindow.AbsoluteSize.Y, 180)
             savedChatWidth  = chatWindow.AbsoluteSize.X
-            chatWindow.Size = UDim2.new(0, savedChatWidth, 0, 26)
+            inputBar.Visible = false
+            chatScroll.Visible = false
+            if chatResizeGrip then chatResizeGrip.Visible = false end
+            chatMinBtn.Text = "+"
+            pcall(function()
+                TweenService:Create(chatWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Size = UDim2.new(0, savedChatWidth, 0, 26)
+                }):Play()
+            end)
         else
-            chatWindow.Size = UDim2.new(0, savedChatWidth, 0, savedChatHeight)
+            chatMinBtn.Text = "-"
+            local curW = savedChatWidth or 420
+            local curH = savedChatHeight or 260
+            pcall(function()
+                TweenService:Create(chatWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Size = UDim2.new(0, curW, 0, curH)
+                }):Play()
+            end)
+            task.delay(0.12, function()
+                if not isChatCollapsed then
+                    inputBar.Visible = true
+                    chatScroll.Visible = true
+                    if chatResizeGrip then chatResizeGrip.Visible = true end
+                end
+            end)
         end
     end)
 
