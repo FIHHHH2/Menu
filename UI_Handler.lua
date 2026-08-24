@@ -1657,12 +1657,12 @@ return function(Shared)
     chatScroll.BackgroundTransparency = 1
     chatScroll.BorderSizePixel = 0
     chatScroll.ScrollBarThickness = 4
-    chatScroll.ScrollBarImageColor3 = C.NavBorder
+    chatScroll.ScrollBarImageColor3 = C.WinBorder
     chatScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     chatScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
     chatScroll.ZIndex = 41
     chatScroll.Parent = chatWindow
-    registerThemed(chatScroll, { ScrollBarImageColor3 = "NavBorder" })
+    registerThemed(chatScroll, { ScrollBarImageColor3 = "WinBorder" })
 
     local chatList = Instance.new("UIListLayout")
     chatList.Padding = UDim.new(0, 3)
@@ -1686,7 +1686,7 @@ return function(Shared)
         msgLabel.Font = Enum.Font.Code
         msgLabel.TextSize = 12
         msgLabel.TextXAlignment = Enum.TextXAlignment.Left
-        msgLabel.TextColor3 = C.Text
+        msgLabel.TextColor3 = C.BtnText
         msgLabel.ZIndex = 42
 
         local colorHex = prefixColorHex or (isDark and "55ff99" or "008844")
@@ -1702,13 +1702,13 @@ return function(Shared)
     local inputBar = Instance.new("Frame")
     inputBar.Size = UDim2.new(1, 0, 0, 30)
     inputBar.Position = UDim2.new(0, 0, 1, -30)
-    inputBar.BackgroundColor3 = C.CardBg
+    inputBar.BackgroundColor3 = C.RowBg
     inputBar.BackgroundTransparency = 0.20
     inputBar.BorderSizePixel = 1
     inputBar.BorderColor3 = C.WinBorder
     inputBar.ZIndex = 41
     inputBar.Parent = chatWindow
-    registerThemed(inputBar, { BackgroundColor3 = "CardBg", BorderColor3 = "WinBorder" })
+    registerThemed(inputBar, { BackgroundColor3 = "RowBg", BorderColor3 = "WinBorder" })
 
     -- 1. Quick Button
     local quickBtn = Instance.new("TextButton")
@@ -1730,20 +1730,20 @@ return function(Shared)
     local chatBox = Instance.new("TextBox")
     chatBox.Size = UDim2.new(1, -108, 1, 0)
     chatBox.Position = UDim2.new(0, 52, 0, 0)
-    chatBox.BackgroundColor3 = C.InputBg
+    chatBox.BackgroundColor3 = C.BodyBg
     chatBox.BackgroundTransparency = 0.15
     chatBox.BorderSizePixel = 1
     chatBox.BorderColor3 = C.WinBorder
     chatBox.Text = ""
     chatBox.PlaceholderText = "To chat click here or press / key"
-    chatBox.PlaceholderColor3 = C.SubText
-    chatBox.TextColor3 = C.Text
+    chatBox.PlaceholderColor3 = C.BannerSub
+    chatBox.TextColor3 = C.BtnText
     chatBox.Font = Enum.Font.Code
     chatBox.TextSize = 12
     chatBox.ClearTextOnFocus = false
     chatBox.ZIndex = 42
     chatBox.Parent = inputBar
-    registerThemed(chatBox, { BackgroundColor3 = "InputBg", BorderColor3 = "WinBorder", TextColor3 = "Text", PlaceholderColor3 = "SubText" })
+    registerThemed(chatBox, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder", TextColor3 = "BtnText", PlaceholderColor3 = "BannerSub" })
 
     local boxPad = Instance.new("UIPadding")
     boxPad.PaddingLeft  = UDim.new(0, 6)
@@ -1819,12 +1819,12 @@ return function(Shared)
         qBtn.BorderSizePixel = 1
         qBtn.BorderColor3 = C.RowBorder
         qBtn.Text = phrase
-        qBtn.TextColor3 = C.Text
+        qBtn.TextColor3 = C.BtnText
         qBtn.Font = Enum.Font.Code
         qBtn.TextSize = 11
         qBtn.ZIndex = 46
         qBtn.Parent = quickMenu
-        registerThemed(qBtn, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder", TextColor3 = "Text" })
+        registerThemed(qBtn, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder", TextColor3 = "BtnText" })
 
         qBtn.MouseButton1Click:Connect(function()
             dispatchMessage(phrase)
@@ -1880,12 +1880,12 @@ return function(Shared)
     chatResizeGrip.Position = UDim2.new(1, -14, 1, -14)
     chatResizeGrip.BackgroundTransparency = 1
     chatResizeGrip.Text = "◢"
-    chatResizeGrip.TextColor3 = C.NavBorder
+    chatResizeGrip.TextColor3 = C.WinBorder
     chatResizeGrip.Font = Enum.Font.Code
     chatResizeGrip.TextSize = 11
     chatResizeGrip.ZIndex = 43
     chatResizeGrip.Parent = chatWindow
-    registerThemed(chatResizeGrip, { TextColor3 = "NavBorder" })
+    registerThemed(chatResizeGrip, { TextColor3 = "WinBorder" })
 
     local isChatResizing = false
     local chatResizeStart = Vector2.zero
