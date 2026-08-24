@@ -1313,8 +1313,44 @@ return function(Shared)
     lbCloseBtn.TextSize = 10
     lbCloseBtn.ZIndex = 43
     lbCloseBtn.Parent = lbTitleBar
+    local isLbOpen = true
+    local function getLbTargetHeight(count)
+        local c = count or #Players:GetPlayers()
+        return math.clamp(32 + c * 31 + 6, 70, 520)
+    end
+
+    local function toggleLeaderboard(explicitState)
+        if explicitState ~= nil then
+            isLbOpen = explicitState
+        else
+            isLbOpen = not isLbOpen
+        end
+
+        local targetH = getLbTargetHeight(#Players:GetPlayers())
+        if isLbOpen then
+            lbWindow.Visible = true
+            lbWindow.Position = UDim2.new(1, -242, 0, 36)
+            lbWindow.BackgroundTransparency = 1
+            TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Position = UDim2.new(1, -242, 0, 48),
+                Size     = UDim2.new(0, 230, 0, targetH),
+                BackgroundTransparency = 0.50
+            }):Play()
+        else
+            TweenSvc:Create(lbWindow, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                Position = UDim2.new(1, -242, 0, 36),
+                BackgroundTransparency = 1
+            }):Play()
+            task.delay(0.18, function()
+                if not isLbOpen then
+                    lbWindow.Visible = false
+                end
+            end)
+        end
+    end
+
     lbCloseBtn.MouseButton1Click:Connect(function()
-        lbWindow.Visible = not lbWindow.Visible
+        toggleLeaderboard(false)
     end)
 
     -- Dragging Logic for Leaderboard
@@ -1375,7 +1411,7 @@ return function(Shared)
             if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
                 local delta = i.Position - rStartPos
                 local newW = math.clamp(rStartSize.X + delta.X, 180, 500)
-                local newH = math.clamp(rStartSize.Y + delta.Y, 150, 800)
+                local newH = math.clamp(rStartSize.Y + delta.Y, 70, 800)
                 lbWindow.Size = UDim2.new(0, newW, 0, newH)
             end
         end)
@@ -1417,6 +1453,14 @@ return function(Shared)
         local allPlrs = Players:GetPlayers()
         lbTitleText.Text = "Players (" .. tostring(#allPlrs) .. ")"
 
+        -- Dynamically scale window height to fit player count smoothly
+        local targetH = getLbTargetHeight(#allPlrs)
+        if isLbOpen and lbWindow.Visible then
+            TweenSvc:Create(lbWindow, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 230, 0, targetH)
+            }):Play()
+        end
+
         for i, plr in ipairs(allPlrs) do
             local row = Instance.new("Frame")
             row.Size = UDim2.new(1, 0, 0, 28)
@@ -1437,7 +1481,6 @@ return function(Shared)
             avatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. tostring(plr.UserId) .. "&width=48&height=48&format=png"
             avatar.ZIndex = 43
             avatar.Parent = row
-            -- Force square avatar: 0px corner radius
             local avatarCorner = Instance.new("UICorner")
             avatarCorner.CornerRadius = UDim.new(0, 0)
             avatarCorner.Parent = avatar
@@ -1480,12 +1523,14 @@ return function(Shared)
         renderLeaderboardPlayers()
     end)
 
-    -- Tab Key Toggle for Leaderboard
+    -- Tab Key Toggle for Leaderboard with smooth animation
     UserInput.InputBegan:Connect(function(input, gpe)
         if input.KeyCode == Enum.KeyCode.Tab and not gpe then
-            lbWindow.Visible = not lbWindow.Visible
+            toggleLeaderboard()
         end
     end)
+
+    Shared.ToggleLeaderboard = toggleLeaderboard
 
 
     -- ── CUSTOM WINDOWS AERO CHAT (UNIFIED TOPBAR: ROBLOX, ≡, 🎙, DEDUP) ─
@@ -1625,9 +1670,11 @@ return function(Shared)
     end
 
     createQuickMenuItem("👥  Leaderboard", 1, function()
-        local lb = ScreenGui:FindFirstChild("Fih_CustomLeaderboard")
-        if lb then
-            lb.Visible = not lb.Visible
+        if Shared.ToggleLeaderboard then
+            Shared.ToggleLeaderboard()
+        else
+            local lb = ScreenGui:FindFirstChild("Fih_CustomLeaderboard")
+            if lb then lb.Visible = not lb.Visible end
         end
     end)
 

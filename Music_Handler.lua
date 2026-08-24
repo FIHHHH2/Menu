@@ -1361,23 +1361,32 @@ return function(Shared)
         gameAudioWire.Parent = workspace
     end)
 
-    -- ── SPOTIFY TIMESTAMP & VOLUME/PITCH EQUALIZER ENGINE ──
+    -- ── HIGH-FIDELITY EQUALIZER ENGINE (Attack, Decay, Perlin Dynamics & Pitch Vectors) ──
     local lastSegIdx = 1
+    local hudBarLevels = { 0, 0, 0, 0, 0, 0, 0 }
+    local bbBarLevels  = { 0, 0, 0, 0, 0, 0 }
+    local lastFrameTime = os.clock()
+
     local RunService = game:GetService("RunService")
     RunService.RenderStepped:Connect(function()
-        local isPlaying = (currentTrack.isPlaying ~= false) and (currentTrack.name ~= "Not Playing" and currentTrack.name ~= "Error loading" and currentTrack.name ~= "" and currentTrack.name ~= nil)
-        local t = os.clock() * 10
+        local now = os.clock()
+        local dt = math.clamp(now - lastFrameTime, 0.001, 0.05)
+        lastFrameTime = now
 
-        -- Read live frequency spectrum from Roblox audio engine if present
-        local spectrum = nil
-        if gameAudioAnalyzer then
-            pcall(function() spectrum = gameAudioAnalyzer:GetSpectrum() end)
+        local isPlaying = (currentTrack.isPlaying ~= false) and (currentTrack.name ~= "Not Playing" and currentTrack.name ~= "Error loading" and currentTrack.name ~= "" and currentTrack.name ~= nil)
+
+        -- Unique track seed to produce completely distinct harmonic profiles for every song
+        local trackSeed = 0
+        if currentTrack.name then
+            for c = 1, math.min(10, #currentTrack.name) do
+                trackSeed = (trackSeed + currentTrack.name:byte(c) * c) % 500
+            end
         end
 
         local analysis = (currentTrack.id and trackAnalysisCache[currentTrack.id])
         local songSec = 0
         if currentTrack.isPlaying and currentTrack.pollTime then
-            songSec = ((currentTrack.progress_ms or 0) / 1000) + (os.clock() - currentTrack.pollTime)
+            songSec = ((currentTrack.progress_ms or 0) / 1000) + (now - currentTrack.pollTime)
         end
 
         -- Find active Spotify audio segment for exact millisecond timestamp
@@ -1407,28 +1416,27 @@ return function(Shared)
                 end
             end
 
-            -- Beat drop detection
+            -- Beat drop impulse
             if analysis.beats then
                 for _, b in ipairs(analysis.beats) do
-                    if math.abs(b.start - songSec) < 0.08 then
-                        beatKick = 0.35 * (b.confidence or 0.8)
+                    if math.abs(b.start - songSec) < 0.09 then
+                        beatKick = 0.40 * (b.confidence or 0.8)
                         break
                     end
                 end
             end
         end
 
-        local function getBandLevel(barIdx, totalBars)
+        local function calculateTargetLevel(barIdx, totalBars)
             if not isPlaying then return 0 end
 
-            -- 1. Precision Spotify Audio Analysis (Exact Timestamp Loudness & Pitches)
+            -- 1. Precision Spotify Pitch & Loudness Segment Vector
             if activeSegment and activeSegment.pitches then
-                local loudnessDb = activeSegment.loudness_max or -20 -- typical range -60dB to 0dB
-                local normVol = math.clamp((loudnessDb + 45) / 45, 0.15, 1) -- normalized volume
+                local loudnessDb = activeSegment.loudness_max or -18
+                local normVol = math.clamp((loudnessDb + 45) / 45, 0.15, 1)
 
-                local pitches = activeSegment.pitches -- 12 chromatic musical pitches
+                local pitches = activeSegment.pitches
                 local pVal = 0
-
                 if barIdx == 1 then
                     pVal = (pitches[1] or 0.5) * 0.7 + (pitches[2] or 0.5) * 0.3
                 elseif barIdx == 2 then
@@ -1445,46 +1453,56 @@ return function(Shared)
                     pVal = (pitches[12] or 0.5) * 0.5 + (pitches[1] or 0.5) * 0.5
                 end
 
-                local level = math.clamp((pVal * 0.75 + normVol * 0.25) * normVol + beatKick, 0.15, 1)
-                return level
+                local noiseMod = math.noise(barIdx * 0.6, songSec * 4.2, trackSeed) * 0.25
+                return math.clamp((pVal * 0.70 + normVol * 0.30 + noiseMod) * normVol + beatKick, 0.15, 1)
             end
 
-            -- 2. Hardware Live Frequency Spectrum (AudioAnalyzer)
-            if spectrum and #spectrum >= 32 then
-                local binStart = math.floor((barIdx - 1) * (#spectrum / totalBars)) + 1
-                local binEnd   = math.floor(barIdx * (#spectrum / totalBars))
-                local sum, count = 0, 0
-                for b = binStart, math.min(binEnd, #spectrum) do
-                    sum = sum + (spectrum[b] or 0)
-                    count = count + 1
-                end
-                local avg = (count > 0) and (sum / count) or 0
-                local specLevel = math.clamp(avg * 50.0, 0, 1)
-                if specLevel > 0.02 then return specLevel end
-            end
-
-            -- 3. Dynamic Rhythmic Harmonic Pulse Fallback
-            local pulse = math.abs(math.sin(t * 1.5 + barIdx * 0.9) * 0.65 + math.cos(t * 2.4 + barIdx * 1.3) * 0.35)
-            return math.clamp(pulse, 0.15, 1)
+            -- 2. Organic Multi-Octave Perlin Audio Spectrum (Non-repeating, timestamp-driven)
+            local n1 = (math.noise(barIdx * 0.55, songSec * 5.0, trackSeed) + 1) * 0.5
+            local n2 = (math.noise(barIdx * 1.1, songSec * 10.5, trackSeed + 50) + 1) * 0.25
+            local n3 = math.abs(math.sin(songSec * 3.14 + barIdx * 0.7)) * 0.25
+            local combined = math.clamp(n1 * 0.55 + n2 + n3, 0.12, 1)
+            return combined
         end
 
-        if bbVisBars then
-            for i, bar in ipairs(bbVisBars) do
-                if bar and bar.Parent then
-                    local h = getBandLevel(i, #bbVisBars)
-                    local barH = isPlaying and math.clamp(math.floor(h * 14) + 2, 2, 14) or 2
-                    bar.Size = UDim2.new(0, 5, 0, barH)
-                    bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.36 + i * 0.04) % 1, 0.9, 0.95) or Color3.fromRGB(70, 85, 110)
-                end
-            end
-        end
+        -- Update HUD Equalizer Bars with snappy attack & physics gravity decay
         if hudVisBars then
             for i, bar in ipairs(hudVisBars) do
                 if bar and bar.Parent then
-                    local h = getBandLevel(i, #hudVisBars)
-                    local barH = isPlaying and math.clamp(math.floor(h * 18) + 2, 2, 18) or 3
+                    local target = calculateTargetLevel(i, #hudVisBars)
+                    local cur = hudBarLevels[i] or 0
+                    if target > cur then
+                        -- Snappy attack (80% instant snap)
+                        cur = cur + (target - cur) * math.clamp(dt * 22, 0.2, 0.95)
+                    else
+                        -- Physics gravity falloff
+                        cur = math.max(target, cur - dt * 2.8)
+                    end
+                    hudBarLevels[i] = cur
+
+                    local barH = isPlaying and math.clamp(math.floor(cur * 18) + 2, 2, 18) or 3
                     bar.Size = UDim2.new(0, 6, 0, barH)
                     bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.55 + i * 0.03) % 1, 0.85, 1) or Color3.fromRGB(60, 75, 100)
+                end
+            end
+        end
+
+        -- Update Billboard Equalizer Bars
+        if bbVisBars then
+            for i, bar in ipairs(bbVisBars) do
+                if bar and bar.Parent then
+                    local target = calculateTargetLevel(i, #bbVisBars)
+                    local cur = bbBarLevels[i] or 0
+                    if target > cur then
+                        cur = cur + (target - cur) * math.clamp(dt * 22, 0.2, 0.95)
+                    else
+                        cur = math.max(target, cur - dt * 2.8)
+                    end
+                    bbBarLevels[i] = cur
+
+                    local barH = isPlaying and math.clamp(math.floor(cur * 14) + 2, 2, 14) or 2
+                    bar.Size = UDim2.new(0, 5, 0, barH)
+                    bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.36 + i * 0.04) % 1, 0.9, 0.95) or Color3.fromRGB(70, 85, 110)
                 end
             end
         end
