@@ -625,42 +625,6 @@ return function(Shared)
         bg.ClipsDescendants     = false
         bg.Parent               = billboard
 
-        -- Ronald Cat Overlay INSIDE BG on far right side
-        local ronaldAsset = nil
-        local function getRonald()
-            if ronaldAsset then return ronaldAsset end
-            local gca = getcustomasset or getsynasset or (getgenv and (getgenv().getcustomasset or getgenv().getsynasset))
-            local wf  = writefile or (getgenv and getgenv().writefile)
-            local isf = isfile or (getgenv and getgenv().isfile)
-            local fname = "fih_ronald.png"
-            if gca and wf then
-                pcall(function()
-                    if not (isf and isf(fname)) then
-                        local bytes = game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu/main/ronald_cat.png")
-                        if bytes and #bytes > 1000 then wf(fname, bytes) end
-                    end
-                end)
-                local ok, a = pcall(function() return gca(fname) end)
-                if ok and a and a ~= "" then
-                    ronaldAsset = a
-                    return a
-                end
-            end
-            return "https://raw.githubusercontent.com/FIHHHH2/Menu/main/ronald_cat.png"
-        end
-
-        local ronaldImg = Instance.new("ImageLabel")
-        ronaldImg.Name                   = "RonaldCatOverlay"
-        ronaldImg.Size                   = UDim2.new(0, 38, 0, 50)
-        ronaldImg.AnchorPoint            = Vector2.new(1, 0.5)
-        ronaldImg.Position               = UDim2.new(1, -6, 0.5, 0)
-        ronaldImg.BackgroundTransparency = 1
-        ronaldImg.BorderSizePixel        = 0
-        ronaldImg.ScaleType              = Enum.ScaleType.Fit
-        ronaldImg.ZIndex                 = 25
-        ronaldImg.Image                  = getRonald()
-        ronaldImg.Parent                 = bg
-
         local bbCoverContainer = Instance.new("Frame")
         bbCoverContainer.Size             = UDim2.new(0, 50, 0, 50)
         bbCoverContainer.Position         = UDim2.new(0, 6, 0, 6)
