@@ -317,7 +317,15 @@ return function(Shared)
         Shared.Flags["BB_PingOffset"] = val
     end)
 
-    MkButton(leftCol, "[ ⚡ Instant Manual Parry ]", 8, function()
+    MkToggle(leftCol, "Dynamic Velocity Distance Scaling", "BB_VelScaling", 8, function(state)
+        Shared.Flags["BB_VelScaling"] = state
+    end)
+
+    MkSlider(leftCol, "Velocity Scale Threshold", "BB_VelThreshold", 30, 200, 70, 9, function(val)
+        Shared.Flags["BB_VelThreshold"] = val
+    end)
+
+    MkButton(leftCol, "[ ⚡ Instant Manual Parry ]", 10, function()
         executeParry()
         Shared.Notify("Blade Ball", "Manual parry triggered", true)
     end)
@@ -464,9 +472,25 @@ return function(Shared)
             statusFrame.BorderColor3 = Color3.fromRGB(0, 160, 255)
         end
 
-        -- Dynamic hit-zone radius strictly based on distance slider + subtle ping compensation
-        local baseDist = Shared.Flags["BB_ParryDist"] or 25
-        local dynamicParryDistance = baseDist + math.clamp(approachSpeed * (pingOffsetSec * 0.25), 0, 5)
+        -- Dynamic hit-zone radius: base distance + dynamic velocity scaling above threshold
+        local baseDist = Shared.Flags["BB_ParryDist"] or 28
+        local velScaling = Shared.Flags["BB_VelScaling"] ~= false
+        local velThreshold = Shared.Flags["BB_VelThreshold"] or 70
+
+        local velocityBonus = 0
+        local reactionWindow = 0.12 + pingOffsetSec
+
+        if velScaling and approachSpeed > velThreshold then
+            local excessSpeed = approachSpeed - velThreshold
+            -- Scale extra distance linearly with speed excess to give reaction room at high velocity
+            velocityBonus = (excessSpeed * 0.16) + math.clamp(approachSpeed * (pingOffsetSec * 0.4), 0, 15)
+            -- Expand the reaction time-to-impact window slightly at extreme speeds
+            reactionWindow = reactionWindow + math.clamp(excessSpeed / 1200, 0, 0.07)
+        else
+            velocityBonus = math.clamp(approachSpeed * (pingOffsetSec * 0.2), 0, 4)
+        end
+
+        local dynamicParryDistance = math.clamp(baseDist + velocityBonus, 5, 100)
 
         -- 1. Ball Visualizer ESP & Highlight
         if Shared.Flags["BB_BallESP"] then
@@ -544,8 +568,8 @@ return function(Shared)
             if isTarget and not hasParriedCurrentVolley then
                 -- If ball is traveling towards the player
                 if approachSpeed > 0 or speed < 5 then
-                    -- Trigger parry based on calculated time to impact or exact distance window
-                    if dist <= dynamicParryDistance or timeToImpact <= (0.12 + pingOffsetSec) then
+                    -- Trigger parry based on calculated time to impact or velocity-scaled distance window
+                    if dist <= dynamicParryDistance or timeToImpact <= reactionWindow then
                         shouldParry = true
                     end
 
