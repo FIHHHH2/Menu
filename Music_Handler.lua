@@ -1314,9 +1314,10 @@ return function(Shared)
     end)
 
     -- ── AUDIO EQUALIZER VISUALIZER ANIMATION LOOP ──
+    local RunService = game:GetService("RunService")
     RunService.RenderStepped:Connect(function()
         local isPlaying = (currentTrack.name ~= "Not Playing" and currentTrack.name ~= "Error loading" and currentTrack.name ~= "" and currentTrack.name ~= nil)
-        local t = os.clock() * 9
+        local t = os.clock() * 10
 
         -- Read live frequency spectrum from Roblox audio engine
         local spectrum = nil
@@ -1335,13 +1336,13 @@ return function(Shared)
                     count = count + 1
                 end
                 local avg = (count > 0) and (sum / count) or 0
-                local specLevel = math.clamp(avg * 45.0, 0, 1)
-                if specLevel > 0.03 then
+                local specLevel = math.clamp(avg * 50.0, 0, 1)
+                if specLevel > 0.02 then
                     return specLevel
                 end
             end
-            -- Dynamic frequency band harmonic
-            local pulse = math.abs(math.sin(t * 1.3 + barIdx * 0.95) * 0.6 + math.cos(t * 2.2 + barIdx * 1.25) * 0.4)
+            -- Dynamic frequency band harmonic when audio engine has low gain
+            local pulse = math.abs(math.sin(t * 1.5 + barIdx * 0.9) * 0.65 + math.cos(t * 2.4 + barIdx * 1.3) * 0.35)
             return math.clamp(pulse, 0.15, 1)
         end
 
@@ -1349,7 +1350,8 @@ return function(Shared)
             for i, bar in ipairs(bbVisBars) do
                 if bar and bar.Parent then
                     local h = getBandLevel(i, #bbVisBars)
-                    bar.Size = UDim2.new(0, 5, 0, math.clamp(math.floor(h * 13) + 2, 2, 14))
+                    local barH = math.clamp(math.floor(h * 14) + 2, 2, 14)
+                    bar.Size = UDim2.new(0, 5, 0, barH)
                     bar.BackgroundColor3 = Color3.fromHSV((0.36 + i * 0.04) % 1, 0.9, 0.95)
                 end
             end
@@ -1358,7 +1360,8 @@ return function(Shared)
             for i, bar in ipairs(hudVisBars) do
                 if bar and bar.Parent then
                     local h = getBandLevel(i, #hudVisBars)
-                    bar.Size = UDim2.new(0, 6, 0, math.clamp(math.floor(h * 17) + 2, 2, 18))
+                    local barH = math.clamp(math.floor(h * 18) + 2, 2, 18)
+                    bar.Size = UDim2.new(0, 6, 0, barH)
                     bar.BackgroundColor3 = Color3.fromHSV((0.55 + i * 0.03) % 1, 0.85, 1)
                 end
             end
