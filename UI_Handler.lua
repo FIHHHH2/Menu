@@ -130,6 +130,7 @@ return function(Shared)
         pcall(function()
             local cwc = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
             if cwc then
+                cwc.Enabled                = true
                 cwc.BackgroundColor3       = Color3.fromRGB(25, 27, 38)
                 cwc.BackgroundTransparency = 0.3
                 cwc.TextColor3             = Color3.fromRGB(255, 255, 255)
@@ -137,10 +138,16 @@ return function(Shared)
             end
             local cibc = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
             if cibc then
+                cibc.Enabled                = true
                 cibc.BackgroundColor3       = Color3.fromRGB(25, 27, 38)
                 cibc.BackgroundTransparency = 0.2
                 cibc.TextColor3             = Color3.fromRGB(255, 255, 255)
                 cibc.PlaceholderColor3      = Color3.fromRGB(178, 178, 178)
+            end
+            local expChat = CoreGui:FindFirstChild("ExperienceChat")
+            if expChat then
+                local app = expChat:FindFirstChild("appLayout")
+                if app then app.Visible = true end
             end
         end)
     end
@@ -201,25 +208,21 @@ return function(Shared)
             end
         end)
 
-        -- 2. ExperienceChat: ONLY use TextChatService API. Never traverse ExperienceChat
-        --    descendants directly — that breaks BuilderIcons font ligatures (lightning, dots).
-
-        -- 3. TextChatService Configurations
+        -- 2. TextChatService Configurations (Hide native chat widgets when custom chat is active)
         pcall(function()
             local TextChatService = game:GetService("TextChatService")
             local cwc = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
             if cwc then
-                cwc.BackgroundColor3       = bgCol
-                cwc.BackgroundTransparency = 0.15
-                cwc.TextColor3             = textCol
-                -- NOTE: Do NOT set cwc.FontFace — it overrides BuilderIcons on ligature icon labels
+                cwc.Enabled = not customCoreEnabled
             end
             local cibc = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
             if cibc then
-                cibc.BackgroundColor3       = inputBg
-                cibc.BackgroundTransparency = 0.1
-                cibc.TextColor3             = textCol
-                cibc.PlaceholderColor3      = placeCol
+                cibc.Enabled = not customCoreEnabled
+            end
+            local expChat = CoreGui:FindFirstChild("ExperienceChat")
+            if expChat then
+                local app = expChat:FindFirstChild("appLayout")
+                if app then app.Visible = not customCoreEnabled end
             end
         end)
     end
@@ -1119,13 +1122,16 @@ return function(Shared)
     makeToggle(DrawerScroll, "Custom Windows Aero Core UI", "CustomCoreUI", 2, function(state)
         customCoreEnabled = state
         local lb = ScreenGui:FindFirstChild("Fih_CustomLeaderboard")
+        local ch = ScreenGui:FindFirstChild("Fih_CustomChat")
         if state then
             pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false) end)
             if lb then lb.Visible = true end
+            if ch then ch.Visible = true end
             styleRobloxCoreUI(C, isDark)
             sendNotification("Core UI Engine", "Custom Windows Aero Core UI enabled", true)
         else
             if lb then lb.Visible = false end
+            if ch then ch.Visible = false end
             restoreDefaultRobloxCoreUI()
             sendNotification("Core UI Engine", "Default Roblox Core UI restored", false)
         end
@@ -1490,6 +1496,426 @@ return function(Shared)
         end
     end)
 
-    switchTab("Main")
+
+    -- ── CUSTOM WINDOWS AERO CHAT (ASCII DIAGRAM REPLICA) ───────────
+    local chatWindow = Instance.new("Frame")
+    chatWindow.Name = "Fih_CustomChat"
+    chatWindow.Size = UDim2.new(0, 360, 0, 240)
+    chatWindow.Position = UDim2.new(0, 10, 0, 48)
+    chatWindow.BackgroundColor3 = C.BodyBg
+    chatWindow.BackgroundTransparency = 0.40
+    chatWindow.BorderSizePixel = 1
+    chatWindow.BorderColor3 = C.WinBorder
+    chatWindow.ClipsDescendants = true
+    chatWindow.ZIndex = 40
+    chatWindow.Parent = ScreenGui
+    registerThemed(chatWindow, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
+    local chatWinCorner = Instance.new("UICorner")
+    chatWinCorner.CornerRadius = UDim.new(0, 0)
+    chatWinCorner.Parent = chatWindow
+
+    -- TitleBar ([-] [ ] [X] controls & draggable)
+    local chatTitleBar = Instance.new("Frame")
+    chatTitleBar.Size = UDim2.new(1, 0, 0, 24)
+    chatTitleBar.BackgroundColor3 = C.TitleBar
+    chatTitleBar.BackgroundTransparency = 0.30
+    chatTitleBar.BorderSizePixel = 1
+    chatTitleBar.BorderColor3 = C.WinBorder
+    chatTitleBar.ZIndex = 41
+    chatTitleBar.Parent = chatWindow
+    registerThemed(chatTitleBar, { BackgroundColor3 = "TitleBar", BorderColor3 = "WinBorder" })
+    local chatTitleCorner = Instance.new("UICorner")
+    chatTitleCorner.CornerRadius = UDim.new(0, 0)
+    chatTitleCorner.Parent = chatTitleBar
+
+    local chatTitleText = Instance.new("TextLabel")
+    chatTitleText.Size = UDim2.new(1, -80, 1, 0)
+    chatTitleText.Position = UDim2.new(0, 8, 0, 0)
+    chatTitleText.BackgroundTransparency = 1
+    chatTitleText.Text = "Chat"
+    chatTitleText.TextColor3 = C.TitleText
+    chatTitleText.Font = Enum.Font.ArimoBold
+    chatTitleText.TextSize = 12
+    chatTitleText.TextXAlignment = Enum.TextXAlignment.Left
+    chatTitleText.ZIndex = 42
+    chatTitleText.Parent = chatTitleBar
+    registerThemed(chatTitleText, { TextColor3 = "TitleText" })
+
+    -- Control Buttons Container [-] [ ] [X]
+    local chatCtrlHolder = Instance.new("Frame")
+    chatCtrlHolder.Size = UDim2.new(0, 68, 0, 18)
+    chatCtrlHolder.Position = UDim2.new(1, -72, 0, 3)
+    chatCtrlHolder.BackgroundTransparency = 1
+    chatCtrlHolder.ZIndex = 42
+    chatCtrlHolder.Parent = chatTitleBar
+
+    local chatMinBtn = Instance.new("TextButton")
+    chatMinBtn.Size = UDim2.new(0, 20, 0, 18)
+    chatMinBtn.Position = UDim2.new(0, 0, 0, 0)
+    chatMinBtn.BackgroundColor3 = C.BtnBg
+    chatMinBtn.BorderSizePixel = 1
+    chatMinBtn.BorderColor3 = C.BtnBorder
+    chatMinBtn.Text = "-"
+    chatMinBtn.TextColor3 = C.BtnText
+    chatMinBtn.Font = Enum.Font.ArimoBold
+    chatMinBtn.TextSize = 12
+    chatMinBtn.ZIndex = 43
+    chatMinBtn.Parent = chatCtrlHolder
+    registerThemed(chatMinBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
+
+    local chatMaxBtn = Instance.new("TextButton")
+    chatMaxBtn.Size = UDim2.new(0, 20, 0, 18)
+    chatMaxBtn.Position = UDim2.new(0, 24, 0, 0)
+    chatMaxBtn.BackgroundColor3 = C.BtnBg
+    chatMaxBtn.BorderSizePixel = 1
+    chatMaxBtn.BorderColor3 = C.BtnBorder
+    chatMaxBtn.Text = " "
+    chatMaxBtn.TextColor3 = C.BtnText
+    chatMaxBtn.Font = Enum.Font.ArimoBold
+    chatMaxBtn.TextSize = 11
+    chatMaxBtn.ZIndex = 43
+    chatMaxBtn.Parent = chatCtrlHolder
+    registerThemed(chatMaxBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
+
+    local chatCloseBtn = Instance.new("TextButton")
+    chatCloseBtn.Size = UDim2.new(0, 20, 0, 18)
+    chatCloseBtn.Position = UDim2.new(0, 48, 0, 0)
+    chatCloseBtn.BackgroundColor3 = Color3.fromRGB(215, 60, 60)
+    chatCloseBtn.BorderSizePixel = 1
+    chatCloseBtn.BorderColor3 = Color3.fromRGB(150, 20, 20)
+    chatCloseBtn.Text = "x"
+    chatCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    chatCloseBtn.Font = Enum.Font.ArimoBold
+    chatCloseBtn.TextSize = 11
+    chatCloseBtn.ZIndex = 43
+    chatCloseBtn.Parent = chatCtrlHolder
+
+    local isChatCollapsed = false
+    local isChatMaximized = false
+    local savedChatHeight = 240
+    local savedChatWidth  = 360
+
+    chatMinBtn.MouseButton1Click:Connect(function()
+        isChatCollapsed = not isChatCollapsed
+        if isChatCollapsed then
+            savedChatHeight = chatWindow.AbsoluteSize.Y
+            savedChatWidth  = chatWindow.AbsoluteSize.X
+            chatWindow.Size = UDim2.new(0, savedChatWidth, 0, 24)
+        else
+            chatWindow.Size = UDim2.new(0, savedChatWidth, 0, savedChatHeight)
+        end
+    end)
+
+    chatMaxBtn.MouseButton1Click:Connect(function()
+        isChatMaximized = not isChatMaximized
+        if isChatMaximized then
+            chatWindow.Size = UDim2.new(0, 480, 0, 360)
+        else
+            chatWindow.Size = UDim2.new(0, 360, 0, 240)
+        end
+    end)
+
+    chatCloseBtn.MouseButton1Click:Connect(function()
+        chatWindow.Visible = false
+    end)
+
+    -- Chat Dragging Engine
+    local isChatDragging = false
+    local chatDragStart  = Vector2.zero
+    local chatPosStart   = UDim2.new()
+
+    chatTitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isChatDragging = true
+            chatDragStart  = UserInput:GetMouseLocation()
+            chatPosStart   = chatWindow.Position
+        end
+    end)
+
+    UserInput.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isChatDragging = false
+        end
+    end)
+
+    UserInput.InputChanged:Connect(function(input)
+        if isChatDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local cur = UserInput:GetMouseLocation()
+            local dx  = cur.X - chatDragStart.X
+            local dy  = cur.Y - chatDragStart.Y
+            chatWindow.Position = UDim2.new(
+                chatPosStart.X.Scale, chatPosStart.X.Offset + dx,
+                chatPosStart.Y.Scale, chatPosStart.Y.Offset + dy
+            )
+        end
+    end)
+
+    -- Message Scroll Area
+    local chatScroll = Instance.new("ScrollingFrame")
+    chatScroll.Size = UDim2.new(1, -2, 1, -58)
+    chatScroll.Position = UDim2.new(0, 1, 0, 25)
+    chatScroll.BackgroundTransparency = 1
+    chatScroll.BorderSizePixel = 0
+    chatScroll.ScrollBarThickness = 4
+    chatScroll.ScrollBarImageColor3 = C.NavBorder
+    chatScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    chatScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    chatScroll.ZIndex = 41
+    chatScroll.Parent = chatWindow
+    registerThemed(chatScroll, { ScrollBarImageColor3 = "NavBorder" })
+
+    local chatList = Instance.new("UIListLayout")
+    chatList.Padding = UDim.new(0, 3)
+    chatList.SortOrder = Enum.SortOrder.LayoutOrder
+    chatList.Parent = chatScroll
+
+    local chatPad = Instance.new("UIPadding")
+    chatPad.PaddingLeft   = UDim.new(0, 6)
+    chatPad.PaddingRight  = UDim.new(0, 6)
+    chatPad.PaddingTop    = UDim.new(0, 4)
+    chatPad.PaddingBottom = UDim.new(0, 4)
+    chatPad.Parent = chatScroll
+
+    local function addChatMessage(senderName, text, prefixColorHex)
+        local msgLabel = Instance.new("TextLabel")
+        msgLabel.Size = UDim2.new(1, 0, 0, 0)
+        msgLabel.BackgroundTransparency = 1
+        msgLabel.RichText = true
+        msgLabel.TextWrapped = true
+        msgLabel.AutomaticSize = Enum.AutomaticSize.Y
+        msgLabel.Font = Enum.Font.Code
+        msgLabel.TextSize = 12
+        msgLabel.TextXAlignment = Enum.TextXAlignment.Left
+        msgLabel.TextColor3 = C.Text
+        msgLabel.ZIndex = 42
+
+        local colorHex = prefixColorHex or (isDark and "55ff99" or "008844")
+        msgLabel.Text = string.format('<font color="#%s"><b>%s</b></font> --- %s', colorHex, senderName, text)
+        msgLabel.Parent = chatScroll
+
+        task.defer(function()
+            chatScroll.CanvasPosition = Vector2.new(0, chatScroll.AbsoluteCanvasSize.Y)
+        end)
+    end
+
+    -- Bottom 3-Column Input Bar: [Quick] | [Text Box] | [Send]
+    local inputBar = Instance.new("Frame")
+    inputBar.Size = UDim2.new(1, 0, 0, 30)
+    inputBar.Position = UDim2.new(0, 0, 1, -30)
+    inputBar.BackgroundColor3 = C.CardBg
+    inputBar.BackgroundTransparency = 0.20
+    inputBar.BorderSizePixel = 1
+    inputBar.BorderColor3 = C.WinBorder
+    inputBar.ZIndex = 41
+    inputBar.Parent = chatWindow
+    registerThemed(inputBar, { BackgroundColor3 = "CardBg", BorderColor3 = "WinBorder" })
+
+    -- 1. Quick Button
+    local quickBtn = Instance.new("TextButton")
+    quickBtn.Size = UDim2.new(0, 52, 1, 0)
+    quickBtn.Position = UDim2.new(0, 0, 0, 0)
+    quickBtn.BackgroundColor3 = C.BtnBg
+    quickBtn.BackgroundTransparency = 0.25
+    quickBtn.BorderSizePixel = 1
+    quickBtn.BorderColor3 = C.WinBorder
+    quickBtn.Text = "Quick"
+    quickBtn.TextColor3 = C.BtnText
+    quickBtn.Font = Enum.Font.Code
+    quickBtn.TextSize = 11
+    quickBtn.ZIndex = 42
+    quickBtn.Parent = inputBar
+    registerThemed(quickBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "WinBorder", TextColor3 = "BtnText" })
+
+    -- 2. Text Box
+    local chatBox = Instance.new("TextBox")
+    chatBox.Size = UDim2.new(1, -108, 1, 0)
+    chatBox.Position = UDim2.new(0, 52, 0, 0)
+    chatBox.BackgroundColor3 = C.InputBg
+    chatBox.BackgroundTransparency = 0.15
+    chatBox.BorderSizePixel = 1
+    chatBox.BorderColor3 = C.WinBorder
+    chatBox.Text = ""
+    chatBox.PlaceholderText = "To chat click here or press / key"
+    chatBox.PlaceholderColor3 = C.SubText
+    chatBox.TextColor3 = C.Text
+    chatBox.Font = Enum.Font.Code
+    chatBox.TextSize = 12
+    chatBox.ClearTextOnFocus = false
+    chatBox.ZIndex = 42
+    chatBox.Parent = inputBar
+    registerThemed(chatBox, { BackgroundColor3 = "InputBg", BorderColor3 = "WinBorder", TextColor3 = "Text", PlaceholderColor3 = "SubText" })
+
+    local boxPad = Instance.new("UIPadding")
+    boxPad.PaddingLeft  = UDim.new(0, 6)
+    boxPad.PaddingRight = UDim.new(0, 6)
+    boxPad.Parent = chatBox
+
+    -- 3. Send Button
+    local sendBtn = Instance.new("TextButton")
+    sendBtn.Size = UDim2.new(0, 56, 1, 0)
+    sendBtn.Position = UDim2.new(1, -56, 0, 0)
+    sendBtn.BackgroundColor3 = C.BtnBg
+    sendBtn.BackgroundTransparency = 0.25
+    sendBtn.BorderSizePixel = 1
+    sendBtn.BorderColor3 = C.WinBorder
+    sendBtn.Text = "Send"
+    sendBtn.TextColor3 = C.BtnText
+    sendBtn.Font = Enum.Font.Code
+    sendBtn.TextSize = 11
+    sendBtn.ZIndex = 42
+    sendBtn.Parent = inputBar
+    registerThemed(sendBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "WinBorder", TextColor3 = "BtnText" })
+
+    -- Message Sender Engine
+    local function dispatchMessage(text)
+        if not text or #text == 0 then return end
+        local TextChatService = game:GetService("TextChatService")
+        local tc = TextChatService:FindFirstChild("TextChannels")
+        local general = tc and tc:FindFirstChild("RBXGeneral")
+        if general then
+            general:SendAsync(text)
+        else
+            local rEvents = game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
+            local sayReq = rEvents and rEvents:FindFirstChild("SayMessageRequest")
+            if sayReq then
+                sayReq:FireServer(text, "All")
+            end
+        end
+        chatBox.Text = ""
+    end
+
+    chatBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed and #chatBox.Text > 0 then
+            dispatchMessage(chatBox.Text)
+        end
+    end)
+
+    sendBtn.MouseButton1Click:Connect(function()
+        if #chatBox.Text > 0 then
+            dispatchMessage(chatBox.Text)
+        end
+    end)
+
+    -- Quick Chat Dropdown
+    local quickMenu = Instance.new("Frame")
+    quickMenu.Size = UDim2.new(0, 110, 0, 115)
+    quickMenu.Position = UDim2.new(0, 0, 0, -118)
+    quickMenu.BackgroundColor3 = C.BodyBg
+    quickMenu.BackgroundTransparency = 0.2
+    quickMenu.BorderSizePixel = 1
+    quickMenu.BorderColor3 = C.WinBorder
+    quickMenu.Visible = false
+    quickMenu.ZIndex = 45
+    quickMenu.Parent = inputBar
+    registerThemed(quickMenu, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
+
+    local quickPhrases = { "gg", "hello", "lol", "nice", "afk" }
+    for i, phrase in ipairs(quickPhrases) do
+        local qBtn = Instance.new("TextButton")
+        qBtn.Size = UDim2.new(1, 0, 0, 22)
+        qBtn.Position = UDim2.new(0, 0, 0, (i - 1) * 23)
+        qBtn.BackgroundColor3 = C.RowBg
+        qBtn.BackgroundTransparency = 0.3
+        qBtn.BorderSizePixel = 1
+        qBtn.BorderColor3 = C.RowBorder
+        qBtn.Text = phrase
+        qBtn.TextColor3 = C.Text
+        qBtn.Font = Enum.Font.Code
+        qBtn.TextSize = 11
+        qBtn.ZIndex = 46
+        qBtn.Parent = quickMenu
+        registerThemed(qBtn, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder", TextColor3 = "Text" })
+
+        qBtn.MouseButton1Click:Connect(function()
+            dispatchMessage(phrase)
+            quickMenu.Visible = false
+        end)
+    end
+
+    quickBtn.MouseButton1Click:Connect(function()
+        quickMenu.Visible = not quickMenu.Visible
+    end)
+
+    -- Stream Incoming Messages
+    local TextChatService = game:GetService("TextChatService")
+    pcall(function()
+        TextChatService.MessageReceived:Connect(function(msg)
+            local sender = (msg.TextSource and msg.TextSource.Name) or "System"
+            local colorHex = isDark and "66ccff" or "0055aa"
+            if sender == Players.LocalPlayer.Name then
+                colorHex = isDark and "55ff99" or "008844"
+            end
+            addChatMessage(sender, msg.Text, colorHex)
+        end)
+    end)
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        p.Chatted:Connect(function(msg)
+            local colorHex = (p == Players.LocalPlayer) and (isDark and "55ff99" or "008844") or (isDark and "66ccff" or "0055aa")
+            addChatMessage(p.DisplayName or p.Name, msg, colorHex)
+        end)
+    end
+    Players.PlayerAdded:Connect(function(p)
+        p.Chatted:Connect(function(msg)
+            local colorHex = (p == Players.LocalPlayer) and (isDark and "55ff99" or "008844") or (isDark and "66ccff" or "0055aa")
+            addChatMessage(p.DisplayName or p.Name, msg, colorHex)
+        end)
+    end)
+
+    -- Slash key '/' focus listener
+    UserInput.InputBegan:Connect(function(input, gpe)
+        if gpe then return end
+        if input.KeyCode == Enum.KeyCode.Slash and customCoreEnabled then
+            task.defer(function()
+                chatWindow.Visible = true
+                chatBox:CaptureFocus()
+                chatBox.Text = ""
+            end)
+        end
+    end)
+
+    -- Bottom-Right Corner Resize Grip (◢)
+    local chatResizeGrip = Instance.new("TextLabel")
+    chatResizeGrip.Size = UDim2.new(0, 14, 0, 14)
+    chatResizeGrip.Position = UDim2.new(1, -14, 1, -14)
+    chatResizeGrip.BackgroundTransparency = 1
+    chatResizeGrip.Text = "◢"
+    chatResizeGrip.TextColor3 = C.NavBorder
+    chatResizeGrip.Font = Enum.Font.Code
+    chatResizeGrip.TextSize = 11
+    chatResizeGrip.ZIndex = 43
+    chatResizeGrip.Parent = chatWindow
+    registerThemed(chatResizeGrip, { TextColor3 = "NavBorder" })
+
+    local isChatResizing = false
+    local chatResizeStart = Vector2.zero
+    local chatSizeStart   = Vector2.zero
+
+    chatResizeGrip.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isChatResizing = true
+            chatResizeStart = UserInput:GetMouseLocation()
+            chatSizeStart   = chatWindow.AbsoluteSize
+        end
+    end)
+
+    UserInput.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isChatResizing = false
+        end
+    end)
+
+    UserInput.InputChanged:Connect(function(input)
+        if isChatResizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local cur = UserInput:GetMouseLocation()
+            local dx  = cur.X - chatResizeStart.X
+            local dy  = cur.Y - chatResizeStart.Y
+            local newW = math.clamp(chatSizeStart.X + dx, 240, 650)
+            local newH = math.clamp(chatSizeStart.Y + dy, 140, 500)
+            chatWindow.Size = UDim2.new(0, newW, 0, newH)
+        end
+    end)
+
+        switchTab("Main")
     print("[UI_Handler] Loaded -- Dark Mode Engine, Smooth Transitions, Hover Effects Active")
 end
