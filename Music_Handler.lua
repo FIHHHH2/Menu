@@ -525,11 +525,17 @@ return function(Shared)
         task.spawn(function()
             local token = cleanToken(Shared.Config.SpotifyToken)
             if not token or token == "" then
-                Shared.Notify("Spotify", "No Spotify OAuth Token configured", false)
+                Shared.Notify("Spotify", "[!] No OAuth Token configured (Auth Required)", false)
                 return
             end
-            spotifyRequest("/previous", "POST")
-            Shared.Notify("Spotify", "⏮ Skipped to previous track", true)
+            local resp = spotifyRequest("/previous", "POST")
+            if resp and resp.StatusCode == 403 then
+                Shared.Notify("Spotify", "[!] Skipping requires Spotify Premium & active OAuth", false)
+            elseif resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
+                Shared.Notify("Spotify", "[|<] Skipped to previous track", true)
+            else
+                Shared.Notify("Spotify", "[!] Previous track failed (Requires Premium & Active Player)", false)
+            end
             task.wait(0.4)
             local trk = getSpotifyTrack()
             if trk then updateVisuals(trk) end
@@ -540,7 +546,7 @@ return function(Shared)
         task.spawn(function()
             local token = cleanToken(Shared.Config.SpotifyToken)
             if not token or token == "" then
-                Shared.Notify("Spotify", "No Spotify OAuth Token configured", false)
+                Shared.Notify("Spotify", "[!] No OAuth Token configured (Auth Required)", false)
                 return
             end
             -- Check live playback state from /v1/me/player
@@ -560,13 +566,25 @@ return function(Shared)
             end
 
             if isCurrentlyPlaying then
-                spotifyRequest("/pause", "PUT")
-                currentTrack.isPlaying = false
-                Shared.Notify("Spotify", "⏸ Playback paused", false)
+                local resp = spotifyRequest("/pause", "PUT")
+                if resp and resp.StatusCode == 403 then
+                    Shared.Notify("Spotify", "[!] Playback control requires Spotify Premium", false)
+                elseif resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
+                    currentTrack.isPlaying = false
+                    Shared.Notify("Spotify", "[||] Playback paused", false)
+                else
+                    Shared.Notify("Spotify", "[!] Pause failed (Requires Premium & Active Player)", false)
+                end
             else
-                spotifyRequest("/play", "PUT")
-                currentTrack.isPlaying = true
-                Shared.Notify("Spotify", "▶ Playback resumed", true)
+                local resp = spotifyRequest("/play", "PUT")
+                if resp and resp.StatusCode == 403 then
+                    Shared.Notify("Spotify", "[!] Playback control requires Spotify Premium", false)
+                elseif resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
+                    currentTrack.isPlaying = true
+                    Shared.Notify("Spotify", "[>] Playback resumed", true)
+                else
+                    Shared.Notify("Spotify", "[!] Resume failed (Requires Premium & Active Player)", false)
+                end
             end
             task.wait(0.4)
             local trk = getSpotifyTrack()
@@ -578,11 +596,17 @@ return function(Shared)
         task.spawn(function()
             local token = cleanToken(Shared.Config.SpotifyToken)
             if not token or token == "" then
-                Shared.Notify("Spotify", "No Spotify OAuth Token configured", false)
+                Shared.Notify("Spotify", "[!] No OAuth Token configured (Auth Required)", false)
                 return
             end
-            spotifyRequest("/next", "POST")
-            Shared.Notify("Spotify", "⏭ Skipped to next track", true)
+            local resp = spotifyRequest("/next", "POST")
+            if resp and resp.StatusCode == 403 then
+                Shared.Notify("Spotify", "[!] Skipping requires Spotify Premium & active OAuth", false)
+            elseif resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
+                Shared.Notify("Spotify", "[>|] Skipped to next track", true)
+            else
+                Shared.Notify("Spotify", "[!] Next track failed (Requires Premium & Active Player)", false)
+            end
             task.wait(0.4)
             local trk = getSpotifyTrack()
             if trk then updateVisuals(trk) end
@@ -735,9 +759,9 @@ return function(Shared)
             return btn
         end
 
-        mkBBCtrlBtn("⏮", 0, handleSpotifyPrevious)
-        mkBBCtrlBtn("⏯", 25, handleSpotifyPlayPause)
-        mkBBCtrlBtn("⏭", 50, handleSpotifyNext)
+        mkBBCtrlBtn("[|<]", 0, handleSpotifyPrevious)
+        mkBBCtrlBtn("[||]", 30, handleSpotifyPlayPause)
+        mkBBCtrlBtn("[>|]", 60, handleSpotifyNext)
 
         applyImage(bbCoverImg, currentTrack)
     end
@@ -930,9 +954,9 @@ return function(Shared)
             return btn
         end
 
-        mkHUDCtrlBtn("⏮", 0, 26, handleSpotifyPrevious)
-        mkHUDCtrlBtn("⏯", 30, 28, handleSpotifyPlayPause)
-        mkHUDCtrlBtn("⏭", 62, 26, handleSpotifyNext)
+        mkHUDCtrlBtn("[|<]", 0, 28, handleSpotifyPrevious)
+        mkHUDCtrlBtn("[||]", 32, 28, handleSpotifyPlayPause)
+        mkHUDCtrlBtn("[>|]", 64, 28, handleSpotifyNext)
 
         -- ── HUD AUDIO EQUALIZER VISUALIZER ──
         local hudVisualizer = Instance.new("Frame")
@@ -1303,9 +1327,69 @@ return function(Shared)
     end)
 
     MkSection(rightCol, "Playback Controls", 10)
-    MkButton(rightCol, "⏮  Previous Track", 11, handleSpotifyPrevious)
-    MkButton(rightCol, "⏯  Play / Pause", 12, handleSpotifyPlayPause)
-    MkButton(rightCol, "⏭  Next Track", 13, handleSpotifyNext)
+    MkButton(rightCol, "[|<]  Previous Track", 11, handleSpotifyPrevious)
+    MkButton(rightCol, "[||]  Play / Pause", 12, handleSpotifyPlayPause)
+    MkButton(rightCol, "[>|]  Next Track", 13, handleSpotifyNext)
+
+    MkSection(rightCol, "OAuth Guide & Requirements", 15)
+
+    local guideFrame = Instance.new("Frame")
+    guideFrame.Name                  = "OAuthGuideFrame"
+    guideFrame.Size                  = UDim2.new(1, 0, 0, 160)
+    guideFrame.BackgroundColor3      = Color3.fromRGB(240, 244, 252)
+    guideFrame.BorderSizePixel       = 1
+    guideFrame.BorderColor3          = Color3.fromRGB(160, 180, 215)
+    guideFrame.LayoutOrder           = 16
+    guideFrame.Parent                = rightCol
+
+    local guidePad = Instance.new("UIPadding")
+    guidePad.PaddingTop    = UDim.new(0, 6)
+    guidePad.PaddingLeft   = UDim.new(0, 8)
+    guidePad.PaddingRight  = UDim.new(0, 8)
+    guidePad.PaddingBottom = UDim.new(0, 6)
+    guidePad.Parent        = guideFrame
+
+    local guideText = Instance.new("TextLabel")
+    guideText.Size                   = UDim2.new(1, 0, 1, 0)
+    guideText.BackgroundTransparency = 1
+    guideText.Text                   = "[ HOW TO GET SPOTIFY OAUTH TOKEN ]\n" ..
+                                       "1. Open developer.spotify.com/dashboard & Log in.\n" ..
+                                       "2. Create an App -> Set Redirect URI to:\n" ..
+                                       "   http://localhost:8888/callback\n" ..
+                                       "3. Obtain Refresh Token with scopes:\n" ..
+                                       "   user-read-playback-state\n" ..
+                                       "   user-modify-playback-state\n" ..
+                                       "   user-read-currently-playing\n" ..
+                                       "4. Paste token above & click Test.\n\n" ..
+                                       "[!] REQUIREMENTS & LIMITATIONS:\n" ..
+                                       "* Playback skipping ([|<], [>|], [||]) requires an\n" ..
+                                       "  active OAuth token AND a Spotify Premium subscription.\n" ..
+                                       "* Free accounts / Last.fm mode support live track\n" ..
+                                       "  scrobbling & cover display only."
+    guideText.TextColor3             = Color3.fromRGB(20, 30, 60)
+    guideText.Font                   = Enum.Font.Code
+    guideText.TextSize               = 9
+    guideText.TextXAlignment         = Enum.TextXAlignment.Left
+    guideText.TextYAlignment         = Enum.TextYAlignment.Top
+    guideText.Parent                 = guideFrame
+
+    MkButton(rightCol, "[ Copy Guide Steps to Clipboard ]", 17, function()
+        pcall(function()
+            if setclipboard then
+                setclipboard(
+                    "Spotify OAuth Token Guide for Fih UI:\n" ..
+                    "1. Open https://developer.spotify.com/dashboard and log in.\n" ..
+                    "2. Create an app and set Redirect URI to http://localhost:8888/callback\n" ..
+                    "3. Generate an OAuth Refresh Token with scopes: user-read-playback-state user-modify-playback-state user-read-currently-playing\n" ..
+                    "4. Paste the token into Fih UI Music Tab -> Spotify Refresh Token box and click [ Test & Auto-Refresh Token ].\n\n" ..
+                    "Notice: Track skipping and remote play/pause controls require an active OAuth connection AND a Spotify Premium subscription."
+                )
+                Shared.Notify("Spotify", "OAuth Guide copied to clipboard!", true)
+            else
+                Shared.Notify("Spotify", "Clipboard function not supported by executor", false)
+            end
+        end)
+    end)
 
     -- ── DARK MODE THEME CALLBACK ──────────────────────────────────
     -- Rebuilds the HUD with the correct colour palette when the user switches theme
