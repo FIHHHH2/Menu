@@ -112,6 +112,52 @@ return function(Shared)
         local titleLower = title:lower()
         local artistLower = artist:lower()
 
+        -- Check if artwork is monochrome/grayscale (like kelestiial - i'm not around)
+        local isMono = false
+        if track and track.palette and track.palette.isMonochrome then
+            isMono = true
+        elseif artistLower:find("kelestiial") or titleLower:find("around") or titleLower:find("gray") or titleLower:find("grey") or titleLower:find("mist") then
+            isMono = true
+        end
+
+        if isMono then
+            -- Elegant High-Contrast Monochrome / Diamond Silver / Misty Glass Theme
+            return {
+                WinBorder     = Color3.fromRGB(220, 230, 248),
+                TitleBar      = Color3.fromRGB(18, 20, 26),
+                TitleText     = Color3.fromRGB(255, 255, 255),
+                NavBar        = Color3.fromRGB(14, 16, 22),
+                NavText       = Color3.fromRGB(220, 230, 250),
+                NavLink       = Color3.fromRGB(200, 220, 255),
+                NavLinkHover  = Color3.fromRGB(255, 255, 255),
+                BodyBg        = Color3.fromRGB(10, 12, 16),
+                SidebarCellA  = Color3.fromRGB(14, 16, 20),
+                SidebarCellB  = Color3.fromRGB(20, 22, 28),
+                SidebarBorder = Color3.fromRGB(45, 52, 68),
+                BtnBg         = Color3.fromRGB(22, 26, 34),
+                BtnBorder     = Color3.fromRGB(60, 70, 90),
+                BtnHover      = Color3.fromRGB(34, 40, 52),
+                BtnDown       = Color3.fromRGB(16, 18, 24),
+                BtnText       = Color3.fromRGB(245, 248, 255),
+                TabActiveBg   = Color3.fromRGB(10, 12, 16),
+                TabActiveText = Color3.fromRGB(255, 255, 255),
+                SectionBg     = Color3.fromRGB(24, 28, 38),
+                SectionText   = Color3.fromRGB(235, 242, 255),
+                RowBg         = Color3.fromRGB(14, 16, 22),
+                RowBorder     = Color3.fromRGB(38, 44, 58),
+                RowHover      = Color3.fromRGB(24, 28, 36),
+                Accent        = Color3.fromRGB(225, 235, 255),
+                DrawerBg      = Color3.fromRGB(12, 14, 18),
+                NotifyBg      = Color3.fromRGB(16, 18, 24),
+                NotifyBorder  = Color3.fromRGB(180, 200, 235),
+                BannerBg      = Color3.fromRGB(16, 18, 24),
+                BannerTitle   = Color3.fromRGB(250, 252, 255),
+                BannerSub     = Color3.fromRGB(160, 175, 200),
+                IsDark        = true,
+                IsAdaptive    = true
+            }
+        end
+
         local hue = 0.95
         local sat = 0.80
         local val = 0.90
@@ -138,9 +184,9 @@ return function(Shared)
             accentHue = 0.55
             sat = 0.85
             val = 0.95
-        elseif track and track.palette and track.palette.vibrant then
-            local v = track.palette.vibrant
-            local h, s, l = Color3.toHSV(v)
+        elseif track and track.palette and track.palette.dominant then
+            local d = track.palette.dominant
+            local h, s, l = Color3.toHSV(d)
             hue = h
             sat = math.clamp(s, 0.55, 0.95)
             val = math.clamp(l, 0.60, 0.98)
@@ -993,22 +1039,40 @@ return function(Shared)
 
     local function switchTab(name)
         if activeTab == name then return end
+        local oldTabName = activeTab
         activeTab = name
         NavTabLabel.Text = name
 
+        -- Animate outgoing tab out
+        if oldTabName and Tabs[oldTabName] then
+            local oldFrame = Tabs[oldTabName]
+            local outTween = TweenService:Create(oldFrame, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Position = UDim2.new(0, -14, 0, 0)
+            })
+            outTween:Play()
+            task.delay(0.14, function()
+                if activeTab ~= oldTabName then
+                    oldFrame.Visible = false
+                end
+            end)
+        end
+
+        -- Animate incoming tab in with smooth slide transition
         for tName, tFrame in pairs(Tabs) do
             if tName == name then
                 tFrame.Visible = true
-                tFrame.Position = UDim2.new(0, 0, 0, 8)
-                TweenService:Create(tFrame, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Position = UDim2.new(0, 0, 0, 0) }):Play()
-            else
+                tFrame.Position = UDim2.new(0, 16, 0, 0)
+                TweenService:Create(tFrame, TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                    Position = UDim2.new(0, 0, 0, 0)
+                }):Play()
+            elseif tName ~= oldTabName then
                 tFrame.Visible = false
             end
         end
 
         for tName, tBtn in pairs(TabBtns) do
             if tName == name then
-                TweenService:Create(tBtn, TweenInfo.new(0.15), {
+                TweenService:Create(tBtn, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
                     BackgroundColor3 = C.TabActiveBg,
                     TextColor3       = C.TabActiveText,
                     BorderColor3     = C.WinBorder
@@ -1563,9 +1627,9 @@ return function(Shared)
         local targetH = getLbTargetHeight(#Players:GetPlayers())
         if isLbOpen then
             lbWindow.Visible = true
-            lbWindow.Position = UDim2.new(1, -242, 0, 48)
+            lbWindow.Position = UDim2.new(1, -242, 0, 36)
             lbWindow.Size     = UDim2.new(0, 230, 0, targetH)
-            lbWindow.BackgroundTransparency = 0.50
+            lbWindow.BackgroundTransparency = 1
             pcall(function()
                 TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Position = UDim2.new(1, -242, 0, 48),
@@ -1575,12 +1639,13 @@ return function(Shared)
             end)
         else
             pcall(function()
-                TweenSvc:Create(lbWindow, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-                    Position = UDim2.new(1, -242, 0, 36),
+                TweenSvc:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+                    Position = UDim2.new(1, -242, 0, 20),
+                    Size     = UDim2.new(0, 230, 0, 24),
                     BackgroundTransparency = 1
                 }):Play()
             end)
-            task.delay(0.18, function()
+            task.delay(0.20, function()
                 if not isLbOpen then
                     lbWindow.Visible = false
                 end
@@ -2435,7 +2500,18 @@ return function(Shared)
                 chatWindow.Visible = true
                 chatBox:CaptureFocus()
                 chatBox.Text = ""
+                task.delay(0.015, function()
+                    if chatBox.Text == "/" then
+                        chatBox.Text = ""
+                    end
+                end)
             end)
+        end
+    end)
+
+    chatBox:GetPropertyChangedSignal("Text"):Connect(function()
+        if chatBox:IsFocused() and chatBox.Text == "/" then
+            chatBox.Text = ""
         end
     end)
 

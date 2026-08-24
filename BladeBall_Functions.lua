@@ -340,6 +340,24 @@ return function(Shared)
         Shared.Flags["BB_AbilitySpeed"] = val
     end)
 
+    MkSection(leftCol, "Ball Velocity & Speed Modifier", 13)
+
+    MkToggle(leftCol, "Enable Custom Ball Velocity Override", "BB_CustomVelocityEnabled", 14, function(state)
+        Shared.Flags["BB_CustomVelocityEnabled"] = state
+    end)
+
+    MkSlider(leftCol, "Custom Ball Speed (50 - 500)", "BB_CustomVelocityValue", 50, 500, 180, 15, function(val)
+        Shared.Flags["BB_CustomVelocityValue"] = val
+    end)
+
+    MkToggle(leftCol, "Deflection Velocity Multiplier", "BB_VelocityMultiplierEnabled", 16, function(state)
+        Shared.Flags["BB_VelocityMultiplierEnabled"] = state
+    end)
+
+    MkSlider(leftCol, "Deflection Multiplier (1.0x - 3.0x)", "BB_VelocityMultiplierFactor", 10, 30, 15, 17, function(val)
+        Shared.Flags["BB_VelocityMultiplierFactor"] = val
+    end)
+
     -- ── RIGHT COLUMN: VISUALS, AIM ASSIST & POSITIONING ───────────
     MkSection(rightCol, "Aim Assist & Deflection", 20)
 
@@ -660,6 +678,29 @@ return function(Shared)
                 end
 
                 executeParry()
+
+                -- 9. Ball Velocity Physics Modifier Execution
+                if Shared.Flags["BB_CustomVelocityEnabled"] then
+                    local targetSpeed = Shared.Flags["BB_CustomVelocityValue"] or 180
+                    task.delay(0.03, function()
+                        if ball and ball.Parent and ball:IsA("BasePart") then
+                            local currentV = ball.AssemblyLinearVelocity
+                            if currentV.Magnitude > 1 then
+                                ball.AssemblyLinearVelocity = currentV.Unit * targetSpeed
+                            end
+                        end
+                    end)
+                elseif Shared.Flags["BB_VelocityMultiplierEnabled"] then
+                    local mult = (Shared.Flags["BB_VelocityMultiplierFactor"] or 15) / 10
+                    task.delay(0.03, function()
+                        if ball and ball.Parent and ball:IsA("BasePart") then
+                            local currentV = ball.AssemblyLinearVelocity
+                            if currentV.Magnitude > 1 then
+                                ball.AssemblyLinearVelocity = currentV.Unit * (currentV.Magnitude * mult)
+                            end
+                        end
+                    end)
+                end
 
                 if Shared.Flags["BB_AutoAbility"] then
                     local thresh = Shared.Flags["BB_AbilitySpeed"] or 140

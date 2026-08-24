@@ -198,13 +198,15 @@ return function(Shared)
         if not bytes or #bytes < 128 then return nil end
         local totalR, totalG, totalB = 0, 0, 0
         local count = 0
-        local maxSat = 0
-        local vibR, vibG, vibB = 0.5, 0.5, 0.5
+        local grayscaleCount = 0
 
-        -- Sample across image data payload
-        local step = math.max(1, math.floor(#bytes / 180))
-        local startIdx = math.min(256, math.floor(#bytes * 0.1))
-        local endIdx = math.min(#bytes - 32, math.floor(#bytes * 0.9))
+        -- 12-hue bucket histogram for true most common color selection
+        local buckets = {}
+        for b = 1, 12 do buckets[b] = { count = 0, totalR = 0, totalG = 0, totalB = 0, maxSat = 0 } end
+
+        local step = math.max(1, math.floor(#bytes / 250))
+        local startIdx = math.min(256, math.floor(#bytes * 0.05))
+        local endIdx = math.min(#bytes - 32, math.floor(#bytes * 0.95))
 
         for i = startIdx, endIdx, step do
             local b1 = string.byte(bytes, i) or 128
@@ -223,16 +225,51 @@ return function(Shared)
             local maxC = math.max(r, g, b)
             local minC = math.min(r, g, b)
             local sat = maxC > 0 and (maxC - minC) / maxC or 0
-            if sat > maxSat and maxC > 0.25 and maxC < 0.95 then
-                maxSat = sat
-                vibR, vibG, vibB = r, g, b
+
+            if sat < 0.16 then
+                grayscaleCount = grayscaleCount + 1
+            else
+                local h, _, _ = Color3.new(r, g, b):ToHSV()
+                local bIdx = math.clamp(math.floor(h * 12) + 1, 1, 12)
+                local bucket = buckets[bIdx]
+                bucket.count = bucket.count + 1
+                bucket.totalR = bucket.totalR + r
+                bucket.totalG = bucket.totalG + g
+                bucket.totalB = bucket.totalB + b
+                if sat > bucket.maxSat then
+                    bucket.maxSat = sat
+                end
             end
         end
 
         if count == 0 then return nil end
+
+        -- Check if artwork is predominantly grayscale/monochrome
+        local isMonochrome = (grayscaleCount / count) > 0.65
+
+        -- Find the most common / most frequent color bucket
+        local bestBucket = nil
+        local maxFreq = -1
+        for b = 1, 12 do
+            if buckets[b].count > maxFreq and buckets[b].count > 0 then
+                maxFreq = buckets[b].count
+                bestBucket = buckets[b]
+            end
+        end
+
+        local dominantCol = nil
+        if bestBucket and bestBucket.count > 0 then
+            dominantCol = Color3.new(
+                bestBucket.totalR / bestBucket.count,
+                bestBucket.totalG / bestBucket.count,
+                bestBucket.totalB / bestBucket.count
+            )
+        end
+
         return {
             avg = Color3.new(totalR / count, totalG / count, totalB / count),
-            vibrant = Color3.new(vibR, vibG, vibB)
+            dominant = dominantCol,
+            isMonochrome = isMonochrome
         }
     end
 
