@@ -84,29 +84,38 @@ return function(Shared)
         -- 1. Priority 1: Check active match balls in workspace.Balls
         local folder = Workspace:FindFirstChild("Balls")
         if folder and #folder:GetChildren() > 0 then
-            -- First check if any ball in folder is targeting us
+            -- Pass A: Look for child with realBall == true
             for _, b in ipairs(folder:GetChildren()) do
-                if b:IsA("BasePart") and b.Name ~= "Temp" then
-                    if isTargetingMe(b) then return b end
+                if b:IsA("BasePart") and b:GetAttribute("realBall") == true then
+                    return b
                 end
             end
-            -- Otherwise return closest match ball in folder
-            local bestMatchBall, minDist = nil, math.huge
+            -- Pass B: Look for child with a non-empty target attribute
             for _, b in ipairs(folder:GetChildren()) do
                 if b:IsA("BasePart") and b.Name ~= "Temp" then
-                    local d = (b.Position - myPos).Magnitude
-                    if d < minDist then
-                        minDist = d
-                        bestMatchBall = b
+                    local t = b:GetAttribute("target")
+                    if t and t ~= "" and t ~= "None" then
+                        return b
                     end
                 end
             end
-            if bestMatchBall then return bestMatchBall end
+            -- Pass C: Any BasePart in Balls folder
+            for _, b in ipairs(folder:GetChildren()) do
+                if b:IsA("BasePart") and b.Name ~= "Temp" then
+                    return b
+                end
+            end
         end
 
         -- 2. Priority 2: Check Workspace.TrainingBalls (if in training area)
         local tBalls = Workspace:FindFirstChild("TrainingBalls") or Workspace:FindFirstChild("Training")
         if tBalls and #tBalls:GetChildren() > 0 then
+            for _, b in ipairs(tBalls:GetChildren()) do
+                if b:IsA("BasePart") and (b:GetAttribute("realBall") == true or b:GetAttribute("target") ~= nil) then
+                    local d = (b.Position - myPos).Magnitude
+                    if d < 120 then return b end
+                end
+            end
             for _, b in ipairs(tBalls:GetChildren()) do
                 if b:IsA("BasePart") then
                     local d = (b.Position - myPos).Magnitude
@@ -138,6 +147,16 @@ return function(Shared)
 
     local function isTargetingMe(ball)
         if not ball then return false end
+
+        -- If ball is inside a folder and has a sibling with realBall == true, resolve to the real ball
+        if ball.Parent and ball:GetAttribute("realBall") ~= true then
+            for _, sibling in ipairs(ball.Parent:GetChildren()) do
+                if sibling:IsA("BasePart") and sibling:GetAttribute("realBall") == true then
+                    ball = sibling
+                    break
+                end
+            end
+        end
 
         -- 1. Check exact match target attributes (Arena Match Balls)
         local t = ball:GetAttribute("target") or ball:GetAttribute("Target")
