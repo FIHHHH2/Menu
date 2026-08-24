@@ -1492,8 +1492,8 @@ return function(Shared)
 
     local chatWindow = Instance.new("Frame")
     chatWindow.Name = "Fih_CustomChat"
-    chatWindow.Size = UDim2.new(1, 0, 0, 290)
-    chatWindow.Position = UDim2.new(0, 0, 0, 0)
+    chatWindow.Size = UDim2.new(0, 420, 0, 260)
+    chatWindow.Position = UDim2.new(0, 8, 0, 4)
     chatWindow.BackgroundColor3 = C.BodyBg
     chatWindow.BackgroundTransparency = 0.45
     chatWindow.BorderSizePixel = 1
@@ -1520,9 +1520,9 @@ return function(Shared)
     chatTitleCorner.CornerRadius = UDim.new(0, 0)
     chatTitleCorner.Parent = chatTitleBar
 
-    -- Left Navigation: [Roblox] [≡] [🎙]
+    -- Left Navigation: [Roblox] [≡] [🎙] + Mic Meter
     local leftNavHolder = Instance.new("Frame")
-    leftNavHolder.Size = UDim2.new(0, 78, 0, 20)
+    leftNavHolder.Size = UDim2.new(0, 105, 0, 20)
     leftNavHolder.Position = UDim2.new(0, 4, 0, 3)
     leftNavHolder.BackgroundTransparency = 1
     leftNavHolder.ZIndex = 42
@@ -1554,7 +1554,7 @@ return function(Shared)
     -- 2. [≡] Three Lines Menu Button (Toggles In-Game Settings / Menu)
     local menuBtn = Instance.new("TextButton")
     menuBtn.Size = UDim2.new(0, 22, 0, 20)
-    menuBtn.Position = UDim2.new(0, 26, 0, 0)
+    menuBtn.Position = UDim2.new(0, 25, 0, 0)
     menuBtn.BackgroundColor3 = C.BtnBg
     menuBtn.BorderSizePixel = 1
     menuBtn.BorderColor3 = C.BtnBorder
@@ -1570,7 +1570,7 @@ return function(Shared)
     local quickMenu = Instance.new("Frame")
     quickMenu.Name = "Fih_QuickActionsMenu"
     quickMenu.Size = UDim2.new(0, 160, 0, 145)
-    quickMenu.Position = UDim2.new(0, 26, 0, 84)
+    quickMenu.Position = UDim2.new(0, 32, 0, 88)
     quickMenu.BackgroundColor3 = C.BodyBg
     quickMenu.BackgroundTransparency = 0.15
     quickMenu.BorderSizePixel = 1
@@ -1670,10 +1670,10 @@ return function(Shared)
         quickMenu.Visible = not quickMenu.Visible
     end)
 
-    -- 3. [🎙] Voice Chat Mute/Unmute Button (Direct VoiceChatInternal toggle)
+    -- 3. [🎙] Voice Chat Mute/Unmute Button (Direct VoiceChatInternal toggle + Toast Notification)
     local vcBtn = Instance.new("TextButton")
     vcBtn.Size = UDim2.new(0, 22, 0, 20)
-    vcBtn.Position = UDim2.new(0, 52, 0, 0)
+    vcBtn.Position = UDim2.new(0, 50, 0, 0)
     vcBtn.BackgroundColor3 = C.BtnBg
     vcBtn.BorderSizePixel = 1
     vcBtn.BorderColor3 = C.BtnBorder
@@ -1685,6 +1685,28 @@ return function(Shared)
     vcBtn.Parent = leftNavHolder
     registerThemed(vcBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
 
+    -- 4. Mic Volume Threshold Visualizer Meter (4-bar audio meter)
+    local micMeter = Instance.new("Frame")
+    micMeter.Name = "MicVolumeMeter"
+    micMeter.Size = UDim2.new(0, 24, 0, 16)
+    micMeter.Position = UDim2.new(0, 75, 0, 2)
+    micMeter.BackgroundTransparency = 1
+    micMeter.ZIndex = 43
+    micMeter.Parent = leftNavHolder
+
+    local micBars = {}
+    for i = 1, 4 do
+        local mb = Instance.new("Frame")
+        mb.Size = UDim2.new(0, 4, 0, 4)
+        mb.Position = UDim2.new(0, (i - 1) * 6, 1, 0)
+        mb.AnchorPoint = Vector2.new(0, 1)
+        mb.BackgroundColor3 = Color3.fromRGB(70, 85, 110)
+        mb.BorderSizePixel = 0
+        mb.ZIndex = 44
+        mb.Parent = micMeter
+        micBars[i] = mb
+    end
+
     local isMicMuted = true
     vcBtn.MouseButton1Click:Connect(function()
         isMicMuted = not isMicMuted
@@ -1695,12 +1717,32 @@ return function(Shared)
             end
         end)
         vcBtn.TextColor3 = isMicMuted and C.BtnText or Color3.fromRGB(0, 220, 140)
+        if Shared.Notify then
+            Shared.Notify("Voice Chat", isMicMuted and "Microphone Muted [OFF]" or "Microphone Active [ON]", not isMicMuted)
+        end
+    end)
+
+    -- Animate mic volume meter threshold
+    RunService.RenderStepped:Connect(function()
+        local t = os.clock() * 10
+        for i, mb in ipairs(micBars) do
+            if mb and mb.Parent then
+                if not isMicMuted then
+                    local h = math.clamp(math.abs(math.sin(t + i * 1.3) * 0.7 + math.cos(t * 2 + i * 0.7) * 0.3), 0.25, 1)
+                    mb.Size = UDim2.new(0, 4, 0, math.floor(h * 15) + 1)
+                    mb.BackgroundColor3 = (i == 4) and Color3.fromRGB(255, 90, 90) or ((i >= 3) and Color3.fromRGB(255, 200, 40) or Color3.fromRGB(0, 220, 140))
+                else
+                    mb.Size = UDim2.new(0, 4, 0, 3)
+                    mb.BackgroundColor3 = Color3.fromRGB(70, 85, 110)
+                end
+            end
+        end
     end)
 
     -- Title Label
     local chatTitleText = Instance.new("TextLabel")
-    chatTitleText.Size = UDim2.new(1, -144, 1, 0)
-    chatTitleText.Position = UDim2.new(0, 88, 0, 0)
+    chatTitleText.Size = UDim2.new(1, -165, 1, 0)
+    chatTitleText.Position = UDim2.new(0, 110, 0, 0)
     chatTitleText.BackgroundTransparency = 1
     chatTitleText.Text = "Chat"
     chatTitleText.TextColor3 = C.TitleText
@@ -1749,7 +1791,7 @@ return function(Shared)
 
     local isChatCollapsed = false
     local isChatMaximized = false
-    local savedChatHeight = 290
+    local savedChatHeight = 260
     local savedChatWidth  = 420
 
     -- Minimize strictly collapses chat down to topbar only
@@ -1770,10 +1812,10 @@ return function(Shared)
         if isChatMaximized then
             savedChatHeight = chatWindow.AbsoluteSize.Y
             savedChatWidth  = chatWindow.AbsoluteSize.X
-            chatWindow.Size = UDim2.new(0, 580, 0, 440)
+            chatWindow.Size = UDim2.new(0, 580, 0, 420)
             chatMaxBtn.Text = "❐"
         else
-            chatWindow.Size = UDim2.new(0, savedChatWidth or 420, 0, savedChatHeight or 290)
+            chatWindow.Size = UDim2.new(0, savedChatWidth or 420, 0, savedChatHeight or 260)
             chatMaxBtn.Text = "□"
         end
     end)

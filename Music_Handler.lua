@@ -580,6 +580,8 @@ return function(Shared)
 
     -- ── 3D BILLBOARD GUI OVER HEAD ─────────────────────────────────
     local bbSongLbl, bbArtistLbl, bbCoverImg
+    local bbVisBars  = {}
+    local hudVisBars = {}
 
     local function getHRP()
         return Shared.HumanoidRP or (Shared.Character and Shared.Character:FindFirstChild("HumanoidRootPart")) or (Player.Character and Player.Character:FindFirstChild("HumanoidRootPart"))
@@ -660,6 +662,27 @@ return function(Shared)
         artistLbl.TextTruncate          = Enum.TextTruncate.AtEnd
         artistLbl.Parent                = bg
         bbArtistLbl = artistLbl
+
+        -- ── BILLBOARD AUDIO EQUALIZER VISUALIZER ──
+        local bbVisualizer = Instance.new("Frame")
+        bbVisualizer.Name                   = "BB_Visualizer"
+        bbVisualizer.Size                   = UDim2.new(0, 52, 0, 14)
+        bbVisualizer.Position               = UDim2.new(0, 62, 0, 45)
+        bbVisualizer.BackgroundTransparency = 1
+        bbVisualizer.BorderSizePixel        = 0
+        bbVisualizer.Parent                 = bg
+
+        bbVisBars = {}
+        for i = 1, 6 do
+            local bar = Instance.new("Frame")
+            bar.Size = UDim2.new(0, 5, 0, 3)
+            bar.Position = UDim2.new(0, (i - 1) * 8, 1, 0)
+            bar.AnchorPoint = Vector2.new(0, 1)
+            bar.BackgroundColor3 = Color3.fromRGB(0, 220, 140)
+            bar.BorderSizePixel = 0
+            bar.Parent = bbVisualizer
+            bbVisBars[i] = bar
+        end
 
         -- ── BILLBOARD PLAYBACK CONTROLS (⏮ ⏯ ⏭) ──
         local ctrlBox = Instance.new("Frame")
@@ -892,6 +915,29 @@ return function(Shared)
         mkHUDCtrlBtn("⏮", 0, 26, handleSpotifyPrevious)
         mkHUDCtrlBtn("⏯", 30, 28, handleSpotifyPlayPause)
         mkHUDCtrlBtn("⏭", 62, 26, handleSpotifyNext)
+
+        -- ── HUD AUDIO EQUALIZER VISUALIZER ──
+        local hudVisualizer = Instance.new("Frame")
+        hudVisualizer.Name                   = "HUD_Visualizer"
+        hudVisualizer.Size                   = UDim2.new(0, 72, 0, 18)
+        hudVisualizer.Position               = UDim2.new(1, -78, 0, 44)
+        hudVisualizer.BackgroundTransparency = 1
+        hudVisualizer.BorderSizePixel        = 0
+        hudVisualizer.ZIndex                 = 54
+        hudVisualizer.Parent                 = rightBox
+
+        hudVisBars = {}
+        for i = 1, 7 do
+            local bar = Instance.new("Frame")
+            bar.Size = UDim2.new(0, 6, 0, 4)
+            bar.Position = UDim2.new(0, (i - 1) * 10, 1, 0)
+            bar.AnchorPoint = Vector2.new(0, 1)
+            bar.BackgroundColor3 = C.Accent
+            bar.BorderSizePixel = 0
+            bar.ZIndex = 55
+            bar.Parent = hudVisualizer
+            hudVisBars[i] = bar
+        end
 
         -- Divider Line
         local div = Instance.new("Frame")
@@ -1234,6 +1280,40 @@ return function(Shared)
             end
         end)
     end
+
+    -- ── AUDIO EQUALIZER VISUALIZER ANIMATION LOOP ──
+    RunService.RenderStepped:Connect(function()
+        local isPlaying = (currentTrack.name ~= "Not Playing" and currentTrack.name ~= "Error loading" and currentTrack.name ~= "" and currentTrack.name ~= nil)
+        local t = os.clock() * 9
+        if bbVisBars then
+            for i, bar in ipairs(bbVisBars) do
+                if bar and bar.Parent then
+                    if isPlaying then
+                        local h = math.clamp(math.abs(math.sin(t + i * 1.1) * 0.7 + math.cos(t * 1.6 + i * 0.8) * 0.3), 0.15, 1)
+                        bar.Size = UDim2.new(0, 5, 0, math.floor(h * 13) + 2)
+                        bar.BackgroundColor3 = Color3.fromHSV((0.38 + i * 0.04) % 1, 0.9, 0.95)
+                    else
+                        bar.Size = UDim2.new(0, 5, 0, 2)
+                        bar.BackgroundColor3 = Color3.fromRGB(70, 85, 110)
+                    end
+                end
+            end
+        end
+        if hudVisBars then
+            for i, bar in ipairs(hudVisBars) do
+                if bar and bar.Parent then
+                    if isPlaying then
+                        local h = math.clamp(math.abs(math.sin(t + i * 0.95) * 0.65 + math.cos(t * 1.8 + i * 1.2) * 0.35), 0.15, 1)
+                        bar.Size = UDim2.new(0, 6, 0, math.floor(h * 17) + 2)
+                        bar.BackgroundColor3 = Color3.fromHSV((0.55 + i * 0.03) % 1, 0.85, 1)
+                    else
+                        bar.Size = UDim2.new(0, 6, 0, 3)
+                        bar.BackgroundColor3 = Color3.fromRGB(60, 75, 100)
+                    end
+                end
+            end
+        end
+    end)
 
     print("[Music_Handler] Loaded -- Dynamic Covers, Scaled HUD, Clean Typography Online")
 end
