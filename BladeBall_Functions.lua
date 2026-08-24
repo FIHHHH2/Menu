@@ -313,48 +313,36 @@ return function(Shared)
         Shared.Flags["BB_ParryDist"] = val
     end)
 
-    MkSlider(leftCol, "Ping Compensation (ms)", "BB_PingOffset", 0, 200, 45, 7, function(val)
-        Shared.Flags["BB_PingOffset"] = val
-    end)
-
-    MkToggle(leftCol, "Dynamic Velocity Distance Scaling", "BB_VelScaling", 8, function(state)
-        Shared.Flags["BB_VelScaling"] = state
-    end)
-
-    MkSlider(leftCol, "Velocity Scale Threshold", "BB_VelThreshold", 30, 200, 70, 9, function(val)
-        Shared.Flags["BB_VelThreshold"] = val
-    end)
-
-    MkButton(leftCol, "[ ⚡ Instant Manual Parry ]", 10, function()
+    MkButton(leftCol, "[ ⚡ Instant Manual Parry ]", 7, function()
         executeParry()
         Shared.Notify("Blade Ball", "Manual parry triggered", true)
     end)
 
-    MkSection(leftCol, "Auto Abilities & Defense", 10)
+    MkSection(leftCol, "Auto Abilities & Defense", 8)
 
-    MkToggle(leftCol, "Auto Ability on High Velocity", "BB_AutoAbility", 11, function(state)
+    MkToggle(leftCol, "Auto Ability on High Velocity", "BB_AutoAbility", 9, function(state)
         Shared.Flags["BB_AutoAbility"] = state
     end)
 
-    MkSlider(leftCol, "Ability Trigger Speed", "BB_AbilitySpeed", 60, 300, 140, 12, function(val)
+    MkSlider(leftCol, "Ability Trigger Speed", "BB_AbilitySpeed", 60, 300, 140, 10, function(val)
         Shared.Flags["BB_AbilitySpeed"] = val
     end)
 
-    MkSection(leftCol, "Ball Velocity & Speed Modifier", 13)
+    MkSection(leftCol, "Ball Velocity & Speed Modifier", 11)
 
-    MkToggle(leftCol, "Enable Custom Ball Velocity Override", "BB_CustomVelocityEnabled", 14, function(state)
+    MkToggle(leftCol, "Enable Custom Ball Velocity Override", "BB_CustomVelocityEnabled", 12, function(state)
         Shared.Flags["BB_CustomVelocityEnabled"] = state
     end)
 
-    MkSlider(leftCol, "Custom Ball Speed (50 - 500)", "BB_CustomVelocityValue", 50, 500, 180, 15, function(val)
+    MkSlider(leftCol, "Custom Ball Speed (50 - 500)", "BB_CustomVelocityValue", 50, 500, 180, 13, function(val)
         Shared.Flags["BB_CustomVelocityValue"] = val
     end)
 
-    MkToggle(leftCol, "Deflection Velocity Multiplier", "BB_VelocityMultiplierEnabled", 16, function(state)
+    MkToggle(leftCol, "Deflection Velocity Multiplier", "BB_VelocityMultiplierEnabled", 14, function(state)
         Shared.Flags["BB_VelocityMultiplierEnabled"] = state
     end)
 
-    MkSlider(leftCol, "Deflection Multiplier (1.0x - 3.0x)", "BB_VelocityMultiplierFactor", 10, 30, 15, 17, function(val)
+    MkSlider(leftCol, "Deflection Multiplier (1.0x - 3.0x)", "BB_VelocityMultiplierFactor", 10, 30, 15, 15, function(val)
         Shared.Flags["BB_VelocityMultiplierFactor"] = val
     end)
 
@@ -507,12 +495,9 @@ return function(Shared)
         local approachSpeed = (speed > 1) and vel:Dot(dirToMe) or speed
         local isTarget = isTargetingMe(ball)
 
-        -- 2. Real-Time Network Ping & Lead Time Calculation
+        -- 2. Fully Automated Network Ping & Server Lead Time
         local livePingSec = getLivePingSec()
-        local userOffsetMs = Shared.Flags["BB_PingOffset"] or 45
-        local userOffsetSec = userOffsetMs / 1000
-        local oneWayPing = livePingSec * 0.5
-        local serverLeadTime = oneWayPing + userOffsetSec + 0.016 -- Compensate 1 frame + one-way packet transmission
+        local serverLeadTime = (livePingSec * 0.60) + 0.016 -- Live one-way RTT + 1 frame pipeline
 
         -- 3. Projected Future Positions (2nd Order Kinematics)
         local predictedBallPos = ballPos + (vel * serverLeadTime) + (0.5 * acceleration * (serverLeadTime ^ 2))
@@ -539,22 +524,19 @@ return function(Shared)
             end
         end
 
-        -- 6. Dynamic Parry Threshold Computation
+        -- 6. Dynamic Parry Threshold Computation (100% Self-Calibrating)
         local baseDist = Shared.Flags["BB_ParryDist"] or 28
-        local velScaling = Shared.Flags["BB_VelScaling"] ~= false
-        local velThreshold = Shared.Flags["BB_VelThreshold"] or 70
 
-        -- Dynamic lead compensation: As ball speed accelerates, expand the physical parry trigger sphere
         local dynamicLeadBonus = 0
-        if velScaling and approachSpeed > velThreshold then
-            local excessSpeed = approachSpeed - velThreshold
-            dynamicLeadBonus = (excessSpeed * 0.08) + (approachSpeed * (serverLeadTime * 0.4))
+        if approachSpeed > 50 then
+            local excessSpeed = approachSpeed - 50
+            dynamicLeadBonus = (excessSpeed * 0.085) + (approachSpeed * (serverLeadTime * 0.45))
         else
-            dynamicLeadBonus = approachSpeed * (serverLeadTime * 0.2)
+            dynamicLeadBonus = approachSpeed * (serverLeadTime * 0.25)
         end
 
-        local dynamicParryDistance = math.clamp(baseDist + dynamicLeadBonus, 8, 120)
-        local dynamicReactionTime = math.clamp((baseDist / math.max(approachSpeed, 25)) + serverLeadTime, 0.08, 0.45)
+        local dynamicParryDistance = math.clamp(baseDist + dynamicLeadBonus, 8, 140)
+        local dynamicReactionTime = math.clamp((baseDist / math.max(approachSpeed, 20)) + serverLeadTime, 0.08, 0.50)
 
         -- 7. Visualizer Highlights & Adornments
         if Shared.Flags["BB_BallESP"] then
