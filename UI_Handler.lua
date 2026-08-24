@@ -114,7 +114,7 @@ return function(Shared)
     Shared.IsDark = function() return isDark end
     Shared.GetTheme = function() return C end
 
-        -- ── ROBLOX CORE UI (CHAT, PLAYERLIST, TOPBAR) THEMING ENGINE ──
+        -- ── ROBLOX CORE UI (CHAT, PLAYERLIST, TOPBAR) SHARP SQUARE ENGINE ──
     local function styleRobloxCoreUI(targetTheme, isDarkMode)
         local theme = targetTheme or C
         local dark  = (isDarkMode ~= nil) and isDarkMode or isDark
@@ -124,6 +124,13 @@ return function(Shared)
         local textCol   = dark and Color3.fromRGB(225, 235, 255) or Color3.fromRGB(15, 25, 60)
         local inputCol  = dark and Color3.fromRGB(24, 30, 44) or Color3.fromRGB(255, 255, 255)
         local accentCol = dark and Color3.fromRGB(0, 160, 255) or Color3.fromRGB(0, 120, 215)
+
+        -- 0. Universal Squircles Killer: Strip all UICorners across CoreGui (Squares Only)
+        for _, d in ipairs(CoreGui:GetDescendants()) do
+            if d:IsA("UICorner") then
+                d.CornerRadius = UDim.new(0, 0)
+            end
+        end
 
         -- 1. TextChatService Styling (In-game Chat Box & Input Bar)
         pcall(function()
@@ -149,16 +156,25 @@ return function(Shared)
             local pl = CoreGui:FindFirstChild("PlayerList")
             if pl then
                 for _, obj in ipairs(pl:GetDescendants()) do
+                    if obj:IsA("UICorner") then
+                        obj.CornerRadius = UDim.new(0, 0)
+                    end
                     if obj:IsA("Frame") or obj:IsA("ImageLabel") or obj:IsA("ScrollingFrame") then
-                        if obj.BackgroundTransparency < 0.95 then
+                        if obj.BackgroundTransparency < 0.95 and obj.Name ~= "Avatar" then
                             obj.BackgroundColor3 = bgCol
                             obj.BorderSizePixel  = 1
                             obj.BorderColor3     = borderCol
                         end
                     end
+                    if obj:IsA("UIStroke") then
+                        obj.Color = borderCol
+                        obj.Thickness = 1
+                    end
                     if obj:IsA("TextLabel") then
                         obj.Font = Enum.Font.Code
-                        obj.TextColor3 = textCol
+                        if obj.TextColor3.R > 0.7 and obj.TextColor3.G > 0.7 and obj.TextColor3.B > 0.7 then
+                            obj.TextColor3 = textCol
+                        end
                     end
                 end
             end
@@ -169,10 +185,17 @@ return function(Shared)
             local topbar = CoreGui:FindFirstChild("TopBarApp")
             if topbar then
                 for _, obj in ipairs(topbar:GetDescendants()) do
+                    if obj:IsA("UICorner") then
+                        obj.CornerRadius = UDim.new(0, 0)
+                    end
                     if obj:IsA("Frame") and obj.BackgroundTransparency < 0.95 then
                         obj.BackgroundColor3 = bgCol
                         obj.BorderSizePixel  = 1
                         obj.BorderColor3     = borderCol
+                    end
+                    if obj:IsA("UIStroke") then
+                        obj.Color = borderCol
+                        obj.Thickness = 1
                     end
                 end
             end
@@ -185,6 +208,9 @@ return function(Shared)
                 local nFrame = rgui:FindFirstChild("NotificationFrame")
                 if nFrame then
                     for _, obj in ipairs(nFrame:GetDescendants()) do
+                        if obj:IsA("UICorner") then
+                            obj.CornerRadius = UDim.new(0, 0)
+                        end
                         if obj:IsA("Frame") and obj.BackgroundTransparency < 0.95 then
                             obj.BackgroundColor3 = bgCol
                             obj.BorderSizePixel  = 1
@@ -196,16 +222,27 @@ return function(Shared)
         end)
     end
 
-    -- Run initial Core UI skinning and watch for dynamically added elements
+    -- Persistent Watcher: Re-enforces sharp square styling when Chat or Leaderboard are toggled
     task.spawn(function()
-        task.wait(0.5)
+        task.wait(0.3)
         styleRobloxCoreUI(C, isDark)
-        local pl = CoreGui:FindFirstChild("PlayerList")
-        if pl then
-            pl.DescendantAdded:Connect(function()
-                task.delay(0.1, function() styleRobloxCoreUI(C, isDark) end)
-            end)
-        end
+
+        -- Persistent loop ensures opening/closing chat/leaderboard never reverts style
+        local elapsed = 0
+        RunService.Heartbeat:Connect(function(dt)
+            elapsed = elapsed + dt
+            if elapsed >= 0.8 then
+                elapsed = 0
+                styleRobloxCoreUI(C, isDark)
+            end
+        end)
+
+        -- Immediate listener for new UI elements
+        CoreGui.DescendantAdded:Connect(function(desc)
+            if desc:IsA("UICorner") then
+                desc.CornerRadius = UDim.new(0, 0)
+            end
+        end)
     end)
 
     local function applyThemeTransition(targetTheme)
