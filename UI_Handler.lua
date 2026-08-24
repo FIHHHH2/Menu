@@ -614,7 +614,7 @@ return function(Shared)
         curOrder = curOrder + 1
     end
     if isNDS then
-        table.insert(tabDefs, {name="NDS", order=curOrder})
+        table.insert(tabDefs, {name="Disasters", order=curOrder})
         curOrder = curOrder + 1
     end
     table.insert(tabDefs, {name="Music",    order=curOrder})

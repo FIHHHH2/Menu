@@ -10,7 +10,7 @@ return function(Shared)
     local Http        = Services.Http
     local CoreGui     = Services.CoreGui
 
-    local Tab = Shared.Tabs and Shared.Tabs["NDS"]
+    local Tab = Shared.Tabs and (Shared.Tabs["Disasters"] or Shared.Tabs["NDS"])
     if not Tab then return end
 
     local leftCol  = Tab:FindFirstChild("LeftColumn")  or Tab
@@ -147,14 +147,32 @@ return function(Shared)
         setGodPlatform(state)
     end)
 
+    -- AFK AUTO WIN FARM
+    local afkFarmConn = nil
+    MkToggle(leftCol, "AFK Auto-Win Farm", "NDS_AutoWin", 12, function(state)
+        if state then
+            setGodPlatform(true)
+            afkFarmConn = RunSvc.Heartbeat:Connect(function()
+                local hrp = getHRP()
+                if hrp and (hrp.Position - Vector3.new(-85, 188, 12)).Magnitude > 30 then
+                    hrp.CFrame = CFrame.new(-85, 188, 12)
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                end
+            end)
+            Shared.Notify("NDS Farm", "AFK Auto-Win Farm Active: Stationed at Sky Sanctuary", true)
+        else
+            if afkFarmConn then afkFarmConn:Disconnect(); afkFarmConn = nil end
+        end
+    end)
+
     -- NO FALL DAMAGE
     local noFallConn = nil
-    MkToggle(leftCol, "No Fall Damage", "NDS_NoFall", 12, function(state)
+    MkToggle(leftCol, "No Fall Damage", "NDS_NoFall", 13, function(state)
         if state then
             noFallConn = RunSvc.Heartbeat:Connect(function()
                 local hrp = getHRP()
-                if hrp and hrp.AssemblyLinearVelocity.Y < -55 then
-                    hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, -30, hrp.AssemblyLinearVelocity.Z)
+                if hrp and hrp.AssemblyLinearVelocity.Y < -50 then
+                    hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, -28, hrp.AssemblyLinearVelocity.Z)
                 end
             end)
         else
@@ -164,7 +182,7 @@ return function(Shared)
 
     -- AUTO RESCUE (FALL CATCH)
     local autoRescueConn = nil
-    MkToggle(leftCol, "Auto-Rescue (Fall Catch)", "NDS_AutoRescue", 13, function(state)
+    MkToggle(leftCol, "Auto-Rescue (Fall Catch)", "NDS_AutoRescue", 14, function(state)
         if state then
             autoRescueConn = RunSvc.Heartbeat:Connect(function()
                 local hrp = getHRP()
@@ -181,7 +199,7 @@ return function(Shared)
 
     -- WALK ON WATER / ACID
     local waterWalkPart = nil
-    MkToggle(leftCol, "Walk on Water / Ocean", "NDS_WaterWalk", 14, function(state)
+    MkToggle(leftCol, "Walk on Water / Ocean", "NDS_WaterWalk", 15, function(state)
         if state then
             if not waterWalkPart or not waterWalkPart.Parent then
                 waterWalkPart = Instance.new("Part")
@@ -245,7 +263,6 @@ return function(Shared)
     end)
 
     -- DISASTER HIGHLIGHT CHAMS
-    local disasterHL = nil
     MkToggle(rightCol, "Highlight Falling Disasters", "NDS_HighlightThreats", 12, function(state)
         if state then
             task.spawn(function()
