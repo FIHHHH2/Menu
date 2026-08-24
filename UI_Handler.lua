@@ -1014,7 +1014,7 @@ return function(Shared)
     local isNDS = (game.PlaceId == 189707 or game.GameId == 65241)
     if Shared.IsNDS ~= nil then isNDS = Shared.IsNDS end
 
-    local isBladeBall = (game.PlaceId == 13772394625 or game.PlaceId == 14732610803 or game.PlaceId == 15131065025 or game.PlaceId == 15264892126 or game.PlaceId == 17135832729 or game.PlaceId == 15552588147 or game.GameId == 4777817887)
+    local isBladeBall = (game.PlaceId == 13772394625 or game.PlaceId == 14732610803 or game.PlaceId == 15131065025 or game.PlaceId == 15264892126 or game.PlaceId == 17135832729 or game.PlaceId == 15552588147 or game.GameId == 4777817887 or workspace:FindFirstChild("Balls") ~= nil or workspace:FindFirstChild("Alive") ~= nil)
     if Shared.IsBladeBall ~= nil then isBladeBall = Shared.IsBladeBall end
 
     local tabDefs = {
@@ -1039,40 +1039,23 @@ return function(Shared)
 
     local function switchTab(name)
         if activeTab == name then return end
-        local oldTabName = activeTab
         activeTab = name
         NavTabLabel.Text = name
 
-        -- Animate outgoing tab out
-        if oldTabName and Tabs[oldTabName] then
-            local oldFrame = Tabs[oldTabName]
-            local outTween = TweenService:Create(oldFrame, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                Position = UDim2.new(0, -14, 0, 0)
-            })
-            outTween:Play()
-            task.delay(0.14, function()
-                if activeTab ~= oldTabName then
-                    oldFrame.Visible = false
-                end
-            end)
-        end
+        ContentArea.CanvasPosition = Vector2.zero
 
-        -- Animate incoming tab in with smooth slide transition
         for tName, tFrame in pairs(Tabs) do
             if tName == name then
+                tFrame.Position = UDim2.new(0, 0, 0, 0)
                 tFrame.Visible = true
-                tFrame.Position = UDim2.new(0, 16, 0, 0)
-                TweenService:Create(tFrame, TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                    Position = UDim2.new(0, 0, 0, 0)
-                }):Play()
-            elseif tName ~= oldTabName then
+            else
                 tFrame.Visible = false
             end
         end
 
         for tName, tBtn in pairs(TabBtns) do
             if tName == name then
-                TweenService:Create(tBtn, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                TweenService:Create(tBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
                     BackgroundColor3 = C.TabActiveBg,
                     TextColor3       = C.TabActiveText,
                     BorderColor3     = C.WinBorder
