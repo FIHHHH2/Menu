@@ -123,6 +123,16 @@ return function(Shared)
     Shared.Flags["CustomCoreUI"] = true
 
     local function restoreDefaultRobloxCoreUI()
+        -- Re-enable native TopBar ScreenGuis
+        pcall(function()
+            local topbarFolder = CoreGui:FindFirstChild("TopBarApp")
+            if topbarFolder then
+                local topbarGui   = topbarFolder:FindFirstChild("TopBarApp")
+                local topbarScrim = topbarFolder:FindFirstChild("TopBarScrim")
+                if topbarGui   then topbarGui.Enabled   = true end
+                if topbarScrim then topbarScrim.Enabled = true end
+            end
+        end)
         pcall(function()
             StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, true)
         end)
@@ -175,14 +185,15 @@ return function(Shared)
             end
         end)
 
-        -- 1. TopBarApp (Hide native TopBar completely so ChatBar serves as the unified TopBar)
+        -- 1. TopBarApp (Disable both ScreenGuis so chat bar replaces it completely)
         pcall(function()
-            local topbar = CoreGui:FindFirstChild("TopBarApp")
-            if topbar then
-                local topbarApp = topbar:FindFirstChild("TopBarApp")
-                if topbarApp then
-                    topbarApp.Visible = not customCoreEnabled
-                end
+            local topbarFolder = CoreGui:FindFirstChild("TopBarApp")
+            if topbarFolder then
+                local topbarGui  = topbarFolder:FindFirstChild("TopBarApp")
+                local topbarScrim = topbarFolder:FindFirstChild("TopBarScrim")
+                local shouldHide  = customCoreEnabled
+                if topbarGui  then topbarGui.Enabled  = not shouldHide end
+                if topbarScrim then topbarScrim.Enabled = not shouldHide end
             end
         end)
 
@@ -1506,8 +1517,8 @@ return function(Shared)
 
     local chatWindow = Instance.new("Frame")
     chatWindow.Name = "Fih_CustomChat"
-    chatWindow.Size = UDim2.new(0, 420, 0, 290)
-    chatWindow.Position = UDim2.new(0, 10, 0, 4)
+    chatWindow.Size = UDim2.new(1, 0, 0, 290)
+    chatWindow.Position = UDim2.new(0, 0, 0, 0)
     chatWindow.BackgroundColor3 = C.BodyBg
     chatWindow.BackgroundTransparency = 0.45
     chatWindow.BorderSizePixel = 1
@@ -1534,7 +1545,7 @@ return function(Shared)
     chatTitleCorner.CornerRadius = UDim.new(0, 0)
     chatTitleCorner.Parent = chatTitleBar
 
-    -- Left Navigation Integrated Controls: [Roblox] [≡] [🎙]
+    -- Left Navigation: [Roblox] [≡] [🎙]
     local leftNavHolder = Instance.new("Frame")
     leftNavHolder.Size = UDim2.new(0, 78, 0, 20)
     leftNavHolder.Position = UDim2.new(0, 4, 0, 3)
@@ -1542,7 +1553,7 @@ return function(Shared)
     leftNavHolder.ZIndex = 42
     leftNavHolder.Parent = chatTitleBar
 
-    -- 1. [Roblox Logo] Button (Toggles Pause / Escape Menu)
+    -- 1. [Roblox Logo] Button
     local rbxLogoBtn = Instance.new("ImageButton")
     rbxLogoBtn.Size = UDim2.new(0, 22, 0, 20)
     rbxLogoBtn.Position = UDim2.new(0, 0, 0, 0)
@@ -1557,12 +1568,11 @@ return function(Shared)
     registerThemed(rbxLogoBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", ImageColor3 = "BtnText" })
 
     rbxLogoBtn.MouseButton1Click:Connect(function()
-        if not triggerNativeButton("IconHitArea") then
-            pcall(function() GuiService:TogglePauseMenu() end)
-        end
+        -- GuiService:TogglePauseMenu always works regardless of topbar state
+        pcall(function() GuiService:TogglePauseMenu() end)
     end)
 
-    -- 2. [≡] Three Lines Menu Button (Toggles Nine-Dot / In-game Quick Menu)
+    -- 2. [≡] Three Lines Menu Button
     local menuBtn = Instance.new("TextButton")
     menuBtn.Size = UDim2.new(0, 22, 0, 20)
     menuBtn.Position = UDim2.new(0, 26, 0, 0)
@@ -1578,9 +1588,8 @@ return function(Shared)
     registerThemed(menuBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
 
     menuBtn.MouseButton1Click:Connect(function()
-        if not triggerNativeButton("IconHitArea_nine_dot") then
-            pcall(function() GuiService:TogglePauseMenu() end)
-        end
+        -- Same as Roblox button - both open the in-game menu
+        pcall(function() GuiService:TogglePauseMenu() end)
     end)
 
     -- 3. [🎙] Voice Chat Mute/Unmute Button
@@ -1600,7 +1609,16 @@ return function(Shared)
 
     local isMicMuted = true
     vcBtn.MouseButton1Click:Connect(function()
-        triggerNativeButton("IconHitArea_toggle_mic_mute")
+        -- Re-enable TopBar momentarily, click the mic, hide again
+        local topbarFolder = CoreGui:FindFirstChild("TopBarApp")
+        local topbarGui = topbarFolder and topbarFolder:FindFirstChild("TopBarApp")
+        if topbarGui then topbarGui.Enabled = true end
+        task.delay(0.05, function()
+            triggerNativeButton("IconHitArea_toggle_mic_mute")
+            task.delay(0.1, function()
+                if topbarGui then topbarGui.Enabled = false end
+            end)
+        end)
         isMicMuted = not isMicMuted
         vcBtn.TextColor3 = isMicMuted and C.BtnText or Color3.fromRGB(0, 220, 140)
     end)
