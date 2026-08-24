@@ -204,42 +204,21 @@ return function(Shared)
             end
         end)
 
-        -- 2. ExperienceChat (Semi-transparent Top Tab Bar, Native Input Row Alignment)
+        -- 2. ExperienceChat (Clean Glass Backdrop & 0px Squircles, Preserves Native Layout)
         pcall(function()
             local expChat = CoreGui:FindFirstChild("ExperienceChat")
-            if expChat and expChat:FindFirstChild("appLayout") then
-                local app = expChat.appLayout
-
-                local topPanel = app:FindFirstChild("topPanel")
-                if topPanel then
-                    topPanel.BackgroundColor3       = cardBg
-                    topPanel.BackgroundTransparency = 0.25
-                    topPanel.BorderSizePixel        = 1
-                    topPanel.BorderColor3           = borderCol
-                    for _, lbl in ipairs(topPanel:GetDescendants()) do
-                        if lbl:IsA("TextLabel") or lbl:IsA("TextButton") then
-                            lbl.TextColor3 = textCol
-                            lbl.Font = Enum.Font.Code
-                        end
-                    end
-                end
-
-                local chatWindow = app:FindFirstChild("chatWindow")
-                if chatWindow then
-                    chatWindow.BackgroundColor3       = bgCol
-                    chatWindow.BackgroundTransparency = 0.15
-                    chatWindow.BorderSizePixel        = 1
-                    chatWindow.BorderColor3           = borderCol
-                end
-
+            if expChat then
                 for _, d in ipairs(expChat:GetDescendants()) do
                     if d:IsA("UICorner") then d.CornerRadius = UDim.new(0, 0) end
                     if d:IsA("ScrollingFrame") then
                         d.ScrollBarThickness = 0
                         d.ScrollBarImageTransparency = 1
                     end
-                    if d:IsA("ImageLabel") or d:IsA("ImageButton") or d:IsA("TextButton") or d:IsA("TextBox") then
+                    if d:IsA("TextLabel") or d:IsA("ImageLabel") or d:IsA("ImageButton") or d:IsA("TextButton") or d:IsA("TextBox") then
                         d.Visible = true
+                        if d.Name == "Icon" or d.Name == "Children" then
+                            pcall(function() d.FontFace = Font.fromName("BuilderIcons") end)
+                        end
                     end
                 end
             end
@@ -1299,7 +1278,7 @@ return function(Shared)
     lbWindow.Size = UDim2.new(0, 230, 0, 360)
     lbWindow.Position = UDim2.new(1, -242, 0, 48)
     lbWindow.BackgroundColor3 = C.BodyBg
-    lbWindow.BackgroundTransparency = 0.25
+    lbWindow.BackgroundTransparency = 0.50
     lbWindow.BorderSizePixel = 1
     lbWindow.BorderColor3 = C.WinBorder
     lbWindow.ClipsDescendants = true
@@ -1311,7 +1290,7 @@ return function(Shared)
     local lbTitleBar = Instance.new("Frame")
     lbTitleBar.Size = UDim2.new(1, 0, 0, 24)
     lbTitleBar.BackgroundColor3 = C.TitleBar
-    lbTitleBar.BackgroundTransparency = 0.2
+    lbTitleBar.BackgroundTransparency = 0.40
     lbTitleBar.BorderSizePixel = 1
     lbTitleBar.BorderColor3 = C.WinBorder
     lbTitleBar.ZIndex = 41
@@ -1451,7 +1430,7 @@ return function(Shared)
             local row = Instance.new("Frame")
             row.Size = UDim2.new(1, 0, 0, 28)
             row.BackgroundColor3 = C.RowBg
-            row.BackgroundTransparency = 0.35
+            row.BackgroundTransparency = 0.55
             row.BorderSizePixel = 1
             row.BorderColor3 = C.RowBorder
             row.LayoutOrder = i
