@@ -481,14 +481,28 @@ return function(Shared)
     registerThemed(Sidebar, { BackgroundColor3 = "BodyBg" })
 
     local CELL = 9
-    for r = 0, 50 do for c = 0, 11 do
-        local cell = Instance.new("Frame")
-        cell.Size = UDim2.new(0,CELL,0,CELL); cell.Position = UDim2.new(0,c*CELL,0,r*CELL)
-        cell.BorderSizePixel = 0
-        cell.BackgroundColor3 = ((r+c)%2==0) and C.SidebarCellA or C.SidebarCellB
-        cell.Parent = Sidebar
-        registerThemed(cell, { BackgroundColor3 = ((r+c)%2==0) and "SidebarCellA" or "SidebarCellB" })
-    end end
+    local cellCache = {}
+    local function updateSidebarCells()
+        local targetH = math.max(Sidebar.AbsoluteSize.Y, 1500)
+        local maxR = math.ceil(targetH / CELL) + 4
+        for r = 0, maxR do
+            for c = 0, 11 do
+                local key = r * 12 + c
+                if not cellCache[key] then
+                    local cell = Instance.new("Frame")
+                    cell.Size = UDim2.new(0, CELL, 0, CELL)
+                    cell.Position = UDim2.new(0, c * CELL, 0, r * CELL)
+                    cell.BorderSizePixel = 0
+                    cell.BackgroundColor3 = ((r + c) % 2 == 0) and C.SidebarCellA or C.SidebarCellB
+                    cell.Parent = Sidebar
+                    cellCache[key] = cell
+                    registerThemed(cell, { BackgroundColor3 = ((r + c) % 2 == 0) and "SidebarCellA" or "SidebarCellB" })
+                end
+            end
+        end
+    end
+    updateSidebarCells()
+    Sidebar:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateSidebarCells)
 
     local SBorder = Instance.new("Frame")
     SBorder.Size = UDim2.new(0,2,1,0); SBorder.Position = UDim2.new(1,-2,0,0)

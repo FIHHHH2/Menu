@@ -1,51 +1,55 @@
 -- NDS_Functions.lua
--- Natural Disaster Survival Ultimate Feature Suite for Antigravity Menu
+-- Natural Disaster Survival Ultimate Feature Suite (Aligned with Native Menu Styling)
 
 return function(Shared)
-    local Player      = Shared.Player
-    local Services    = Shared.Services
-    local TweenSvc    = Services.TweenService
-    local RunSvc      = Services.RunService
-    local Workspace   = Services.Workspace
-    local Http        = Services.Http
-    local CoreGui     = Services.CoreGui
+    local Players      = Shared.Services.Players
+    local RunService   = Shared.Services.RunService
+    local UserInput    = Shared.Services.UserInput
+    local TweenService = Shared.Services.TweenService
+    local Workspace    = Shared.Services.Workspace
+    local Lighting     = Shared.Services.Workspace.Parent:GetService("Lighting")
 
-    local Tab = Shared.Tabs and (Shared.Tabs["Disasters"] or Shared.Tabs["NDS"])
-    if not Tab then return end
+    local Player    = Shared.Player
+    local Tabs      = Shared.Tabs or {}
+    local QuadCols  = Shared.QuadCols or {}
+    local MkSection = Shared.MakeSection or function() end
+    local MkToggle  = Shared.MakeToggle  or function() return Instance.new("Frame"), function() end end
+    local MkSlider  = Shared.MakeSlider  or function() return Instance.new("Frame") end
+    local MkButton  = Shared.MakeButton  or function() return Instance.new("TextButton") end
 
-    local leftCol  = Tab:FindFirstChild("LeftColumn")  or Tab
-    local rightCol = Tab:FindFirstChild("RightColumn") or Tab
+    local tab  = Tabs["Disasters"] or Tabs["NDS"]
+    local cols = QuadCols["Disasters"] or QuadCols["NDS"]
+    if not tab or not cols then return end
 
-    local MkSection = Shared.MkSection or function(p, t, o) end
-    local MkToggle  = Shared.MkToggle  or function(p, t, f, o, cb) end
-    local MkButton  = Shared.MkButton  or function(p, t, o, cb) end
-    local MkSlider  = Shared.MkSlider  or function(p, t, c, mi, ma, d, o, cb) end
+    local leftCol  = cols.Left
+    local rightCol = cols.Right
 
-    local function getHRP()
-        return Shared.HumanoidRP or (Player.Character and Player.Character:FindFirstChild("HumanoidRootPart"))
-    end
+    local function getChar()  return Shared.Character or Player.Character end
+    local function getHRP()   local c = getChar(); return c and c:FindFirstChild("HumanoidRootPart") end
+    local function getHum()   local c = getChar(); return c and c:FindFirstChildOfClass("Humanoid") end
 
-    local function getHum()
-        return Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-    end
+    -- ── DISASTER RADAR BANNER ─────────────────────────────────────
+    MkSection(leftCol, "Active Disaster Radar", 1)
 
-    -- ── DISASTER DETECTOR & NOTIFIER ──────────────────────────────
-    MkSection(leftCol, "Disaster Radar & Tracker", 1)
+    local bannerFrame = Instance.new("Frame")
+    bannerFrame.Name                  = "NDS_DisasterBanner"
+    bannerFrame.Size                  = UDim2.new(1, 0, 0, 26)
+    bannerFrame.BackgroundColor3      = Color3.fromRGB(24, 28, 38)
+    bannerFrame.BorderSizePixel       = 1
+    bannerFrame.BorderColor3          = Color3.fromRGB(0, 160, 255)
+    bannerFrame.LayoutOrder           = 2
+    bannerFrame.Parent                = leftCol
+
+    local bannerText = Instance.new("TextLabel")
+    bannerText.Size                   = UDim2.new(1, 0, 1, 0)
+    bannerText.BackgroundTransparency = 1
+    bannerText.Text                   = "⚠ Active: Scanning..."
+    bannerText.TextColor3             = Color3.fromRGB(0, 220, 140)
+    bannerText.Font                   = Enum.Font.Code
+    bannerText.TextSize               = 11
+    bannerText.Parent                 = bannerFrame
 
     local activeDisaster = "Scanning..."
-    local disasterLabel = Instance.new("TextLabel")
-    disasterLabel.Name                  = "NDS_DisasterBanner"
-    disasterLabel.Size                  = UDim2.new(1, 0, 0, 28)
-    disasterLabel.BackgroundColor3      = Color3.fromRGB(24, 28, 38)
-    disasterLabel.BorderSizePixel       = 1
-    disasterLabel.BorderColor3          = Color3.fromRGB(0, 160, 255)
-    disasterLabel.Text                  = "⚠ Active: Scanning..."
-    disasterLabel.TextColor3            = Color3.fromRGB(0, 220, 140)
-    disasterLabel.Font                  = Enum.Font.GothamBold
-    disasterLabel.TextSize              = 11
-    disasterLabel.LayoutOrder           = 2
-    disasterLabel.Parent                = leftCol
-
     local function scanDisaster()
         local detected = nil
         local pgui = Player:FindFirstChild("PlayerGui")
@@ -87,25 +91,25 @@ return function(Shared)
 
     task.spawn(function()
         while true do
-            task.wait(2.5)
+            task.wait(2)
             local d = scanDisaster()
             if d ~= activeDisaster then
                 activeDisaster = d
-                disasterLabel.Text = "⚠ Active: " .. d
+                bannerText.Text = "⚠ Active: " .. d
                 if d ~= "Intermission / Safe" then
-                    disasterLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
-                    Shared.Notify("NDS Disaster", "Disaster Alert: " .. d, false)
+                    bannerText.TextColor3 = Color3.fromRGB(255, 80, 80)
+                    Shared.Notify("Disaster Radar", "Alert: " .. d .. " has begun!", false)
                 else
-                    disasterLabel.TextColor3 = Color3.fromRGB(0, 220, 140)
+                    bannerText.TextColor3 = Color3.fromRGB(0, 220, 140)
                 end
             end
         end
     end)
 
-    -- ── SURVIVAL & ANTI-FALL SUITE ────────────────────────────────
-    MkSection(leftCol, "Anti-Fall & Defense Suite", 10)
+    -- ── LEFT COLUMN: DEFENSE & ANTI-FALL SUITE ────────────────────
+    MkSection(leftCol, "Anti-Fall & Hazard Defense", 10)
 
-    -- DYNAMIC ANTI-FALL STEP GUARD (Spawns stepping pad under feet when falling)
+    -- 1. Smart Anti-Fall (Step Guard)
     local antiFallPad = nil
     local antiFallConn = nil
     MkToggle(leftCol, "Smart Anti-Fall (Step Guard)", "NDS_SmartAntiFall", 11, function(state)
@@ -113,7 +117,7 @@ return function(Shared)
             if not antiFallPad or not antiFallPad.Parent then
                 antiFallPad = Instance.new("Part")
                 antiFallPad.Name = "NDS_AntiFallStep"
-                antiFallPad.Size = Vector3.new(12, 1, 12)
+                antiFallPad.Size = Vector3.new(14, 1, 14)
                 antiFallPad.Anchored = true
                 antiFallPad.CanCollide = true
                 antiFallPad.Transparency = 0.7
@@ -121,11 +125,10 @@ return function(Shared)
                 antiFallPad.Material = Enum.Material.Forcefield
                 antiFallPad.Parent = Workspace
             end
-            antiFallConn = RunSvc.Heartbeat:Connect(function()
+            antiFallConn = RunService.Heartbeat:Connect(function()
                 local hrp = getHRP()
                 local hum = getHum()
                 if hrp and hum and antiFallPad and antiFallPad.Parent then
-                    -- If character is in freefall or stepped over void
                     if hum.FloorMaterial == Enum.Material.Air and hrp.AssemblyLinearVelocity.Y < -20 then
                         antiFallPad.Position = Vector3.new(hrp.Position.X, hrp.Position.Y - 3.2, hrp.Position.Z)
                         antiFallPad.CanCollide = true
@@ -134,18 +137,18 @@ return function(Shared)
                     end
                 end
             end)
-            Shared.Notify("NDS Anti-Fall", "Smart Anti-Fall Active: Spawns stepping pad during falls", true)
+            Shared.Notify("Anti-Fall", "Step Guard enabled: Spawns floor during falls", true)
         else
             if antiFallConn then antiFallConn:Disconnect(); antiFallConn = nil end
             if antiFallPad then antiFallPad:Destroy(); antiFallPad = nil end
         end
     end)
 
-    -- NO FALL DAMAGE
+    -- 2. No Fall Damage
     local noFallConn = nil
     MkToggle(leftCol, "No Fall Damage (Dampener)", "NDS_NoFall", 12, function(state)
         if state then
-            noFallConn = RunSvc.Heartbeat:Connect(function()
+            noFallConn = RunService.Heartbeat:Connect(function()
                 local hrp = getHRP()
                 if hrp and hrp.AssemblyLinearVelocity.Y < -48 then
                     hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, -25, hrp.AssemblyLinearVelocity.Z)
@@ -156,16 +159,16 @@ return function(Shared)
         end
     end)
 
-    -- AUTO-RESCUE (VOID & OCEAN RESCUE)
+    -- 3. Auto-Rescue (Ocean / Void Catch)
     local autoRescueConn = nil
-    MkToggle(leftCol, "Auto-Rescue (Ocean / Void Catch)", "NDS_AutoRescue", 13, function(state)
+    MkToggle(leftCol, "Auto-Rescue (Ocean Catch)", "NDS_AutoRescue", 13, function(state)
         if state then
-            autoRescueConn = RunSvc.Heartbeat:Connect(function()
+            autoRescueConn = RunService.Heartbeat:Connect(function()
                 local hrp = getHRP()
                 if hrp and hrp.Position.Y < 40 then
                     hrp.CFrame = CFrame.new(-85, 58, 12)
                     hrp.AssemblyLinearVelocity = Vector3.zero
-                    Shared.Notify("NDS Rescue", "Saved from drowning / void!", true)
+                    Shared.Notify("Rescue", "Saved from ocean drowning / void!", true)
                 end
             end)
         else
@@ -173,11 +176,11 @@ return function(Shared)
         end
     end)
 
-    -- ANTI-FLING & TORNADO STABILIZER
+    -- 4. Anti-Fling & Tornado Stabilizer
     local antiFlingConn = nil
-    MkToggle(leftCol, "Anti-Fling & Tornado Stabilizer", "NDS_AntiFling", 14, function(state)
+    MkToggle(leftCol, "Anti-Fling & Wind Stabilizer", "NDS_AntiFling", 14, function(state)
         if state then
-            antiFlingConn = RunSvc.Heartbeat:Connect(function()
+            antiFlingConn = RunService.Heartbeat:Connect(function()
                 local hrp = getHRP()
                 if hrp then
                     hrp.AssemblyAngularVelocity = Vector3.zero
@@ -186,21 +189,21 @@ return function(Shared)
                     end
                 end
             end)
-            Shared.Notify("NDS Defense", "Anti-Fling active: Immune to wind & explosion displacement", true)
+            Shared.Notify("Defense", "Anti-Fling active: Immune to wind & explosion fling", true)
         else
             if antiFlingConn then antiFlingConn:Disconnect(); antiFlingConn = nil end
         end
     end)
 
-    -- ACID RAIN FORCEFIELD UMBRELLA
+    -- 5. Acid Rain Forcefield Umbrella
     local acidUmbrella = nil
     local umbrellaConn = nil
-    MkToggle(leftCol, "Acid Rain Forcefield Umbrella", "NDS_AcidShield", 15, function(state)
+    MkToggle(leftCol, "Acid Rain Umbrella Shield", "NDS_AcidShield", 15, function(state)
         if state then
             if not acidUmbrella or not acidUmbrella.Parent then
                 acidUmbrella = Instance.new("Part")
                 acidUmbrella.Name = "NDS_AcidUmbrella"
-                acidUmbrella.Size = Vector3.new(8, 0.5, 8)
+                acidUmbrella.Size = Vector3.new(10, 0.5, 10)
                 acidUmbrella.Anchored = true
                 acidUmbrella.CanCollide = true
                 acidUmbrella.Transparency = 0.5
@@ -208,38 +211,38 @@ return function(Shared)
                 acidUmbrella.Material = Enum.Material.Forcefield
                 acidUmbrella.Parent = Workspace
             end
-            umbrellaConn = RunSvc.Heartbeat:Connect(function()
+            umbrellaConn = RunService.Heartbeat:Connect(function()
                 local hrp = getHRP()
                 if hrp and acidUmbrella and acidUmbrella.Parent then
-                    acidUmbrella.CFrame = hrp.CFrame * CFrame.new(0, 4.2, 0)
+                    acidUmbrella.CFrame = hrp.CFrame * CFrame.new(0, 4.4, 0)
                 end
             end)
-            Shared.Notify("NDS Shield", "Forcefield Umbrella active: Blocks acid rain & debris", true)
+            Shared.Notify("Shield", "Forcefield Umbrella active: Deflects acid rain & debris", true)
         else
             if umbrellaConn then umbrellaConn:Disconnect(); umbrellaConn = nil end
             if acidUmbrella then acidUmbrella:Destroy(); acidUmbrella = nil end
         end
     end)
 
-    -- GREEN BALLOON GLIDE
+    -- 6. Green Balloon Glide
     local balloonConn = nil
-    MkToggle(leftCol, "Green Balloon Float Glide", "NDS_BalloonGlide", 16, function(state)
+    MkToggle(leftCol, "Green Balloon Float Physics", "NDS_BalloonGlide", 16, function(state)
         if state then
-            balloonConn = RunSvc.Heartbeat:Connect(function()
+            balloonConn = RunService.Heartbeat:Connect(function()
                 local hrp = getHRP()
                 local hum = getHum()
                 if hrp and hum and hum.FloorMaterial == Enum.Material.Air and hrp.AssemblyLinearVelocity.Y < -8 then
                     hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X * 1.01, -12, hrp.AssemblyLinearVelocity.Z * 1.01)
                 end
             end)
-            Shared.Notify("NDS Float", "Balloon Glide active: Low-gravity floating jumps", true)
+            Shared.Notify("Physics", "Balloon Glide active: Low-gravity floating jumps", true)
         else
             if balloonConn then balloonConn:Disconnect(); balloonConn = nil end
         end
     end)
 
-    -- ── RIGHT COLUMN: TELEPORTS & WORLD MODS ───────────────────────
-    MkSection(rightCol, "Sanctuary & Teleports", 1)
+    -- ── RIGHT COLUMN: SANCTUARY & TELEPORTS ────────────────────────
+    MkSection(rightCol, "Sanctuary & Auto-Win", 1)
 
     local godPlat = nil
     local function setGodPlatform(enable)
@@ -256,7 +259,7 @@ return function(Shared)
                 godPlat.Transparency = 0.4
                 godPlat.Parent = Workspace
 
-                -- Safety rail
+                -- Safety barrier
                 for _, offset in ipairs({ Vector3.new(0, 3, 22), Vector3.new(0, 3, -22), Vector3.new(22, 3, 0), Vector3.new(-22, 3, 0) }) do
                     local r = Instance.new("Part")
                     r.Size = (offset.X == 0) and Vector3.new(45, 6, 1) or Vector3.new(1, 6, 45)
@@ -271,62 +274,63 @@ return function(Shared)
             end
             local hrp = getHRP()
             if hrp then hrp.CFrame = CFrame.new(-85, 188, 12) end
-            Shared.Notify("NDS Survival", "Teleported to Sky Sanctuary (Immune to all disasters)", true)
+            Shared.Notify("Survival", "Teleported to Sky Sanctuary (Safe from all disasters)", true)
         else
             if godPlat then godPlat:Destroy(); godPlat = nil end
         end
     end
 
-    MkToggle(rightCol, "Sky Sanctuary (God Platform)", "NDS_GodPlat", 2, function(state)
+    MkToggle(rightCol, "Sky Sanctuary Platform", "NDS_GodPlat", 2, function(state)
         setGodPlatform(state)
     end)
 
-    -- AFK AUTO WIN FARM
     local afkFarmConn = nil
     MkToggle(rightCol, "AFK Auto-Win Farm", "NDS_AutoWin", 3, function(state)
         if state then
             setGodPlatform(true)
-            afkFarmConn = RunSvc.Heartbeat:Connect(function()
+            afkFarmConn = RunService.Heartbeat:Connect(function()
                 local hrp = getHRP()
                 if hrp and (hrp.Position - Vector3.new(-85, 188, 12)).Magnitude > 30 then
                     hrp.CFrame = CFrame.new(-85, 188, 12)
                     hrp.AssemblyLinearVelocity = Vector3.zero
                 end
             end)
-            Shared.Notify("NDS Farm", "AFK Auto-Win Farm Active: Stationed at Sky Sanctuary", true)
+            Shared.Notify("Auto-Win", "AFK Farm Active: Stationed at Sky Sanctuary", true)
         else
             if afkFarmConn then afkFarmConn:Disconnect(); afkFarmConn = nil end
         end
     end)
 
-    MkButton(rightCol, "[ 🏝 Teleport to Island ]", 4, function()
+    MkButton(rightCol, "🏝  Teleport to Island Center", 4, function()
         local hrp = getHRP()
         if hrp then
             hrp.CFrame = CFrame.new(-85, 52, 12)
-            Shared.Notify("NDS TP", "Teleported to Island Center", true)
+            Shared.Notify("Teleport", "Teleported to Island Center", true)
         end
     end)
 
-    MkButton(rightCol, "[ 🛡 Teleport to Sky Safe Spot ]", 5, function()
+    MkButton(rightCol, "🛡  Teleport to Sky Sanctuary", 5, function()
         local hrp = getHRP()
         if hrp then
             if not godPlat or not godPlat.Parent then setGodPlatform(true) end
             hrp.CFrame = CFrame.new(-85, 188, 12)
-            Shared.Notify("NDS TP", "Teleported to Sky Sanctuary", true)
+            Shared.Notify("Teleport", "Teleported to Sky Sanctuary", true)
         end
     end)
 
-    MkButton(rightCol, "[ 🏰 Teleport to Spawn Tower ]", 6, function()
+    MkButton(rightCol, "🏰  Teleport to Spawn Tower", 6, function()
         local hrp = getHRP()
         if hrp then
             hrp.CFrame = CFrame.new(-275, 180, 380)
-            Shared.Notify("NDS TP", "Teleported to Spawn Tower", true)
+            Shared.Notify("Teleport", "Teleported to Spawn Tower", true)
         end
     end)
 
-    -- WALK ON WATER / ACID
+    MkSection(rightCol, "World & Visual Modifiers", 10)
+
+    -- Walk on Ocean / Water
     local waterWalkPart = nil
-    MkToggle(rightCol, "Walk on Water / Ocean", "NDS_WaterWalk", 7, function(state)
+    MkToggle(rightCol, "Walk on Ocean / Water", "NDS_WaterWalk", 11, function(state)
         if state then
             if not waterWalkPart or not waterWalkPart.Parent then
                 waterWalkPart = Instance.new("Part")
@@ -339,30 +343,29 @@ return function(Shared)
                 waterWalkPart.BrickColor = BrickColor.new("Cyan")
                 waterWalkPart.Parent = Workspace
             end
+            Shared.Notify("World", "Walk on Ocean enabled", true)
         else
             if waterWalkPart then waterWalkPart:Destroy(); waterWalkPart = nil end
         end
     end)
 
-    MkSection(rightCol, "Visuals & Hazard Defense", 10)
-
-    -- STORM & BLIZZARD DEFOGGER
-    MkToggle(rightCol, "Clear Blizzard / Sandstorm Fog", "NDS_Defog", 11, function(state)
-        local lighting = Services.Workspace.Parent:GetService("Lighting")
+    -- Clear Storm & Blizzard Fog
+    MkToggle(rightCol, "Clear Blizzard & Storm Fog", "NDS_Defog", 12, function(state)
         if state then
-            lighting.FogEnd = 100000
-            for _, cc in ipairs(lighting:GetChildren()) do
+            Lighting.FogEnd = 100000
+            for _, cc in ipairs(Lighting:GetChildren()) do
                 if cc:IsA("ColorCorrectionEffect") or cc:IsA("Atmosphere") or cc:IsA("BlurEffect") then
                     pcall(function() cc.Enabled = false end)
                 end
             end
+            Shared.Notify("Visual", "Storm fog and atmosphere blur cleared", true)
         else
-            lighting.FogEnd = 1000
+            Lighting.FogEnd = 1000
         end
     end)
 
-    -- DISASTER HIGHLIGHT CHAMS
-    MkToggle(rightCol, "Highlight Falling Disasters", "NDS_HighlightThreats", 12, function(state)
+    -- Highlight Falling Threats
+    MkToggle(rightCol, "Highlight Falling Threats", "NDS_HighlightThreats", 13, function(state)
         if state then
             task.spawn(function()
                 while Shared.Flags["NDS_HighlightThreats"] do
