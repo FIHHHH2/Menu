@@ -437,66 +437,132 @@ return function(Shared)
         if lastBallPos then
             local timeDelta = math.clamp(now - lastBallTime, 0.001, 0.1)
             local calcVel = (ballPos - lastBallPos) / timeDelta
-            if calcVel.Magnitude > vel.Magnitude then
-                vel = calcVel
+    -- ── LIVE NETWORK PING & LATENCY MONITOR ──────────────────────
+    local function getLivePingSec()
+        local pingSec = 0.055
+        pcall(function()
+            local stats = game:GetService("Stats")
+            if stats then
+                local net = stats:FindFirstChild("Network")
+                if net then
+                    local sItem = net:FindFirstChild("ServerStatsItem")
+                    if sItem then
+                        local dp = sItem:FindFirstChild("Data Ping")
+                        if dp then
+                            pingSec = dp:GetValue() / 1000
+                        end
+                    end
+                end
+                if pingSec == 0.055 and stats:FindFirstChild("PerformanceStats") then
+                    local p = stats.PerformanceStats:FindFirstChild("Ping")
+                    if p then pingSec = p:GetValue() / 1000 end
+                end
+            end
+        end)
+        return math.clamp(pingSec, 0.015, 0.350)
+    end
+
+    -- ── REAL-TIME HIGH-FREQUENCY PHYSICS CALCULATION CYCLE ────────
+    local prevVel = Vector3.zero
+    local prevBallPos = nil
+    local prevTime = os.clock()
+
+    RunService.Heartbeat:Connect(function(dt)
+        local ball = findActiveBall()
+        if not ball or not ball.Parent then
+            if statusText and statusText.Parent and statusText.Text ~= "⚡ Ball: Idle / Searching" then
+                statusText.Text = "⚡ Ball: Idle / Searching"
+                statusText.TextColor3 = Color3.fromRGB(0, 220, 140)
+                if statusFrame and statusFrame.Parent then
+                    statusFrame.BorderColor3 = Color3.fromRGB(0, 160, 255)
+                end
+            end
+            if zoneRingAdorn   then pcall(function() zoneRingAdorn:Destroy() end); zoneRingAdorn = nil end
+            if zoneSphereAdorn then pcall(function() zoneSphereAdorn:Destroy() end); zoneSphereAdorn = nil end
+            if ballHighlight   then pcall(function() ballHighlight:Destroy() end); ballHighlight = nil end
+            hasParriedCurrentVolley = false
+            return
+        end
+
+        local hrp = getHRP()
+        if not hrp then return end
+
+        local now = os.clock()
+        local myPos = hrp.Position
+        local ballPos = ball.Position
+        local dist = (myPos - ballPos).Magnitude
+
+        -- 1. True Vector Velocity & Acceleration Kinematics
+        local vel = ball.AssemblyLinearVelocity or Vector3.zero
+        local deltaSec = math.max(0.001, now - prevTime)
+        if prevBallPos then
+            local computedVel = (ballPos - prevBallPos) / deltaSec
+            if computedVel.Magnitude > vel.Magnitude then
+                vel = computedVel
             end
         end
-        lastBallPos = ballPos
-        lastBallTime = now
+
+        local acceleration = (vel - prevVel) / deltaSec
+        prevVel = vel
+        prevBallPos = ballPos
+        prevTime = now
 
         local speed = vel.Magnitude
-        local dirToMe = (myPos - ballPos).Unit
+        local toMe = (myPos - ballPos)
+        local dirToMe = (dist > 0.01) and (toMe / dist) or Vector3.zero
         local approachSpeed = (speed > 1) and vel:Dot(dirToMe) or speed
         local isTarget = isTargetingMe(ball)
 
-        -- Dynamic ping offset
-        local pingMs = Shared.Flags["BB_PingOffset"] or 45
-        local pingOffsetSec = pingMs / 1000
+        -- 2. Real-Time Network Ping & Lead Time Calculation
+        local livePingSec = getLivePingSec()
+        local userOffsetMs = Shared.Flags["BB_PingOffset"] or 45
+        local userOffsetSec = userOffsetMs / 1000
+        local oneWayPing = livePingSec * 0.5
+        local serverLeadTime = oneWayPing + userOffsetSec + 0.016 -- Compensate 1 frame + one-way packet transmission
 
-        -- Time to Impact
-        local timeToImpact = (approachSpeed > 1) and (dist / approachSpeed) or (dist / math.max(speed, 1))
+        -- 3. Projected Future Positions (2nd Order Kinematics)
+        local predictedBallPos = ballPos + (vel * serverLeadTime) + (0.5 * acceleration * (serverLeadTime ^ 2))
+        local hrpVel = hrp.AssemblyLinearVelocity or Vector3.zero
+        local predictedHrpPos = myPos + (hrpVel * serverLeadTime)
+        local predictedDist = (predictedHrpPos - predictedBallPos).Magnitude
 
-        -- Configured parry threshold
-        local customDist = Shared.Flags["BB_ParryDist"] or 30
-        local dynamicParryDistance = customDist + math.clamp(speed * (0.35 + pingOffsetSec), 0, 55)
+        -- 4. Precise Time To Impact (TTI)
+        local timeToImpact = (approachSpeed > 2) and (dist / approachSpeed) or (dist / math.max(speed, 1))
 
-        -- Status Banner update (Throttled to eliminate GUI render pipeline stutter)
+        -- 5. Status Banner Display
         if isTarget ~= lastTargetState or (now - lastUIUpdate > 0.08) then
             lastUIUpdate = now
             lastTargetState = isTarget
             local targetName = tostring(ball:GetAttribute("target") or "None")
             if isTarget then
-                statusText.Text = string.format("[ALERT] INCOMING! Dist: %dm | Spd: %d | Time: %.2fs", math.floor(dist), math.floor(speed), math.max(0, timeToImpact))
+                statusText.Text = string.format("[ALERT] INCOMING! Dist: %dm | Spd: %d | Ping: %dms | TTI: %.2fs", math.floor(dist), math.floor(speed), math.floor(livePingSec * 1000), math.max(0, timeToImpact))
                 statusText.TextColor3 = Color3.fromRGB(255, 60, 60)
                 statusFrame.BorderColor3 = Color3.fromRGB(255, 60, 60)
             else
-                statusText.Text = string.format("[SAFE] Target: %s | Dist: %dm | Spd: %d", targetName:sub(1, 10), math.floor(dist), math.floor(speed))
+                statusText.Text = string.format("[SAFE] Target: %s | Dist: %dm | Spd: %d | Ping: %dms", targetName:sub(1, 10), math.floor(dist), math.floor(speed), math.floor(livePingSec * 1000))
                 statusText.TextColor3 = Color3.fromRGB(0, 220, 140)
                 statusFrame.BorderColor3 = Color3.fromRGB(0, 160, 255)
             end
         end
 
-        -- Dynamic hit-zone radius: base distance + subtle velocity micro-adjustments
+        -- 6. Dynamic Parry Threshold Computation
         local baseDist = Shared.Flags["BB_ParryDist"] or 28
         local velScaling = Shared.Flags["BB_VelScaling"] ~= false
-        local velThreshold = Shared.Flags["BB_VelThreshold"] or 80
+        local velThreshold = Shared.Flags["BB_VelThreshold"] or 70
 
-        local velocityBonus = 0
-        local reactionWindow = 0.12 + pingOffsetSec
-
+        -- Dynamic lead compensation: As ball speed accelerates, expand the physical parry trigger sphere
+        local dynamicLeadBonus = 0
         if velScaling and approachSpeed > velThreshold then
             local excessSpeed = approachSpeed - velThreshold
-            -- Small micro-adjustment: max +6 studs extra even at ultra speeds
-            velocityBonus = math.clamp(excessSpeed * 0.035 + (approachSpeed * (pingOffsetSec * 0.1)), 0, 6)
-            -- Subtle reaction window micro-adjustment (max +0.02s)
-            reactionWindow = reactionWindow + math.clamp(excessSpeed / 4000, 0, 0.02)
+            dynamicLeadBonus = (excessSpeed * 0.08) + (approachSpeed * (serverLeadTime * 0.4))
         else
-            velocityBonus = math.clamp(approachSpeed * (pingOffsetSec * 0.05), 0, 2)
+            dynamicLeadBonus = approachSpeed * (serverLeadTime * 0.2)
         end
 
-        local dynamicParryDistance = math.clamp(baseDist + velocityBonus, 5, 100)
+        local dynamicParryDistance = math.clamp(baseDist + dynamicLeadBonus, 8, 120)
+        local dynamicReactionTime = math.clamp((baseDist / math.max(approachSpeed, 25)) + serverLeadTime, 0.08, 0.45)
 
-        -- 1. Ball Visualizer ESP & Highlight
+        -- 7. Visualizer Highlights & Adornments
         if Shared.Flags["BB_BallESP"] then
             if not ballHighlight or ballHighlight.Adornee ~= ball then
                 if ballHighlight then pcall(function() ballHighlight:Destroy() end) end
@@ -514,14 +580,12 @@ return function(Shared)
             if ballHighlight then pcall(function() ballHighlight:Destroy() end); ballHighlight = nil end
         end
 
-        -- 2. Dynamic Parry Hit-Zone Area 3D Visualizer (Ground Disc + 3D Hitbox Box)
         if Shared.Flags["BB_ParryZone"] and hrp then
             local alphaPercent = Shared.Flags["BB_ZoneAlpha"] or 55
             local transparency = alphaPercent / 100
             local themeColor = isTarget and Color3.fromRGB(255, 45, 45) or Color3.fromRGB(0, 200, 255)
             local terrain = workspace.Terrain or workspace
 
-            -- Ground Disc / Ring
             if not zoneRingAdorn or zoneRingAdorn.Adornee ~= hrp or not zoneRingAdorn.Parent then
                 if zoneRingAdorn then pcall(function() zoneRingAdorn:Destroy() end) end
                 zoneRingAdorn = Instance.new("CylinderHandleAdornment")
@@ -537,7 +601,6 @@ return function(Shared)
             zoneRingAdorn.Color3 = themeColor
             zoneRingAdorn.Transparency = math.clamp(transparency * 0.7, 0.1, 0.9)
 
-            -- 3D Volumetric Hitbox Box
             if not zoneSphereAdorn or zoneSphereAdorn.Adornee ~= hrp or not zoneSphereAdorn.Parent then
                 if zoneSphereAdorn then pcall(function() zoneSphereAdorn:Destroy() end) end
                 zoneSphereAdorn = Instance.new("BoxHandleAdornment")
@@ -556,31 +619,34 @@ return function(Shared)
             if zoneSphereAdorn then pcall(function() zoneSphereAdorn:Destroy() end); zoneSphereAdorn = nil end
         end
 
-        -- Reset parried volley flag when ball leaves or deflects away
+        -- Reset volley flag when ball is deflected or moving away
         if hasParriedCurrentVolley then
             local timeSinceParry = now - lastParryTick
-            if not isTarget or approachSpeed < -1 or timeSinceParry > 0.25 then
+            if not isTarget or approachSpeed < -2 or timeSinceParry > 0.22 then
                 hasParriedCurrentVolley = false
             end
         end
 
-        -- 3. AUTO PARRY ENGINE (Velocity & Physics-Driven)
+        -- 8. COMPREHENSIVE MULTI-FACTOR PARRY TRIGGER
         if Shared.Flags["BB_AutoParry"] then
             local shouldParry = false
 
-            -- STRICT RULE: ONLY parry if the ball is actually targeted on local player AND not already parried in this volley
             if isTarget and not hasParriedCurrentVolley then
-                -- If ball is traveling towards the player
-                if approachSpeed > 0 or speed < 5 then
-                    -- Trigger parry based on calculated time to impact or velocity-scaled distance window
-                    if dist <= dynamicParryDistance or timeToImpact <= reactionWindow then
+                -- Scenario A: Standard approach collision window
+                if approachSpeed > 1 or speed < 5 then
+                    if dist <= dynamicParryDistance or predictedDist <= dynamicParryDistance or timeToImpact <= dynamicReactionTime then
                         shouldParry = true
                     end
+                end
 
-                    -- Clash / Standoff close-range trigger (only when targeted)
-                    if Shared.Flags["BB_ClashSpam"] and dist <= 16 then
-                        shouldParry = true
-                    end
+                -- Scenario B: High speed curve ball or fast standoff
+                if Shared.Flags["BB_ClashSpam"] and dist <= 24 then
+                    shouldParry = true
+                end
+
+                -- Scenario C: Extreme curve trajectory threshold (ball within danger threshold)
+                if dist <= (baseDist * 0.85) then
+                    shouldParry = true
                 end
             end
 
@@ -597,14 +663,14 @@ return function(Shared)
 
                 if Shared.Flags["BB_AutoAbility"] then
                     local thresh = Shared.Flags["BB_AbilitySpeed"] or 140
-                    if speed >= thresh and dist < 25 then
+                    if speed >= thresh and dist < 28 then
                         executeAbility()
                     end
                 end
             end
         end
 
-        -- 3. Auto Orbit & Safe Spacing
+        -- 9. Auto Orbit & Safe Spacing
         if Shared.Flags["BB_AutoOrbit"] and isTarget then
             local targetOrbit = Shared.Flags["BB_OrbitDist"] or 35
             local hum = getHum()
