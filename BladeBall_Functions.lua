@@ -81,35 +81,38 @@ return function(Shared)
         local myHRP = getHRP()
         local myPos = myHRP and myHRP.Position or Vector3.zero
 
-        -- 1. Priority 1: Check Workspace.TrainingBalls (if player is in training area)
-        local tBalls = Workspace:FindFirstChild("TrainingBalls") or Workspace:FindFirstChild("Training")
-        if tBalls then
-            for _, b in ipairs(tBalls:GetChildren()) do
-                if b:IsA("BasePart") and b:GetAttribute("realBall") ~= false then
-                    local d = (b.Position - myPos).Magnitude
-                    if d < 120 then return b end
+        -- 1. Priority 1: Check active match balls in workspace.Balls
+        local folder = Workspace:FindFirstChild("Balls")
+        if folder and #folder:GetChildren() > 0 then
+            -- First check if any ball in folder is targeting us
+            for _, b in ipairs(folder:GetChildren()) do
+                if b:IsA("BasePart") and b.Name ~= "Temp" then
+                    if isTargetingMe(b) then return b end
                 end
             end
-        end
-
-        -- 2. Priority 2: Check active match balls in workspace.Balls
-        local folder = Workspace:FindFirstChild("Balls")
-        if folder then
-            local bestMatchBall = nil
-            local bestMatchDist = math.huge
+            -- Otherwise return closest match ball in folder
+            local bestMatchBall, minDist = nil, math.huge
             for _, b in ipairs(folder:GetChildren()) do
-                if b:IsA("BasePart") then
-                    local isReal = b:GetAttribute("realBall") == true
-                    local isTarget = isTargetingMe(b)
-                    if isReal and isTarget then return b end
+                if b:IsA("BasePart") and b.Name ~= "Temp" then
                     local d = (b.Position - myPos).Magnitude
-                    if isReal and d < bestMatchDist then
-                        bestMatchDist = d
+                    if d < minDist then
+                        minDist = d
                         bestMatchBall = b
                     end
                 end
             end
             if bestMatchBall then return bestMatchBall end
+        end
+
+        -- 2. Priority 2: Check Workspace.TrainingBalls (if in training area)
+        local tBalls = Workspace:FindFirstChild("TrainingBalls") or Workspace:FindFirstChild("Training")
+        if tBalls and #tBalls:GetChildren() > 0 then
+            for _, b in ipairs(tBalls:GetChildren()) do
+                if b:IsA("BasePart") then
+                    local d = (b.Position - myPos).Magnitude
+                    if d < 120 then return b end
+                end
+            end
         end
 
         -- 3. Priority 3: Check LobbyTraining descendants
@@ -442,9 +445,9 @@ return function(Shared)
             statusFrame.BorderColor3 = Color3.fromRGB(0, 160, 255)
         end
 
-        -- Dynamic hit-zone radius calculation based on velocity, distance slider & ping
-        local baseDist = Shared.Flags["BB_ParryDist"] or 28
-        local dynamicParryDistance = math.clamp(baseDist + math.max(approachSpeed, speed) * (0.28 + pingOffsetSec), 5, 125)
+        -- Dynamic hit-zone radius strictly based on distance slider + subtle ping compensation
+        local baseDist = Shared.Flags["BB_ParryDist"] or 25
+        local dynamicParryDistance = baseDist + math.clamp(approachSpeed * (pingOffsetSec * 0.25), 0, 5)
 
         -- 1. Ball Visualizer ESP & Highlight
         if Shared.Flags["BB_BallESP"] then
@@ -520,15 +523,15 @@ return function(Shared)
 
             -- STRICT RULE: ONLY parry if the ball is actually targeted on local player AND not already parried in this volley
             if isTarget and not hasParriedCurrentVolley then
-                -- If ball is traveling towards the player at speed
+                -- If ball is traveling towards the player
                 if approachSpeed > 0 or speed < 5 then
-                    -- Trigger parry based on calculated time to impact or velocity distance window
-                    if timeToImpact <= (0.36 + pingOffsetSec) or dist <= dynamicParryDistance then
+                    -- Trigger parry based on calculated time to impact or exact distance window
+                    if dist <= dynamicParryDistance or timeToImpact <= (0.12 + pingOffsetSec) then
                         shouldParry = true
                     end
 
                     -- Clash / Standoff close-range trigger (only when targeted)
-                    if Shared.Flags["BB_ClashSpam"] and dist <= 18 then
+                    if Shared.Flags["BB_ClashSpam"] and dist <= 16 then
                         shouldParry = true
                     end
                 end
