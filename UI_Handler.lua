@@ -190,7 +190,7 @@ return function(Shared)
             end
         end)
 
-        -- 2. Chat (ExperienceChat & TextChatService) - Clean Aero Glass, Code Font
+        -- 2. Chat (ExperienceChat & TextChatService) - Clean Aero Glass, Preserves BuilderIcons
         pcall(function()
             local TextChatService = game:GetService("TextChatService")
             local cwc = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
@@ -215,9 +215,6 @@ return function(Shared)
                     if d:IsA("ScrollingFrame") then
                         d.ScrollBarThickness = 0
                         d.ScrollBarImageTransparency = 1
-                    end
-                    if d:IsA("TextLabel") or d:IsA("TextBox") then
-                        d.Font = Enum.Font.Code
                     end
                 end
 
@@ -1267,11 +1264,10 @@ return function(Shared)
     Shared.GUI = ScreenGui; Shared.Tabs = Tabs; Shared.QuadCols = QuadCols
     Shared.MakeSection = makeSection; Shared.MakeToggle = makeToggle
     Shared.MakeSlider = makeSlider; Shared.MakeButton = makeButton
-    -- ── CUSTOM FIH UI THEMED LEADERBOARD (ZERO-CLIPPING RETRO WINDOW) ──
+    -- ── CUSTOM FIH UI THEMED LEADERBOARD (DRAGGABLE, RESIZABLE, THEME-SYNCED) ──
     local StarterGui = game:GetService("StarterGui")
     local Players    = game:GetService("Players")
 
-    -- Disable default buggy Roblox playerlist
     pcall(function()
         StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
     end)
@@ -1288,7 +1284,7 @@ return function(Shared)
     lbWindow.Parent = ScreenGui
     registerThemed(lbWindow, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
 
-    -- TitleBar
+    -- TitleBar (Movable / Draggable)
     local lbTitleBar = Instance.new("Frame")
     lbTitleBar.Size = UDim2.new(1, 0, 0, 24)
     lbTitleBar.BackgroundColor3 = C.TitleBar
@@ -1326,6 +1322,75 @@ return function(Shared)
     lbCloseBtn.MouseButton1Click:Connect(function()
         lbWindow.Visible = not lbWindow.Visible
     end)
+
+    -- Dragging Logic for Leaderboard
+    do
+        local dragging = false
+        local dragInput, dragStart, startPos
+        lbTitleBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = lbWindow.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
+                end)
+            end
+        end)
+        lbTitleBar.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                dragInput = input
+            end
+        end)
+        UserInput.InputChanged:Connect(function(input)
+            if input == dragInput and dragging then
+                local delta = input.Position - dragStart
+                lbWindow.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + delta.X,
+                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                )
+            end
+        end)
+    end
+
+    -- Resizing Grip for Leaderboard
+    do
+        local resizeGrip = Instance.new("TextButton")
+        resizeGrip.Name                   = "LBResizeGrip"
+        resizeGrip.Size                   = UDim2.new(0, 14, 0, 14)
+        resizeGrip.Position               = UDim2.new(1, -14, 1, -14)
+        resizeGrip.BackgroundTransparency = 1
+        resizeGrip.Text                   = "◢"
+        resizeGrip.TextColor3             = C.WinBorder
+        resizeGrip.Font                   = Enum.Font.Code
+        resizeGrip.TextSize               = 11
+        resizeGrip.ZIndex                 = 50
+        resizeGrip.Parent                 = lbWindow
+        registerThemed(resizeGrip, { TextColor3 = "WinBorder" })
+
+        local resizing = false
+        local rStartPos, rStartSize
+        resizeGrip.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                resizing = true
+                rStartPos = i.Position
+                rStartSize = lbWindow.AbsoluteSize
+            end
+        end)
+        UserInput.InputChanged:Connect(function(i)
+            if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+                local delta = i.Position - rStartPos
+                local newW = math.clamp(rStartSize.X + delta.X, 180, 500)
+                local newH = math.clamp(rStartSize.Y + delta.Y, 150, 800)
+                lbWindow.Size = UDim2.new(0, newW, 0, newH)
+            end
+        end)
+        UserInput.InputEnded:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                resizing = false
+            end
+        end)
+    end
 
     -- Scroll Area
     local lbScroll = Instance.new("ScrollingFrame")
@@ -1397,7 +1462,7 @@ return function(Shared)
             uName.Position = UDim2.new(0, 28, 0, 14)
             uName.BackgroundTransparency = 1
             uName.Text = "@" .. plr.Name
-            uName.TextColor3 = (plr == Players.LocalPlayer) and Color3.fromRGB(0, 220, 140) or C.BannerSub
+            uName.TextColor3 = (plr == Players.LocalPlayer) and Color3.fromRGB(0, 220, 140) or (isDark and Color3.fromRGB(120, 150, 190) or Color3.fromRGB(70, 90, 120))
             uName.Font = Enum.Font.Code
             uName.TextSize = 9
             uName.TextXAlignment = Enum.TextXAlignment.Left
@@ -1410,6 +1475,11 @@ return function(Shared)
     renderLeaderboardPlayers()
     Players.PlayerAdded:Connect(renderLeaderboardPlayers)
     Players.PlayerRemoving:Connect(renderLeaderboardPlayers)
+
+    -- Auto-refresh leaderboard rows on theme change
+    Shared.RegisterThemeCallback(function(targetTheme, isDarkMode)
+        renderLeaderboardPlayers()
+    end)
 
     -- Tab Key Toggle for Leaderboard
     UserInput.InputBegan:Connect(function(input, gpe)
