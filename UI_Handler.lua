@@ -1497,13 +1497,13 @@ return function(Shared)
     end)
 
 
-    -- ── CUSTOM WINDOWS AERO CHAT (ASCII DIAGRAM REPLICA) ───────────
+    -- ── CUSTOM WINDOWS AERO CHAT (TOPBAR INTEGRATED & DYNAMIC COLORS) ─
     local chatWindow = Instance.new("Frame")
     chatWindow.Name = "Fih_CustomChat"
-    chatWindow.Size = UDim2.new(0, 360, 0, 240)
+    chatWindow.Size = UDim2.new(0, 420, 0, 290)
     chatWindow.Position = UDim2.new(0, 10, 0, 48)
     chatWindow.BackgroundColor3 = C.BodyBg
-    chatWindow.BackgroundTransparency = 0.40
+    chatWindow.BackgroundTransparency = 0.45
     chatWindow.BorderSizePixel = 1
     chatWindow.BorderColor3 = C.WinBorder
     chatWindow.ClipsDescendants = true
@@ -1514,11 +1514,11 @@ return function(Shared)
     chatWinCorner.CornerRadius = UDim.new(0, 0)
     chatWinCorner.Parent = chatWindow
 
-    -- TitleBar ([-] [ ] [X] controls & draggable)
+    -- TitleBar (Unified Header: [-] [ ] Controls, no [X])
     local chatTitleBar = Instance.new("Frame")
-    chatTitleBar.Size = UDim2.new(1, 0, 0, 24)
+    chatTitleBar.Size = UDim2.new(1, 0, 0, 26)
     chatTitleBar.BackgroundColor3 = C.TitleBar
-    chatTitleBar.BackgroundTransparency = 0.30
+    chatTitleBar.BackgroundTransparency = 0.25
     chatTitleBar.BorderSizePixel = 1
     chatTitleBar.BorderColor3 = C.WinBorder
     chatTitleBar.ZIndex = 41
@@ -1529,28 +1529,28 @@ return function(Shared)
     chatTitleCorner.Parent = chatTitleBar
 
     local chatTitleText = Instance.new("TextLabel")
-    chatTitleText.Size = UDim2.new(1, -80, 1, 0)
-    chatTitleText.Position = UDim2.new(0, 8, 0, 0)
+    chatTitleText.Size = UDim2.new(1, -60, 1, 0)
+    chatTitleText.Position = UDim2.new(0, 10, 0, 0)
     chatTitleText.BackgroundTransparency = 1
     chatTitleText.Text = "Chat"
     chatTitleText.TextColor3 = C.TitleText
     chatTitleText.Font = Enum.Font.ArimoBold
-    chatTitleText.TextSize = 12
+    chatTitleText.TextSize = 13
     chatTitleText.TextXAlignment = Enum.TextXAlignment.Left
     chatTitleText.ZIndex = 42
     chatTitleText.Parent = chatTitleBar
     registerThemed(chatTitleText, { TextColor3 = "TitleText" })
 
-    -- Control Buttons Container [-] [ ] [X]
+    -- Control Buttons Container [-] [ ] (No X button)
     local chatCtrlHolder = Instance.new("Frame")
-    chatCtrlHolder.Size = UDim2.new(0, 68, 0, 18)
-    chatCtrlHolder.Position = UDim2.new(1, -72, 0, 3)
+    chatCtrlHolder.Size = UDim2.new(0, 46, 0, 20)
+    chatCtrlHolder.Position = UDim2.new(1, -50, 0, 3)
     chatCtrlHolder.BackgroundTransparency = 1
     chatCtrlHolder.ZIndex = 42
     chatCtrlHolder.Parent = chatTitleBar
 
     local chatMinBtn = Instance.new("TextButton")
-    chatMinBtn.Size = UDim2.new(0, 20, 0, 18)
+    chatMinBtn.Size = UDim2.new(0, 20, 0, 20)
     chatMinBtn.Position = UDim2.new(0, 0, 0, 0)
     chatMinBtn.BackgroundColor3 = C.BtnBg
     chatMinBtn.BorderSizePixel = 1
@@ -1558,13 +1558,13 @@ return function(Shared)
     chatMinBtn.Text = "-"
     chatMinBtn.TextColor3 = C.BtnText
     chatMinBtn.Font = Enum.Font.ArimoBold
-    chatMinBtn.TextSize = 12
+    chatMinBtn.TextSize = 13
     chatMinBtn.ZIndex = 43
     chatMinBtn.Parent = chatCtrlHolder
     registerThemed(chatMinBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
 
     local chatMaxBtn = Instance.new("TextButton")
-    chatMaxBtn.Size = UDim2.new(0, 20, 0, 18)
+    chatMaxBtn.Size = UDim2.new(0, 20, 0, 20)
     chatMaxBtn.Position = UDim2.new(0, 24, 0, 0)
     chatMaxBtn.BackgroundColor3 = C.BtnBg
     chatMaxBtn.BorderSizePixel = 1
@@ -1577,30 +1577,18 @@ return function(Shared)
     chatMaxBtn.Parent = chatCtrlHolder
     registerThemed(chatMaxBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
 
-    local chatCloseBtn = Instance.new("TextButton")
-    chatCloseBtn.Size = UDim2.new(0, 20, 0, 18)
-    chatCloseBtn.Position = UDim2.new(0, 48, 0, 0)
-    chatCloseBtn.BackgroundColor3 = Color3.fromRGB(215, 60, 60)
-    chatCloseBtn.BorderSizePixel = 1
-    chatCloseBtn.BorderColor3 = Color3.fromRGB(150, 20, 20)
-    chatCloseBtn.Text = "x"
-    chatCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    chatCloseBtn.Font = Enum.Font.ArimoBold
-    chatCloseBtn.TextSize = 11
-    chatCloseBtn.ZIndex = 43
-    chatCloseBtn.Parent = chatCtrlHolder
-
     local isChatCollapsed = false
     local isChatMaximized = false
-    local savedChatHeight = 240
-    local savedChatWidth  = 360
+    local savedChatHeight = 290
+    local savedChatWidth  = 420
 
+    -- Minimize strictly collapses chat down to topbar only
     chatMinBtn.MouseButton1Click:Connect(function()
         isChatCollapsed = not isChatCollapsed
         if isChatCollapsed then
             savedChatHeight = chatWindow.AbsoluteSize.Y
             savedChatWidth  = chatWindow.AbsoluteSize.X
-            chatWindow.Size = UDim2.new(0, savedChatWidth, 0, 24)
+            chatWindow.Size = UDim2.new(0, savedChatWidth, 0, 26)
         else
             chatWindow.Size = UDim2.new(0, savedChatWidth, 0, savedChatHeight)
         end
@@ -1609,14 +1597,10 @@ return function(Shared)
     chatMaxBtn.MouseButton1Click:Connect(function()
         isChatMaximized = not isChatMaximized
         if isChatMaximized then
-            chatWindow.Size = UDim2.new(0, 480, 0, 360)
+            chatWindow.Size = UDim2.new(0, 520, 0, 380)
         else
-            chatWindow.Size = UDim2.new(0, 360, 0, 240)
+            chatWindow.Size = UDim2.new(0, 420, 0, 290)
         end
-    end)
-
-    chatCloseBtn.MouseButton1Click:Connect(function()
-        chatWindow.Visible = false
     end)
 
     -- Chat Dragging Engine
@@ -1650,13 +1634,24 @@ return function(Shared)
         end
     end)
 
-    -- Message Scroll Area
+    -- Deterministic Unique Player Color Generator
+    local function getUniquePlayerHex(name)
+        if not name or #name == 0 then return "00ccff" end
+        local hash = 0
+        for i = 1, #name do
+            hash = (hash * 37 + string.byte(name, i)) % 360
+        end
+        local col = Color3.fromHSV(hash / 360, 0.78, 0.98)
+        return col:ToHex()
+    end
+
+    -- Message Scroll Area (Larger font, Player: text format)
     local chatScroll = Instance.new("ScrollingFrame")
-    chatScroll.Size = UDim2.new(1, -2, 1, -58)
-    chatScroll.Position = UDim2.new(0, 1, 0, 25)
+    chatScroll.Size = UDim2.new(1, -2, 1, -64)
+    chatScroll.Position = UDim2.new(0, 1, 0, 27)
     chatScroll.BackgroundTransparency = 1
     chatScroll.BorderSizePixel = 0
-    chatScroll.ScrollBarThickness = 4
+    chatScroll.ScrollBarThickness = 5
     chatScroll.ScrollBarImageColor3 = C.WinBorder
     chatScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     chatScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -1665,18 +1660,18 @@ return function(Shared)
     registerThemed(chatScroll, { ScrollBarImageColor3 = "WinBorder" })
 
     local chatList = Instance.new("UIListLayout")
-    chatList.Padding = UDim.new(0, 3)
+    chatList.Padding = UDim.new(0, 4)
     chatList.SortOrder = Enum.SortOrder.LayoutOrder
     chatList.Parent = chatScroll
 
     local chatPad = Instance.new("UIPadding")
-    chatPad.PaddingLeft   = UDim.new(0, 6)
-    chatPad.PaddingRight  = UDim.new(0, 6)
-    chatPad.PaddingTop    = UDim.new(0, 4)
-    chatPad.PaddingBottom = UDim.new(0, 4)
+    chatPad.PaddingLeft   = UDim.new(0, 8)
+    chatPad.PaddingRight  = UDim.new(0, 8)
+    chatPad.PaddingTop    = UDim.new(0, 5)
+    chatPad.PaddingBottom = UDim.new(0, 5)
     chatPad.Parent = chatScroll
 
-    local function addChatMessage(senderName, text, prefixColorHex)
+    local function addChatMessage(senderName, text, customColorHex)
         local msgLabel = Instance.new("TextLabel")
         msgLabel.Size = UDim2.new(1, 0, 0, 0)
         msgLabel.BackgroundTransparency = 1
@@ -1684,13 +1679,14 @@ return function(Shared)
         msgLabel.TextWrapped = true
         msgLabel.AutomaticSize = Enum.AutomaticSize.Y
         msgLabel.Font = Enum.Font.Code
-        msgLabel.TextSize = 12
+        msgLabel.TextSize = 13
         msgLabel.TextXAlignment = Enum.TextXAlignment.Left
         msgLabel.TextColor3 = C.BtnText
         msgLabel.ZIndex = 42
 
-        local colorHex = prefixColorHex or (isDark and "55ff99" or "008844")
-        msgLabel.Text = string.format('<font color="#%s"><b>%s</b></font> --- %s', colorHex, senderName, text)
+        local nameColor = customColorHex or getUniquePlayerHex(senderName)
+        local textBodyColor = isDark and "f0f4fc" or "101525"
+        msgLabel.Text = string.format('<font color="#%s"><b>%s:</b></font> <font color="#%s">%s</font>', nameColor, senderName, textBodyColor, text)
         msgLabel.Parent = chatScroll
 
         task.defer(function()
@@ -1698,10 +1694,10 @@ return function(Shared)
         end)
     end
 
-    -- Bottom 3-Column Input Bar: [Quick] | [Text Box] | [Send]
+    -- Bottom 3-Column Input Bar: [Quick] | [Text Box] | [Send] (Larger 34px height)
     local inputBar = Instance.new("Frame")
-    inputBar.Size = UDim2.new(1, 0, 0, 30)
-    inputBar.Position = UDim2.new(0, 0, 1, -30)
+    inputBar.Size = UDim2.new(1, 0, 0, 34)
+    inputBar.Position = UDim2.new(0, 0, 1, -34)
     inputBar.BackgroundColor3 = C.RowBg
     inputBar.BackgroundTransparency = 0.20
     inputBar.BorderSizePixel = 1
@@ -1712,7 +1708,7 @@ return function(Shared)
 
     -- 1. Quick Button
     local quickBtn = Instance.new("TextButton")
-    quickBtn.Size = UDim2.new(0, 52, 1, 0)
+    quickBtn.Size = UDim2.new(0, 56, 1, 0)
     quickBtn.Position = UDim2.new(0, 0, 0, 0)
     quickBtn.BackgroundColor3 = C.BtnBg
     quickBtn.BackgroundTransparency = 0.25
@@ -1721,15 +1717,15 @@ return function(Shared)
     quickBtn.Text = "Quick"
     quickBtn.TextColor3 = C.BtnText
     quickBtn.Font = Enum.Font.Code
-    quickBtn.TextSize = 11
+    quickBtn.TextSize = 12
     quickBtn.ZIndex = 42
     quickBtn.Parent = inputBar
     registerThemed(quickBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "WinBorder", TextColor3 = "BtnText" })
 
     -- 2. Text Box
     local chatBox = Instance.new("TextBox")
-    chatBox.Size = UDim2.new(1, -108, 1, 0)
-    chatBox.Position = UDim2.new(0, 52, 0, 0)
+    chatBox.Size = UDim2.new(1, -118, 1, 0)
+    chatBox.Position = UDim2.new(0, 56, 0, 0)
     chatBox.BackgroundColor3 = C.BodyBg
     chatBox.BackgroundTransparency = 0.15
     chatBox.BorderSizePixel = 1
@@ -1739,21 +1735,21 @@ return function(Shared)
     chatBox.PlaceholderColor3 = C.BannerSub
     chatBox.TextColor3 = C.BtnText
     chatBox.Font = Enum.Font.Code
-    chatBox.TextSize = 12
+    chatBox.TextSize = 13
     chatBox.ClearTextOnFocus = false
     chatBox.ZIndex = 42
     chatBox.Parent = inputBar
     registerThemed(chatBox, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder", TextColor3 = "BtnText", PlaceholderColor3 = "BannerSub" })
 
     local boxPad = Instance.new("UIPadding")
-    boxPad.PaddingLeft  = UDim.new(0, 6)
-    boxPad.PaddingRight = UDim.new(0, 6)
+    boxPad.PaddingLeft  = UDim.new(0, 8)
+    boxPad.PaddingRight = UDim.new(0, 8)
     boxPad.Parent = chatBox
 
     -- 3. Send Button
     local sendBtn = Instance.new("TextButton")
-    sendBtn.Size = UDim2.new(0, 56, 1, 0)
-    sendBtn.Position = UDim2.new(1, -56, 0, 0)
+    sendBtn.Size = UDim2.new(0, 62, 1, 0)
+    sendBtn.Position = UDim2.new(1, -62, 0, 0)
     sendBtn.BackgroundColor3 = C.BtnBg
     sendBtn.BackgroundTransparency = 0.25
     sendBtn.BorderSizePixel = 1
@@ -1761,7 +1757,7 @@ return function(Shared)
     sendBtn.Text = "Send"
     sendBtn.TextColor3 = C.BtnText
     sendBtn.Font = Enum.Font.Code
-    sendBtn.TextSize = 11
+    sendBtn.TextSize = 12
     sendBtn.ZIndex = 42
     sendBtn.Parent = inputBar
     registerThemed(sendBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "WinBorder", TextColor3 = "BtnText" })
@@ -1836,29 +1832,23 @@ return function(Shared)
         quickMenu.Visible = not quickMenu.Visible
     end)
 
-    -- Stream Incoming Messages
+    -- Stream Incoming Messages with Unique Colors
     local TextChatService = game:GetService("TextChatService")
     pcall(function()
         TextChatService.MessageReceived:Connect(function(msg)
             local sender = (msg.TextSource and msg.TextSource.Name) or "System"
-            local colorHex = isDark and "66ccff" or "0055aa"
-            if sender == Players.LocalPlayer.Name then
-                colorHex = isDark and "55ff99" or "008844"
-            end
-            addChatMessage(sender, msg.Text, colorHex)
+            addChatMessage(sender, msg.Text, getUniquePlayerHex(sender))
         end)
     end)
 
     for _, p in ipairs(Players:GetPlayers()) do
         p.Chatted:Connect(function(msg)
-            local colorHex = (p == Players.LocalPlayer) and (isDark and "55ff99" or "008844") or (isDark and "66ccff" or "0055aa")
-            addChatMessage(p.DisplayName or p.Name, msg, colorHex)
+            addChatMessage(p.DisplayName or p.Name, msg, getUniquePlayerHex(p.Name))
         end)
     end
     Players.PlayerAdded:Connect(function(p)
         p.Chatted:Connect(function(msg)
-            local colorHex = (p == Players.LocalPlayer) and (isDark and "55ff99" or "008844") or (isDark and "66ccff" or "0055aa")
-            addChatMessage(p.DisplayName or p.Name, msg, colorHex)
+            addChatMessage(p.DisplayName or p.Name, msg, getUniquePlayerHex(p.Name))
         end)
     end)
 
@@ -1867,6 +1857,10 @@ return function(Shared)
         if gpe then return end
         if input.KeyCode == Enum.KeyCode.Slash and customCoreEnabled then
             task.defer(function()
+                if isChatCollapsed then
+                    isChatCollapsed = false
+                    chatWindow.Size = UDim2.new(0, savedChatWidth, 0, savedChatHeight)
+                end
                 chatWindow.Visible = true
                 chatBox:CaptureFocus()
                 chatBox.Text = ""
@@ -1910,8 +1904,8 @@ return function(Shared)
             local cur = UserInput:GetMouseLocation()
             local dx  = cur.X - chatResizeStart.X
             local dy  = cur.Y - chatResizeStart.Y
-            local newW = math.clamp(chatSizeStart.X + dx, 240, 650)
-            local newH = math.clamp(chatSizeStart.Y + dy, 140, 500)
+            local newW = math.clamp(chatSizeStart.X + dx, 260, 750)
+            local newH = math.clamp(chatSizeStart.Y + dy, 160, 600)
             chatWindow.Size = UDim2.new(0, newW, 0, newH)
         end
     end)
