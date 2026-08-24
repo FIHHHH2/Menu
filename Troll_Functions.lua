@@ -282,6 +282,59 @@ return function(Shared)
     -- ── LEFT COLUMN: ZERO-JITTER PHYSICS TROLLS ──────────────────
     MkSection(leftCol, "Physics Interactions", 10)
 
+    -- 0. STEALTH WALK FLING (No-Spin Collision Touch Fling)
+    local walkFlingConn = nil
+    MkToggle(leftCol, "Walk Touch Fling (No Spin)", "WalkFling", 10, function(state)
+        if walkFlingConn then walkFlingConn:Disconnect(); walkFlingConn = nil end
+        if not state then
+            local myHRP = getHRP()
+            if myHRP then
+                myHRP.AssemblyLinearVelocity = Vector3.zero
+                myHRP.AssemblyAngularVelocity = Vector3.zero
+            end
+            return
+        end
+
+        walkFlingConn = RunService.Heartbeat:Connect(function()
+            local myHRP = getHRP()
+            local char  = getChar()
+            local myHum = char and char:FindFirstChildOfClass("Humanoid")
+            if not myHRP or not myHum then return end
+
+            myHum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+            myHum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+
+            local touchingTarget = nil
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= Player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local tHRP = p.Character.HumanoidRootPart
+                    local dist = (tHRP.Position - myHRP.Position).Magnitude
+                    if dist <= 5.4 then
+                        touchingTarget = tHRP
+                        break
+                    end
+                end
+            end
+
+            if touchingTarget then
+                local dir = (touchingTarget.Position - myHRP.Position).Unit
+                local power = Shared.Flags["WalkFlingPower"] or 65000
+                myHRP.AssemblyLinearVelocity = dir * power + Vector3.new(0, power * 0.4, 0)
+                myHRP.AssemblyAngularVelocity = Vector3.new(0, power, 0)
+            else
+                if myHRP.AssemblyAngularVelocity.Magnitude > 100 then
+                    myHRP.AssemblyAngularVelocity = Vector3.zero
+                end
+            end
+        end)
+
+        Shared.Notify("Walk Fling", "Stealth Touch Fling active: Walk into players to fling them!", true)
+    end)
+
+    MkSlider(leftCol, "Fling Power", "WalkFlingPower", 10000, 100000, 65000, 11, function(v)
+        Shared.Flags["WalkFlingPower"] = v
+    end)
+
     -- 1. PUSH PLAYER (Zero-Jitter Impulse Booster)
     -- Instead of locking CFrame every microsecond (which cancels physics and causes jitter),
     -- this applies clean physics collision thrust impulses that launch the target smoothly.
