@@ -109,48 +109,69 @@ return function(Shared)
         local artist = (track and track.artist) or "Unknown Artist"
         local cover = (track and track.cover) or ""
 
-        -- Hash-based deterministic harmonic seed from track name, artist and cover
-        local hash = 5381
-        local combined = title .. ":" .. artist .. ":" .. cover
-        for i = 1, #combined do
-            hash = bit32.band(hash * 33 + string.byte(combined, i), 0x7FFFFFFF)
+        local hue, sat, val = 0.60, 0.75, 0.85
+        local accentHue = 0.95
+
+        -- 1. If real vibrant/dominant colors were sampled from artwork bytes by Music_Handler
+        if track and track.palette and track.palette.vibrant then
+            local v = track.palette.vibrant
+            local h, s, l = Color3.toHSV(v)
+            hue = h
+            sat = math.clamp(s, 0.45, 0.95)
+            val = math.clamp(l, 0.50, 0.95)
+            accentHue = h
+        elseif track and track.palette and track.palette.avg then
+            local a = track.palette.avg
+            local h, s, l = Color3.toHSV(a)
+            hue = h
+            sat = math.clamp(s, 0.40, 0.85)
+            accentHue = (h + 0.08) % 1.0
+        else
+            -- High-entropy multi-field artwork chromatic seed
+            local hash = 5381
+            local combined = tostring(cover) .. ":" .. tostring(title) .. ":" .. tostring(artist)
+            for i = 1, #combined do
+                hash = bit32.band(hash * 33 + string.byte(combined, i), 0x7FFFFFFF)
+            end
+            hue = (hash % 360) / 360
+            accentHue = ((hash + 140) % 360) / 360
+            sat = 0.75
+            val = 0.85
         end
 
-        local hue = (hash % 360) / 360
-        local secondaryHue = ((hash + 137) % 360) / 360
-        local accentHue = ((hash + 210) % 360) / 360
+        local secondaryHue = ((hue + 0.12) % 1.0)
 
-        -- Generate deep, rich opaque surfaces with guaranteed contrast
-        local winBorderCol = Color3.fromHSV(accentHue, 0.70, 0.65)
-        local titleBarCol  = Color3.fromHSV(hue, 0.45, 0.18)
-        local titleTextCol = Color3.fromRGB(245, 248, 255)
-        local navBarCol    = Color3.fromHSV(hue, 0.50, 0.14)
-        local navTextCol   = Color3.fromHSV(hue, 0.25, 0.90)
-        local navLinkCol   = Color3.fromHSV(accentHue, 0.65, 0.95)
-        local navHoverCol  = Color3.fromHSV((accentHue + 0.1) % 1, 0.85, 1.0)
-        local bodyBgCol    = Color3.fromHSV(hue, 0.40, 0.08)
-        local cellACol     = Color3.fromHSV(hue, 0.35, 0.11)
-        local cellBCol     = Color3.fromHSV(hue, 0.35, 0.14)
-        local sideBorder   = Color3.fromHSV(hue, 0.45, 0.25)
-        local btnBgCol     = Color3.fromHSV(hue, 0.30, 0.17)
-        local btnBorderCol = Color3.fromHSV(hue, 0.35, 0.28)
-        local btnHoverCol  = Color3.fromHSV(hue, 0.35, 0.24)
-        local btnDownCol   = Color3.fromHSV(hue, 0.40, 0.12)
-        local btnTextCol   = Color3.fromRGB(240, 245, 255)
-        local tabActiveBg  = Color3.fromHSV(hue, 0.40, 0.08)
-        local tabActiveTxt = Color3.fromHSV(accentHue, 0.70, 0.95)
-        local secBgCol     = Color3.fromHSV(secondaryHue, 0.40, 0.15)
-        local secTextCol   = Color3.fromHSV(secondaryHue, 0.20, 0.92)
-        local rowBgCol     = Color3.fromHSV(hue, 0.32, 0.11)
-        local rowBorderCol = Color3.fromHSV(hue, 0.35, 0.20)
-        local rowHoverCol  = Color3.fromHSV(hue, 0.35, 0.16)
-        local accentCol    = Color3.fromHSV(accentHue, 0.75, 0.90)
-        local drawerBgCol  = Color3.fromHSV(hue, 0.38, 0.10)
-        local notifyBgCol  = Color3.fromHSV(hue, 0.40, 0.12)
-        local notifyBrdCol = Color3.fromHSV(accentHue, 0.65, 0.60)
-        local bannerBgCol  = Color3.fromHSV(hue, 0.42, 0.12)
-        local bannerTitle  = Color3.fromHSV(accentHue, 0.30, 0.95)
-        local bannerSub    = Color3.fromHSV(hue, 0.25, 0.70)
+        -- Generate deep, rich opaque surfaces with guaranteed contrast matching the artwork
+        local winBorderCol = Color3.fromHSV(accentHue, math.clamp(sat + 0.1, 0.6, 1.0), math.clamp(val, 0.7, 1.0))
+        local titleBarCol  = Color3.fromHSV(hue, math.clamp(sat * 0.7, 0.3, 0.6), 0.14)
+        local titleTextCol = Color3.fromRGB(248, 250, 255)
+        local navBarCol    = Color3.fromHSV(hue, math.clamp(sat * 0.8, 0.35, 0.65), 0.11)
+        local navTextCol   = Color3.fromHSV(accentHue, 0.30, 0.95)
+        local navLinkCol   = Color3.fromHSV(accentHue, math.clamp(sat, 0.6, 0.95), 1.0)
+        local navHoverCol  = Color3.fromHSV((accentHue + 0.08) % 1.0, 0.90, 1.0)
+        local bodyBgCol    = Color3.fromHSV(hue, math.clamp(sat * 0.6, 0.25, 0.55), 0.07)
+        local cellACol     = Color3.fromHSV(hue, math.clamp(sat * 0.5, 0.20, 0.45), 0.10)
+        local cellBCol     = Color3.fromHSV(hue, math.clamp(sat * 0.5, 0.20, 0.45), 0.13)
+        local sideBorder   = Color3.fromHSV(hue, math.clamp(sat * 0.7, 0.35, 0.65), 0.26)
+        local btnBgCol     = Color3.fromHSV(hue, math.clamp(sat * 0.45, 0.20, 0.50), 0.15)
+        local btnBorderCol = Color3.fromHSV(hue, math.clamp(sat * 0.6, 0.30, 0.60), 0.30)
+        local btnHoverCol  = Color3.fromHSV(hue, math.clamp(sat * 0.5, 0.25, 0.55), 0.22)
+        local btnDownCol   = Color3.fromHSV(hue, math.clamp(sat * 0.6, 0.30, 0.60), 0.10)
+        local btnTextCol   = Color3.fromRGB(242, 246, 255)
+        local tabActiveBg  = Color3.fromHSV(hue, math.clamp(sat * 0.6, 0.25, 0.55), 0.07)
+        local tabActiveTxt = Color3.fromHSV(accentHue, math.clamp(sat, 0.65, 0.95), 1.0)
+        local secBgCol     = Color3.fromHSV(secondaryHue, math.clamp(sat * 0.6, 0.30, 0.60), 0.15)
+        local secTextCol   = Color3.fromHSV(secondaryHue, 0.25, 0.96)
+        local rowBgCol     = Color3.fromHSV(hue, math.clamp(sat * 0.45, 0.20, 0.45), 0.10)
+        local rowBorderCol = Color3.fromHSV(hue, math.clamp(sat * 0.55, 0.25, 0.55), 0.22)
+        local rowHoverCol  = Color3.fromHSV(hue, math.clamp(sat * 0.55, 0.25, 0.55), 0.17)
+        local accentCol    = Color3.fromHSV(accentHue, math.clamp(sat, 0.7, 1.0), math.clamp(val, 0.8, 1.0))
+        local drawerBgCol  = Color3.fromHSV(hue, math.clamp(sat * 0.55, 0.25, 0.55), 0.09)
+        local notifyBgCol  = Color3.fromHSV(hue, math.clamp(sat * 0.6, 0.30, 0.60), 0.11)
+        local notifyBrdCol = Color3.fromHSV(accentHue, math.clamp(sat, 0.7, 1.0), 0.75)
+        local bannerBgCol  = Color3.fromHSV(hue, math.clamp(sat * 0.6, 0.30, 0.60), 0.11)
+        local bannerTitle  = Color3.fromHSV(accentHue, 0.35, 0.98)
+        local bannerSub    = Color3.fromHSV(hue, 0.30, 0.75)
 
         return {
             WinBorder     = winBorderCol,

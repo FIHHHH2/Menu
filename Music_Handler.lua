@@ -194,6 +194,48 @@ return function(Shared)
         return nil
     end
 
+    local function extractDominantColorFromBytes(bytes)
+        if not bytes or #bytes < 128 then return nil end
+        local totalR, totalG, totalB = 0, 0, 0
+        local count = 0
+        local maxSat = 0
+        local vibR, vibG, vibB = 0.5, 0.5, 0.5
+
+        -- Sample across image data payload
+        local step = math.max(1, math.floor(#bytes / 180))
+        local startIdx = math.min(256, math.floor(#bytes * 0.1))
+        local endIdx = math.min(#bytes - 32, math.floor(#bytes * 0.9))
+
+        for i = startIdx, endIdx, step do
+            local b1 = string.byte(bytes, i) or 128
+            local b2 = string.byte(bytes, i + 1) or 128
+            local b3 = string.byte(bytes, i + 2) or 128
+
+            local r = b1 / 255
+            local g = b2 / 255
+            local b = b3 / 255
+
+            totalR = totalR + r
+            totalG = totalG + g
+            totalB = totalB + b
+            count = count + 1
+
+            local maxC = math.max(r, g, b)
+            local minC = math.min(r, g, b)
+            local sat = maxC > 0 and (maxC - minC) / maxC or 0
+            if sat > maxSat and maxC > 0.25 and maxC < 0.95 then
+                maxSat = sat
+                vibR, vibG, vibB = r, g, b
+            end
+        end
+
+        if count == 0 then return nil end
+        return {
+            avg = Color3.new(totalR / count, totalG / count, totalB / count),
+            vibrant = Color3.new(vibR, vibG, vibB)
+        }
+    end
+
     local labelTokens = {}
     local cachedCoverTrackKey = ""
 
@@ -237,6 +279,16 @@ return function(Shared)
             local function apply(imgBytes)
                 if labelTokens[imgLabel] ~= myToken then return false end
                 if not imgLabel or not imgLabel.Parent then return false end
+
+                -- Extract dominant artwork palette from raw image data
+                local pal = extractDominantColorFromBytes(imgBytes)
+                if pal then
+                    currentTrack.palette = pal
+                    if Shared.SetAdaptiveThemeTrack then
+                        pcall(Shared.SetAdaptiveThemeTrack, currentTrack)
+                    end
+                end
+
                 local asset = writeAndGetAsset(imgBytes)
                 if asset then
                     currentCoverAsset   = asset
