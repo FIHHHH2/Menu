@@ -431,30 +431,6 @@ return function(Shared)
         Shared.Flags["BB_OrbitDist"] = val
     end)
 
-    -- ── HIGH-FREQUENCY RUNSERVICE PREDICTION & PARRY LOOP ──────────
-    RunService.RenderStepped:Connect(function(dt)
-        local ball = findActiveBall()
-        local hrp  = getHRP()
-
-        if not ball or not hrp then
-            statusText.Text = "⚡ Ball: Waiting for round..."
-            statusText.TextColor3 = Color3.fromRGB(140, 160, 190)
-            statusFrame.BorderColor3 = Color3.fromRGB(0, 160, 255)
-            clearBallVisuals()
-            lastBallPos = nil
-            return
-        end
-
-        local now = os.clock()
-        local ballPos = ball.Position
-        local myPos   = hrp.Position
-        local dist    = (ballPos - myPos).Magnitude
-
-        -- Calculate instantaneous velocity from frame-to-frame position delta
-        local vel = ball.AssemblyLinearVelocity or Vector3.zero
-        if lastBallPos then
-            local timeDelta = math.clamp(now - lastBallTime, 0.001, 0.1)
-            local calcVel = (ballPos - lastBallPos) / timeDelta
     -- ── LIVE NETWORK PING & LATENCY MONITOR ──────────────────────
     local function getLivePingSec()
         local pingSec = 0.055
