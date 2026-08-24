@@ -170,17 +170,25 @@ return function(Shared)
             end
         end
 
-        -- 1. TopBarApp (Frames & High-Contrast Icons)
+        -- 1. TopBarApp & Health Bar (High-Contrast Icons & Sharp Aero Health)
         pcall(function()
             local topbar = CoreGui:FindFirstChild("TopBarApp")
             if topbar then
                 for _, obj in ipairs(topbar:GetDescendants()) do
                     if obj:IsA("UICorner") then obj.CornerRadius = UDim.new(0, 0) end
                     if obj:IsA("Frame") and obj.BackgroundTransparency < 0.95 then
-                        obj.BackgroundColor3       = bgCol
-                        obj.BackgroundTransparency = 0.2
-                        obj.BorderSizePixel        = 1
-                        obj.BorderColor3           = borderCol
+                        -- Check if this frame is the Health indicator bar (green)
+                        if obj.BackgroundColor3.G > 0.55 and obj.BackgroundColor3.R < 0.45 then
+                            obj.BackgroundColor3       = dark and Color3.fromRGB(0, 220, 140) or Color3.fromRGB(0, 190, 110)
+                            obj.BackgroundTransparency = 0
+                            obj.BorderSizePixel        = 1
+                            obj.BorderColor3           = borderCol
+                        else
+                            obj.BackgroundColor3       = bgCol
+                            obj.BackgroundTransparency = 0.2
+                            obj.BorderSizePixel        = 1
+                            obj.BorderColor3           = borderCol
+                        end
                     end
                     if obj:IsA("UIStroke") then
                         obj.Color = borderCol
@@ -196,7 +204,7 @@ return function(Shared)
             end
         end)
 
-        -- 2. ExperienceChat (Semi-transparent Top Tab Bar, Clean Aero Frame, Preserves Buttons)
+        -- 2. ExperienceChat (Semi-transparent Top Tab Bar, Native Input Row Alignment)
         pcall(function()
             local expChat = CoreGui:FindFirstChild("ExperienceChat")
             if expChat and expChat:FindFirstChild("appLayout") then
@@ -224,22 +232,13 @@ return function(Shared)
                     chatWindow.BorderColor3           = borderCol
                 end
 
-                local chatInputRow = app:FindFirstChild("chatInputRow", true)
-                if chatInputRow and chatInputRow:IsA("Frame") then
-                    chatInputRow.BackgroundColor3       = inputBg
-                    chatInputRow.BackgroundTransparency = 0.1
-                    chatInputRow.BorderSizePixel        = 1
-                    chatInputRow.BorderColor3           = borderCol
-                end
-
                 for _, d in ipairs(expChat:GetDescendants()) do
                     if d:IsA("UICorner") then d.CornerRadius = UDim.new(0, 0) end
                     if d:IsA("ScrollingFrame") then
                         d.ScrollBarThickness = 0
                         d.ScrollBarImageTransparency = 1
                     end
-                    -- Ensure all chat icons and buttons remain fully visible
-                    if d:IsA("ImageLabel") or d:IsA("ImageButton") or d:IsA("TextButton") then
+                    if d:IsA("ImageLabel") or d:IsA("ImageButton") or d:IsA("TextButton") or d:IsA("TextBox") then
                         d.Visible = true
                     end
                 end
@@ -1300,6 +1299,7 @@ return function(Shared)
     lbWindow.Size = UDim2.new(0, 230, 0, 360)
     lbWindow.Position = UDim2.new(1, -242, 0, 48)
     lbWindow.BackgroundColor3 = C.BodyBg
+    lbWindow.BackgroundTransparency = 0.25
     lbWindow.BorderSizePixel = 1
     lbWindow.BorderColor3 = C.WinBorder
     lbWindow.ClipsDescendants = true
@@ -1311,6 +1311,7 @@ return function(Shared)
     local lbTitleBar = Instance.new("Frame")
     lbTitleBar.Size = UDim2.new(1, 0, 0, 24)
     lbTitleBar.BackgroundColor3 = C.TitleBar
+    lbTitleBar.BackgroundTransparency = 0.2
     lbTitleBar.BorderSizePixel = 1
     lbTitleBar.BorderColor3 = C.WinBorder
     lbTitleBar.ZIndex = 41
@@ -1450,6 +1451,7 @@ return function(Shared)
             local row = Instance.new("Frame")
             row.Size = UDim2.new(1, 0, 0, 28)
             row.BackgroundColor3 = C.RowBg
+            row.BackgroundTransparency = 0.35
             row.BorderSizePixel = 1
             row.BorderColor3 = C.RowBorder
             row.LayoutOrder = i
