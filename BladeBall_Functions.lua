@@ -58,22 +58,20 @@ return function(Shared)
     local lastUIUpdate = 0
     local lastTargetState = nil
 
-    -- Hook Blade Ball's parry confirmation events to acknowledge deflected state
+    -- Hook Blade Ball's parry confirmation event
     pcall(function()
         local remotes = ReplicatedStorage:FindFirstChild("Remotes")
         if remotes then
-            for _, rName in ipairs({"ParrySuccess", "ParrySuccessClient", "ParrySuccessAll", "VisualCD", "VisualBindableCD"}) do
-                local rObj = remotes:FindFirstChild(rName)
-                if rObj then
-                    if rObj:IsA("RemoteEvent") then
-                        rObj.OnClientEvent:Connect(function()
-                            hasParriedCurrentVolley = true
-                        end)
-                    elseif rObj:IsA("BindableEvent") then
-                        rObj.Event:Connect(function()
-                            hasParriedCurrentVolley = true
-                        end)
-                    end
+            local pSuccess = remotes:FindFirstChild("ParrySuccessClient") or remotes:FindFirstChild("ParrySuccess")
+            if pSuccess then
+                if pSuccess:IsA("RemoteEvent") then
+                    pSuccess.OnClientEvent:Connect(function()
+                        hasParriedCurrentVolley = true
+                    end)
+                elseif pSuccess:IsA("BindableEvent") then
+                    pSuccess.Event:Connect(function()
+                        hasParriedCurrentVolley = true
+                    end)
                 end
             end
         end
@@ -160,8 +158,8 @@ return function(Shared)
     local function isTargetingMe(ball)
         if not ball then return false end
 
-        -- If ball is inside a folder and has a sibling with realBall == true, resolve to the real ball
-        if ball.Parent and ball:GetAttribute("realBall") ~= true then
+        -- If ball is inside Balls folder and has a sibling with realBall == true, resolve to the real ball
+        if ball.Parent and ball.Parent.Name == "Balls" and ball:GetAttribute("realBall") ~= true then
             for _, sibling in ipairs(ball.Parent:GetChildren()) do
                 if sibling:IsA("BasePart") and sibling:GetAttribute("realBall") == true then
                     ball = sibling
@@ -170,20 +168,20 @@ return function(Shared)
             end
         end
 
-        -- 1. Check exact match target attributes (Arena Match Balls)
         local t = ball:GetAttribute("target") or ball:GetAttribute("Target")
-        if t then
-            local tStr = tostring(t)
-            if tStr == Player.Name or tStr == Player.DisplayName or tStr == tostring(Player.UserId) or tStr == "all" then
-                return true
-            end
-            -- If target is another player in the arena, definitely not targeting us
-            if tStr ~= "" and tStr ~= "None" and tStr ~= "nil" and not tStr:lower():find("target<") and not tStr:lower():find("train") then
-                return false
-            end
+        local tStr = t and tostring(t) or ""
+
+        -- 1. Exact match target (Arena Matches)
+        if tStr == Player.Name or tStr == Player.DisplayName or tStr == tostring(Player.UserId) or tStr == "all" then
+            return true
         end
 
-        -- 2. Check target ValueObject
+        -- 2. If target is explicitly someone else in the match
+        if tStr ~= "" and tStr ~= "None" and tStr ~= "nil" and not tStr:lower():find("target<") and not tStr:lower():find("train") then
+            return false
+        end
+
+        -- 3. Target ValueObject fallback
         local targetVal = ball:FindFirstChild("target") or ball:FindFirstChild("Target")
         if targetVal and targetVal:IsA("ValueBase") then
             if tostring(targetVal.Value) == Player.Name or targetVal.Value == Player.Character then
@@ -193,29 +191,21 @@ return function(Shared)
             end
         end
 
-        -- 3. Check Practice / Training Ball (Workspace.TrainingBalls or LobbyTraining)
-        local isTraining = (ball.Parent and (ball.Parent.Name == "TrainingBalls" or ball.Parent.Name == "Training"))
-                        or ball.Name:lower():find("train")
-                        or ball:GetAttribute("Training") ~= nil
-                        or (t and tostring(t):lower():find("target<"))
-
-        if isTraining then
-            local hrp = getHRP()
-            if hrp then
-                local toMe = (hrp.Position - ball.Position)
-                local dist = toMe.Magnitude
-                if dist < 85 then
-                    local vel = ball.AssemblyLinearVelocity or Vector3.zero
-                    if vel.Magnitude < 2 then
-                        return true
-                    end
-                    local dot = toMe.Unit:Dot(vel.Unit)
-                    if dot > 0.35 or dist < 24 then
-                        return true
-                    end
+        -- 4. Practice Ball & Vector Trajectory Check
+        local hrp = getHRP()
+        if hrp then
+            local toMe = (hrp.Position - ball.Position)
+            local dist = toMe.Magnitude
+            if dist < 85 then
+                local vel = ball.AssemblyLinearVelocity or Vector3.zero
+                if vel.Magnitude < 2 then
+                    return true
+                end
+                local dot = toMe.Unit:Dot(vel.Unit)
+                if dot > 0.45 or dist < 22 then
+                    return true
                 end
             end
-            return false
         end
 
         return false
@@ -224,34 +214,45 @@ return function(Shared)
     -- ── PARRY EXECUTION MECHANISMS ────────────────────────────────
     local function executeParry()
         local now = os.clock()
-        if now - lastParryTime < 0.05 or hasParriedCurrentVolley then return end
+        if now - lastParryTime < 0.04 then return end
         lastParryTime = now
         lastParryTick = now
         hasParriedCurrentVolley = true
 
-        -- Method 1: BindableEvent internal trigger (Zero Latency)
-        if parryButtonPress then
-            pcall(function() parryButtonPress:Fire() end)
-        end
-        if parryTester then
-            pcall(function() parryTester:Fire() end)
-        end
+        -- Method 1: BindableEvent internal trigger
+        pcall(function()
+            if parryButtonPress then parryButtonPress:Fire() end
+        end)
+        pcall(function()
+            if parryTester then parryTester:Fire() end
+        end)
 
         -- Method 2: RemoteEvent server parry attempt
-        if parryAttempt then
-            pcall(function() parryAttempt:FireServer(0.5, CFrame.new(), {}, Vector2.new()) end)
-        end
-        if customParry then
-            pcall(function() customParry:FireServer() end)
-        end
+        pcall(function()
+            if parryAttempt then parryAttempt:FireServer(0.5, CFrame.new(), {}, Vector2.new()) end
+        end)
+        pcall(function()
+            if customParry then customParry:FireServer() end
+        end)
 
-        -- Method 3: Virtual Input (Instantaneous Key Deflect)
-        if VirtualInputManager then
-            pcall(function()
+        -- Method 3: Virtual Input (F key + mouse click)
+        pcall(function()
+            if VirtualInputManager then
                 VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
-            end)
-        end
+                task.delay(0.015, function()
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+                end)
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+                task.delay(0.015, function()
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                end)
+            end
+        end)
+
+        -- Method 4: Mouse Click
+        pcall(function()
+            if mouse1click then mouse1click() end
+        end)
     end
 
     local function executeAbility()
@@ -558,7 +559,7 @@ return function(Shared)
         -- Reset parried volley flag when ball leaves or deflects away
         if hasParriedCurrentVolley then
             local timeSinceParry = now - lastParryTick
-            if not isTarget or approachSpeed < -2 or timeSinceParry > 0.45 then
+            if not isTarget or approachSpeed < -1 or timeSinceParry > 0.25 then
                 hasParriedCurrentVolley = false
             end
         end
