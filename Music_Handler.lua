@@ -410,6 +410,75 @@ return function(Shared)
         }
     end
 
+    -- ── CENTRAL SPOTIFY PLAYBACK CONTROLLER ──────────────────────
+    local function handleSpotifyPrevious()
+        task.spawn(function()
+            local token = cleanToken(Shared.Config.SpotifyToken)
+            if not token or token == "" then
+                Shared.Notify("Spotify", "No Spotify OAuth Token configured", false)
+                return
+            end
+            spotifyRequest("/previous", "POST")
+            Shared.Notify("Spotify", "⏮ Skipped to previous track", true)
+            task.wait(0.4)
+            local trk = getSpotifyTrack()
+            if trk then updateVisuals(trk) end
+        end)
+    end
+
+    local function handleSpotifyPlayPause()
+        task.spawn(function()
+            local token = cleanToken(Shared.Config.SpotifyToken)
+            if not token or token == "" then
+                Shared.Notify("Spotify", "No Spotify OAuth Token configured", false)
+                return
+            end
+            -- Check live playback state from /v1/me/player
+            local statusResp = Shared.HttpRequest({
+                Url     = "https://api.spotify.com/v1/me/player",
+                Method  = "GET",
+                Headers = { ["Authorization"] = "Bearer " .. token }
+            })
+            local isCurrentlyPlaying = false
+            if statusResp and statusResp.Body and #statusResp.Body > 0 then
+                local ok, d = pcall(function() return Http:JSONDecode(statusResp.Body) end)
+                if ok and d and d.is_playing ~= nil then
+                    isCurrentlyPlaying = d.is_playing
+                end
+            else
+                isCurrentlyPlaying = currentTrack.isPlaying
+            end
+
+            if isCurrentlyPlaying then
+                spotifyRequest("/pause", "PUT")
+                currentTrack.isPlaying = false
+                Shared.Notify("Spotify", "⏸ Playback paused", false)
+            else
+                spotifyRequest("/play", "PUT")
+                currentTrack.isPlaying = true
+                Shared.Notify("Spotify", "▶ Playback resumed", true)
+            end
+            task.wait(0.4)
+            local trk = getSpotifyTrack()
+            if trk then updateVisuals(trk) end
+        end)
+    end
+
+    local function handleSpotifyNext()
+        task.spawn(function()
+            local token = cleanToken(Shared.Config.SpotifyToken)
+            if not token or token == "" then
+                Shared.Notify("Spotify", "No Spotify OAuth Token configured", false)
+                return
+            end
+            spotifyRequest("/next", "POST")
+            Shared.Notify("Spotify", "⏭ Skipped to next track", true)
+            task.wait(0.4)
+            local trk = getSpotifyTrack()
+            if trk then updateVisuals(trk) end
+        end)
+    end
+
     -- ── 3D BILLBOARD GUI OVER HEAD ─────────────────────────────────
     local bbSongLbl, bbArtistLbl, bbCoverImg
 
@@ -424,7 +493,7 @@ return function(Shared)
 
         billboard = Instance.new("BillboardGui")
         billboard.Name          = "MusicBillboard"
-        billboard.Size          = UDim2.new(0, 260, 0, 58)
+        billboard.Size          = UDim2.new(0, 275, 0, 62)
         billboard.StudsOffset   = Vector3.new(0, 3.8, 0)
         billboard.AlwaysOnTop   = false
         billboard.Adornee       = hrp
@@ -439,8 +508,8 @@ return function(Shared)
         bg.Parent               = billboard
 
         local bbCoverContainer = Instance.new("Frame")
-        bbCoverContainer.Size             = UDim2.new(0, 48, 0, 48)
-        bbCoverContainer.Position         = UDim2.new(0, 5, 0, 5)
+        bbCoverContainer.Size             = UDim2.new(0, 50, 0, 50)
+        bbCoverContainer.Position         = UDim2.new(0, 6, 0, 6)
         bbCoverContainer.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
         bbCoverContainer.BorderSizePixel  = 1
         bbCoverContainer.BorderColor3     = Color3.fromRGB(60, 80, 110)
@@ -465,30 +534,59 @@ return function(Shared)
         bbCoverImg = cover
 
         local songLbl = Instance.new("TextLabel")
-        songLbl.Size                  = UDim2.new(1, -62, 0, 20)
-        songLbl.Position              = UDim2.new(0, 58, 0, 7)
+        songLbl.Size                  = UDim2.new(1, -140, 0, 18)
+        songLbl.Position              = UDim2.new(0, 62, 0, 8)
         songLbl.BackgroundTransparency = 1
         songLbl.Text                  = currentTrack.name
         songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
         songLbl.Font                  = Enum.Font.ArimoBold
-        songLbl.TextSize              = 12
+        songLbl.TextSize              = 11
         songLbl.TextXAlignment        = Enum.TextXAlignment.Left
         songLbl.TextTruncate          = Enum.TextTruncate.AtEnd
         songLbl.Parent                = bg
         bbSongLbl = songLbl
 
         local artistLbl = Instance.new("TextLabel")
-        artistLbl.Size                  = UDim2.new(1, -62, 0, 16)
-        artistLbl.Position              = UDim2.new(0, 58, 0, 30)
+        artistLbl.Size                  = UDim2.new(1, -140, 0, 16)
+        artistLbl.Position              = UDim2.new(0, 62, 0, 28)
         artistLbl.BackgroundTransparency = 1
         artistLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
         artistLbl.TextColor3            = Color3.fromRGB(0, 220, 140)
         artistLbl.Font                  = Enum.Font.Code
-        artistLbl.TextSize              = 10
+        artistLbl.TextSize              = 9
         artistLbl.TextXAlignment        = Enum.TextXAlignment.Left
         artistLbl.TextTruncate          = Enum.TextTruncate.AtEnd
         artistLbl.Parent                = bg
         bbArtistLbl = artistLbl
+
+        -- ── BILLBOARD PLAYBACK CONTROLS (⏮ ⏯ ⏭) ──
+        local ctrlBox = Instance.new("Frame")
+        ctrlBox.Size                  = UDim2.new(0, 72, 0, 22)
+        ctrlBox.Position              = UDim2.new(1, -78, 0, 20)
+        ctrlBox.BackgroundTransparency = 1
+        ctrlBox.BorderSizePixel       = 0
+        ctrlBox.Parent                = bg
+
+        local function mkBBCtrlBtn(txt, posX, fn)
+            local btn = Instance.new("TextButton")
+            btn.Size                  = UDim2.new(0, 22, 0, 20)
+            btn.Position              = UDim2.new(0, posX, 0, 0)
+            btn.BackgroundColor3      = Color3.fromRGB(25, 30, 42)
+            btn.BackgroundTransparency = 0.2
+            btn.BorderSizePixel       = 1
+            btn.BorderColor3          = Color3.fromRGB(60, 80, 110)
+            btn.Text                  = txt
+            btn.TextColor3            = Color3.fromRGB(220, 235, 255)
+            btn.Font                  = Enum.Font.GothamBold
+            btn.TextSize              = 10
+            btn.Parent                = ctrlBox
+            btn.MouseButton1Click:Connect(fn)
+            return btn
+        end
+
+        mkBBCtrlBtn("⏮", 0, handleSpotifyPrevious)
+        mkBBCtrlBtn("⏯", 25, handleSpotifyPlayPause)
+        mkBBCtrlBtn("⏭", 50, handleSpotifyNext)
 
         applyImage(bbCoverImg, currentTrack)
     end
@@ -524,8 +622,8 @@ return function(Shared)
 
         local frame = Instance.new("Frame")
         frame.Name             = "Fih_BottomHUD"
-        frame.Size             = UDim2.new(0, 290, 0, 114)
-        frame.Position         = UDim2.new(0, 16, 1, -130)
+        frame.Size             = UDim2.new(0, 310, 0, 126)
+        frame.Position         = UDim2.new(0, 16, 1, -142)
         frame.BackgroundColor3 = C.BodyBg
         frame.BorderSizePixel  = 2
         frame.BorderColor3     = C.WinBorder
@@ -650,10 +748,42 @@ return function(Shared)
         aLbl.Parent                = rightBox
         hudArtistLbl = aLbl
 
+        -- ── HUD PLAYBACK CONTROLS (⏮ ⏯ ⏭) ──
+        local hudControls = Instance.new("Frame")
+        hudControls.Name                   = "HUD_PlaybackControls"
+        hudControls.Size                   = UDim2.new(1, 0, 0, 20)
+        hudControls.Position               = UDim2.new(0, 0, 0, 44)
+        hudControls.BackgroundTransparency = 1
+        hudControls.BorderSizePixel        = 0
+        hudControls.ZIndex                 = 53
+        hudControls.Parent                 = rightBox
+
+        local function mkHUDCtrlBtn(txt, posX, width, fn)
+            local btn = Instance.new("TextButton")
+            btn.Size                  = UDim2.new(0, width or 28, 0, 18)
+            btn.Position              = UDim2.new(0, posX, 0, 0)
+            btn.BackgroundColor3      = C.TitleBar
+            btn.BackgroundTransparency = 0.2
+            btn.BorderSizePixel       = 1
+            btn.BorderColor3          = C.BorderCol
+            btn.Text                  = txt
+            btn.TextColor3            = C.TextDark
+            btn.Font                  = Enum.Font.GothamBold
+            btn.TextSize              = 10
+            btn.ZIndex                = 54
+            btn.Parent                = hudControls
+            btn.MouseButton1Click:Connect(fn)
+            return btn
+        end
+
+        mkHUDCtrlBtn("⏮", 0, 26, handleSpotifyPrevious)
+        mkHUDCtrlBtn("⏯", 30, 28, handleSpotifyPlayPause)
+        mkHUDCtrlBtn("⏭", 62, 26, handleSpotifyNext)
+
         -- Divider Line
         local div = Instance.new("Frame")
         div.Size             = UDim2.new(1, 0, 0, 1)
-        div.Position         = UDim2.new(0, 0, 0, 46)
+        div.Position         = UDim2.new(0, 0, 0, 68)
         div.BackgroundColor3 = C.BorderCol
         div.BorderSizePixel  = 0
         div.ZIndex           = 53
@@ -661,13 +791,13 @@ return function(Shared)
 
         -- Place Info (Moved down)
         local pLbl = Instance.new("TextLabel")
-        pLbl.Size                  = UDim2.new(1, 0, 0, 15)
-        pLbl.Position              = UDim2.new(0, 0, 0, 52)
+        pLbl.Size                  = UDim2.new(1, 0, 0, 14)
+        pLbl.Position              = UDim2.new(0, 0, 0, 72)
         pLbl.BackgroundTransparency = 1
         pLbl.Text                  = "Map: " .. placeTitle .. " (ID: " .. tostring(game.PlaceId) .. ")"
         pLbl.TextColor3            = C.SubText
         pLbl.Font                  = Enum.Font.Code
-        pLbl.TextSize              = 10
+        pLbl.TextSize              = 9
         pLbl.TextXAlignment        = Enum.TextXAlignment.Left
         pLbl.TextTruncate          = Enum.TextTruncate.AtEnd
         pLbl.ZIndex                = 53
@@ -676,13 +806,13 @@ return function(Shared)
 
         -- User Info (Moved down)
         local uLbl = Instance.new("TextLabel")
-        uLbl.Size                  = UDim2.new(1, 0, 0, 15)
-        uLbl.Position              = UDim2.new(0, 0, 0, 69)
+        uLbl.Size                  = UDim2.new(1, 0, 0, 14)
+        uLbl.Position              = UDim2.new(0, 0, 0, 87)
         uLbl.BackgroundTransparency = 1
         uLbl.Text                  = "User: " .. Player.DisplayName .. " (@" .. Player.Name .. ")"
         uLbl.TextColor3            = C.SubText
         uLbl.Font                  = Enum.Font.Code
-        uLbl.TextSize              = 10
+        uLbl.TextSize              = 9
         uLbl.TextXAlignment        = Enum.TextXAlignment.Left
         uLbl.TextTruncate          = Enum.TextTruncate.AtEnd
         uLbl.ZIndex                = 53
@@ -897,63 +1027,9 @@ return function(Shared)
     end)
 
     MkSection(rightCol, "Playback Controls", 10)
-    MkButton(rightCol, "⏮  Previous Track", 11, function()
-        task.spawn(function()
-            local res, err = spotifyRequest("/previous", "POST")
-            if res and (res.StatusCode == 204 or res.StatusCode == 200) then
-                Shared.Notify("Spotify", "Skipped to previous track", true)
-            elseif res and res.StatusCode == 403 then
-                Shared.Notify("Spotify", "Error: Missing modify permissions on token", false)
-            elseif res and res.StatusCode == 404 then
-                Shared.Notify("Spotify", "Error: No active Spotify player found", false)
-            else
-                Shared.Notify("Spotify", "Previous track command sent", true)
-            end
-            task.wait(0.35)
-            local trk = getSpotifyTrack()
-            if trk then updateVisuals(trk) end
-        end)
-    end)
-    MkButton(rightCol, "⏯  Play / Pause", 12, function()
-        task.spawn(function()
-            local t = getSpotifyTrack()
-            if t and t.isPlaying then
-                local res = spotifyRequest("/pause", "PUT")
-                if res and (res.StatusCode == 204 or res.StatusCode == 200) then
-                    Shared.Notify("Spotify", "Playback paused", false)
-                else
-                    Shared.Notify("Spotify", "Pause command sent", false)
-                end
-            else
-                local res = spotifyRequest("/play", "PUT")
-                if res and (res.StatusCode == 204 or res.StatusCode == 200) then
-                    Shared.Notify("Spotify", "Playback resumed", true)
-                else
-                    Shared.Notify("Spotify", "Play command sent", true)
-                end
-            end
-            task.wait(0.35)
-            local trk = getSpotifyTrack()
-            if trk then updateVisuals(trk) end
-        end)
-    end)
-    MkButton(rightCol, "⏭  Next Track", 13, function()
-        task.spawn(function()
-            local res = spotifyRequest("/next", "POST")
-            if res and (res.StatusCode == 204 or res.StatusCode == 200) then
-                Shared.Notify("Spotify", "Skipped to next track", true)
-            elseif res and res.StatusCode == 403 then
-                Shared.Notify("Spotify", "Error: Missing modify permissions on token", false)
-            elseif res and res.StatusCode == 404 then
-                Shared.Notify("Spotify", "Error: No active Spotify player found", false)
-            else
-                Shared.Notify("Spotify", "Next track command sent", true)
-            end
-            task.wait(0.35)
-            local trk = getSpotifyTrack()
-            if trk then updateVisuals(trk) end
-        end)
-    end)
+    MkButton(rightCol, "⏮  Previous Track", 11, handleSpotifyPrevious)
+    MkButton(rightCol, "⏯  Play / Pause", 12, handleSpotifyPlayPause)
+    MkButton(rightCol, "⏭  Next Track", 13, handleSpotifyNext)
 
     -- ── DARK MODE THEME CALLBACK ──────────────────────────────────
     -- Rebuilds the HUD with the correct colour palette when the user switches theme
