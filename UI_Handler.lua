@@ -1576,6 +1576,10 @@ return function(Shared)
         StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
     end)
 
+    -- ── CUSTOM WINDOWS AERO LEADERBOARD (PLAYERLIST) ─────────────
+    local lbScroll = nil
+    local lbResizeGrip = nil
+
     local lbWindow = Instance.new("Frame")
     lbWindow.Name = "Fih_CustomLeaderboard"
     lbWindow.Size = UDim2.new(0, 230, 0, 360)
@@ -1607,7 +1611,7 @@ return function(Shared)
     lbTitleCorner.Parent = lbTitleBar
 
     local lbTitleText = Instance.new("TextLabel")
-    lbTitleText.Size = UDim2.new(1, -30, 1, 0)
+    lbTitleText.Size = UDim2.new(1, -52, 1, 0)
     lbTitleText.Position = UDim2.new(0, 8, 0, 0)
     lbTitleText.BackgroundTransparency = 1
     lbTitleText.Text = "Players (" .. tostring(#Players:GetPlayers()) .. ")"
@@ -1619,9 +1623,23 @@ return function(Shared)
     lbTitleText.Parent = lbTitleBar
     registerThemed(lbTitleText, { TextColor3 = "TitleText" })
 
+    local lbMinBtn = Instance.new("TextButton")
+    lbMinBtn.Size = UDim2.new(0, 18, 0, 18)
+    lbMinBtn.Position = UDim2.new(1, -40, 0, 3)
+    lbMinBtn.BackgroundColor3 = C.BtnBg
+    lbMinBtn.BorderSizePixel = 1
+    lbMinBtn.BorderColor3 = C.BtnBorder
+    lbMinBtn.Text = "-"
+    lbMinBtn.TextColor3 = C.BtnText
+    lbMinBtn.Font = Enum.Font.GothamBold
+    lbMinBtn.TextSize = 12
+    lbMinBtn.ZIndex = 43
+    lbMinBtn.Parent = lbTitleBar
+    registerThemed(lbMinBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
+
     local lbCloseBtn = Instance.new("TextButton")
     lbCloseBtn.Size = UDim2.new(0, 18, 0, 18)
-    lbCloseBtn.Position = UDim2.new(1, -21, 0, 3)
+    lbCloseBtn.Position = UDim2.new(1, -20, 0, 3)
     lbCloseBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
     lbCloseBtn.BorderSizePixel = 1
     lbCloseBtn.BorderColor3 = Color3.fromRGB(220, 70, 70)
@@ -1631,11 +1649,50 @@ return function(Shared)
     lbCloseBtn.TextSize = 10
     lbCloseBtn.ZIndex = 43
     lbCloseBtn.Parent = lbTitleBar
+
+    local isLbCollapsed = false
     local isLbOpen = true
     local function getLbTargetHeight(count)
         local c = count or #Players:GetPlayers()
         return math.clamp(32 + c * 31 + 6, 70, 520)
     end
+
+    local function toggleLeaderboardCollapse(explicitState)
+        if explicitState ~= nil then
+            isLbCollapsed = explicitState
+        else
+            isLbCollapsed = not isLbCollapsed
+        end
+
+        local targetH = getLbTargetHeight(#Players:GetPlayers())
+        if isLbCollapsed then
+            if lbScroll then lbScroll.Visible = false end
+            if lbResizeGrip then lbResizeGrip.Visible = false end
+            lbMinBtn.Text = "+"
+            pcall(function()
+                TweenSvc:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Size = UDim2.new(0, 230, 0, 24)
+                }):Play()
+            end)
+        else
+            lbMinBtn.Text = "-"
+            pcall(function()
+                TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Size = UDim2.new(0, 230, 0, targetH)
+                }):Play()
+            end)
+            task.delay(0.12, function()
+                if not isLbCollapsed and isLbOpen then
+                    if lbScroll then lbScroll.Visible = true end
+                    if lbResizeGrip then lbResizeGrip.Visible = true end
+                end
+            end)
+        end
+    end
+
+    lbMinBtn.MouseButton1Click:Connect(function()
+        toggleLeaderboardCollapse()
+    end)
 
     local function toggleLeaderboard(explicitState)
         if explicitState ~= nil then
@@ -1644,12 +1701,11 @@ return function(Shared)
             isLbOpen = not isLbOpen
         end
 
-        local targetH = getLbTargetHeight(#Players:GetPlayers())
         if isLbOpen then
             lbWindow.Visible = true
-            lbWindow.Position = UDim2.new(1, -242, 0, 36)
-            lbWindow.Size     = UDim2.new(0, 230, 0, targetH)
-            lbWindow.BackgroundTransparency = 1
+            isLbCollapsed = false
+            lbMinBtn.Text = "-"
+            local targetH = getLbTargetHeight(#Players:GetPlayers())
             pcall(function()
                 TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Position = UDim2.new(1, -242, 0, 48),
@@ -1657,11 +1713,18 @@ return function(Shared)
                     BackgroundTransparency = 0.50
                 }):Play()
             end)
+            task.delay(0.12, function()
+                if isLbOpen and not isLbCollapsed then
+                    if lbScroll then lbScroll.Visible = true end
+                    if lbResizeGrip then lbResizeGrip.Visible = true end
+                end
+            end)
         else
+            if lbScroll then lbScroll.Visible = false end
+            if lbResizeGrip then lbResizeGrip.Visible = false end
             pcall(function()
-                TweenSvc:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-                    Position = UDim2.new(1, -242, 0, 20),
-                    Size     = UDim2.new(0, 230, 0, 24),
+                TweenSvc:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                    Size = UDim2.new(0, 230, 0, 24),
                     BackgroundTransparency = 1
                 }):Play()
             end)
@@ -1709,22 +1772,22 @@ return function(Shared)
 
     -- Resizing Grip for Leaderboard
     do
-        local resizeGrip = Instance.new("TextButton")
-        resizeGrip.Name                   = "LBResizeGrip"
-        resizeGrip.Size                   = UDim2.new(0, 14, 0, 14)
-        resizeGrip.Position               = UDim2.new(1, -14, 1, -14)
-        resizeGrip.BackgroundTransparency = 1
-        resizeGrip.Text                   = "◢"
-        resizeGrip.TextColor3             = C.WinBorder
-        resizeGrip.Font                   = Enum.Font.Code
-        resizeGrip.TextSize               = 11
-        resizeGrip.ZIndex                 = 50
-        resizeGrip.Parent                 = lbWindow
-        registerThemed(resizeGrip, { TextColor3 = "WinBorder" })
+        lbResizeGrip = Instance.new("TextButton")
+        lbResizeGrip.Name                   = "LBResizeGrip"
+        lbResizeGrip.Size                   = UDim2.new(0, 14, 0, 14)
+        lbResizeGrip.Position               = UDim2.new(1, -14, 1, -14)
+        lbResizeGrip.BackgroundTransparency = 1
+        lbResizeGrip.Text                   = "◢"
+        lbResizeGrip.TextColor3             = C.WinBorder
+        lbResizeGrip.Font                   = Enum.Font.Code
+        lbResizeGrip.TextSize               = 11
+        lbResizeGrip.ZIndex                 = 50
+        lbResizeGrip.Parent                 = lbWindow
+        registerThemed(lbResizeGrip, { TextColor3 = "WinBorder" })
 
         local resizing = false
         local rStartPos, rStartSize
-        resizeGrip.InputBegan:Connect(function(i)
+        lbResizeGrip.InputBegan:Connect(function(i)
             if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
                 resizing = true
                 rStartPos = i.Position
@@ -1747,7 +1810,7 @@ return function(Shared)
     end
 
     -- Scroll Area
-    local lbScroll = Instance.new("ScrollingFrame")
+    lbScroll = Instance.new("ScrollingFrame")
     lbScroll.Size = UDim2.new(1, 0, 1, -24)
     lbScroll.Position = UDim2.new(0, 0, 0, 24)
     lbScroll.BackgroundTransparency = 1
@@ -1900,7 +1963,7 @@ return function(Shared)
     end
 
     local currentSelectedPlr = nil
-    local function openPlayerProfile(plr)
+    local function openPlayerProfile(plr, rowInstance)
         if not plr then return end
         currentSelectedPlr = plr
         pcTitle.Text = "Player :: @" .. plr.Name
@@ -1908,11 +1971,25 @@ return function(Shared)
         pcUName.Text = "@" .. plr.Name
         pcInfo.Text = "Age: " .. tostring(plr.AccountAge) .. "d | ID: " .. tostring(plr.UserId)
         pcAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. tostring(plr.UserId) .. "&width=150&height=150&format=png"
+
+        local cardH = 215
+        local cardW = 220
+        local cam = workspace.CurrentCamera
+        local viewportH = (cam and cam.ViewportSize.Y) or 800
+
+        local rowY = (rowInstance and rowInstance.AbsolutePosition.Y) or lbWindow.AbsolutePosition.Y
+        local targetY = math.clamp(rowY - 8, 36, viewportH - cardH - 12)
+        local targetX = math.max(lbWindow.AbsolutePosition.X - cardW - 8, 8)
+        local startX  = targetX + 45 -- Pop from right to left!
+
+        profileCard.Position = UDim2.new(0, startX, 0, targetY)
+        profileCard.BackgroundTransparency = 1
         profileCard.Visible = true
+
         pcall(function()
-            profileCard.Position = UDim2.new(1, -485, 0, 48)
-            TweenService:Create(profileCard, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                Position = UDim2.new(1, -475, 0, 48)
+            TweenService:Create(profileCard, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Position = UDim2.new(0, targetX, 0, targetY),
+                BackgroundTransparency = 0.15
             }):Play()
         end)
     end
@@ -1962,7 +2039,7 @@ return function(Shared)
 
         -- Dynamically scale window height to fit player count smoothly
         local targetH = getLbTargetHeight(#allPlrs)
-        if isLbOpen and lbWindow.Visible then
+        if isLbOpen and lbWindow.Visible and not isLbCollapsed then
             pcall(function()
                 TweenSvc:Create(lbWindow, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, 230, 0, targetH)
@@ -2035,7 +2112,7 @@ return function(Shared)
                 TweenSvc:Create(row, TweenInfo.new(0.12), { BackgroundTransparency = 0.55, BackgroundColor3 = C.RowBg }):Play()
             end)
             rowBtn.MouseButton1Click:Connect(function()
-                openPlayerProfile(plr)
+                openPlayerProfile(plr, row)
             end)
         end
     end
