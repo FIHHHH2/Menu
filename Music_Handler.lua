@@ -451,11 +451,15 @@ return function(Shared)
         end
 
         return {
-            name      = trackName,
-            artist    = artistName,
-            cover     = coverUrl,
-            isPlaying = data.is_playing or false,
-            source    = "Spotify"
+            id          = item.id,
+            name        = trackName,
+            artist      = artistName,
+            cover       = coverUrl,
+            isPlaying   = data.is_playing or false,
+            progress_ms = data.progress_ms or 0,
+            duration_ms = item.duration_ms or 0,
+            pollTime    = os.clock(),
+            source      = "Spotify"
         }
     end
 
@@ -1038,9 +1042,53 @@ return function(Shared)
         applyImage(hudCoverImg, currentTrack)
     end
 
+    -- ── SPOTIFY AUDIO ANALYSIS FETCHER (Segments, Beats, Loudness, Pitches) ──
+    local trackAnalysisCache = {}
+    local isFetchingAnalysis = {}
+
+    local function fetchAudioAnalysis(trackId)
+        if not trackId or trackId == "" or trackAnalysisCache[trackId] or isFetchingAnalysis[trackId] then return end
+        isFetchingAnalysis[trackId] = true
+
+        task.spawn(function()
+            local token = cleanToken(Shared.Config.SpotifyToken)
+            if not token or token == "" then
+                isFetchingAnalysis[trackId] = nil
+                return
+            end
+
+            local resp = Shared.HttpRequest({
+                Url     = "https://api.spotify.com/v1/audio-analysis/" .. trackId,
+                Method  = "GET",
+                Headers = {
+                    ["Authorization"] = "Bearer " .. token,
+                    ["Content-Type"]  = "application/json"
+                }
+            })
+
+            isFetchingAnalysis[trackId] = nil
+
+            if resp and resp.Body then
+                local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
+                if ok and data and data.segments then
+                    trackAnalysisCache[trackId] = {
+                        segments = data.segments,
+                        beats    = data.beats or {},
+                        tatums   = data.tatums or {},
+                        sections = data.sections or {},
+                    }
+                end
+            end
+        end)
+    end
+
     -- Update all visual elements & apply new cover image when URL changes
     local function updateVisuals(track)
         currentTrack = track
+
+        if track.source == "Spotify" and track.id then
+            fetchAudioAnalysis(track.id)
+        end
 
         if bbSongLbl then bbSongLbl.Text = track.name end
         if bbArtistLbl then bbArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
@@ -1313,35 +1361,109 @@ return function(Shared)
         gameAudioWire.Parent = workspace
     end)
 
-    -- ── AUDIO EQUALIZER VISUALIZER ANIMATION LOOP ──
+    -- ── SPOTIFY TIMESTAMP & VOLUME/PITCH EQUALIZER ENGINE ──
+    local lastSegIdx = 1
     local RunService = game:GetService("RunService")
     RunService.RenderStepped:Connect(function()
-        local isPlaying = (currentTrack.name ~= "Not Playing" and currentTrack.name ~= "Error loading" and currentTrack.name ~= "" and currentTrack.name ~= nil)
+        local isPlaying = (currentTrack.isPlaying ~= false) and (currentTrack.name ~= "Not Playing" and currentTrack.name ~= "Error loading" and currentTrack.name ~= "" and currentTrack.name ~= nil)
         local t = os.clock() * 10
 
-        -- Read live frequency spectrum from Roblox audio engine
+        -- Read live frequency spectrum from Roblox audio engine if present
         local spectrum = nil
         if gameAudioAnalyzer then
             pcall(function() spectrum = gameAudioAnalyzer:GetSpectrum() end)
         end
 
+        local analysis = (currentTrack.id and trackAnalysisCache[currentTrack.id])
+        local songSec = 0
+        if currentTrack.isPlaying and currentTrack.pollTime then
+            songSec = ((currentTrack.progress_ms or 0) / 1000) + (os.clock() - currentTrack.pollTime)
+        end
+
+        -- Find active Spotify audio segment for exact millisecond timestamp
+        local activeSegment = nil
+        local beatKick = 0
+        if analysis and analysis.segments and #analysis.segments > 0 then
+            local segs = analysis.segments
+            if lastSegIdx > #segs then lastSegIdx = 1 end
+            local found = false
+            for i = math.max(1, lastSegIdx - 5), math.min(#segs, lastSegIdx + 30) do
+                local s = segs[i]
+                if s and s.start <= songSec and (s.start + s.duration) > songSec then
+                    activeSegment = s
+                    lastSegIdx = i
+                    found = true
+                    break
+                end
+            end
+            if not found then
+                for i = 1, #segs do
+                    local s = segs[i]
+                    if s and s.start <= songSec and (s.start + s.duration) > songSec then
+                        activeSegment = s
+                        lastSegIdx = i
+                        break
+                    end
+                end
+            end
+
+            -- Beat drop detection
+            if analysis.beats then
+                for _, b in ipairs(analysis.beats) do
+                    if math.abs(b.start - songSec) < 0.08 then
+                        beatKick = 0.35 * (b.confidence or 0.8)
+                        break
+                    end
+                end
+            end
+        end
+
         local function getBandLevel(barIdx, totalBars)
+            if not isPlaying then return 0 end
+
+            -- 1. Precision Spotify Audio Analysis (Exact Timestamp Loudness & Pitches)
+            if activeSegment and activeSegment.pitches then
+                local loudnessDb = activeSegment.loudness_max or -20 -- typical range -60dB to 0dB
+                local normVol = math.clamp((loudnessDb + 45) / 45, 0.15, 1) -- normalized volume
+
+                local pitches = activeSegment.pitches -- 12 chromatic musical pitches
+                local pVal = 0
+
+                if barIdx == 1 then
+                    pVal = (pitches[1] or 0.5) * 0.7 + (pitches[2] or 0.5) * 0.3
+                elseif barIdx == 2 then
+                    pVal = (pitches[2] or 0.5) * 0.3 + (pitches[3] or 0.5) * 0.4 + (pitches[4] or 0.5) * 0.3
+                elseif barIdx == 3 then
+                    pVal = (pitches[4] or 0.5) * 0.3 + (pitches[5] or 0.5) * 0.4 + (pitches[6] or 0.5) * 0.3
+                elseif barIdx == 4 then
+                    pVal = (pitches[6] or 0.5) * 0.3 + (pitches[7] or 0.5) * 0.4 + (pitches[8] or 0.5) * 0.3
+                elseif barIdx == 5 then
+                    pVal = (pitches[8] or 0.5) * 0.3 + (pitches[9] or 0.5) * 0.4 + (pitches[10] or 0.5) * 0.3
+                elseif barIdx == 6 then
+                    pVal = (pitches[10] or 0.5) * 0.3 + (pitches[11] or 0.5) * 0.4 + (pitches[12] or 0.5) * 0.3
+                else
+                    pVal = (pitches[12] or 0.5) * 0.5 + (pitches[1] or 0.5) * 0.5
+                end
+
+                local level = math.clamp((pVal * 0.75 + normVol * 0.25) * normVol + beatKick, 0.15, 1)
+                return level
+            end
+
+            -- 2. Hardware Live Frequency Spectrum (AudioAnalyzer)
             if spectrum and #spectrum >= 32 then
                 local binStart = math.floor((barIdx - 1) * (#spectrum / totalBars)) + 1
                 local binEnd   = math.floor(barIdx * (#spectrum / totalBars))
-                local sum = 0
-                local count = 0
+                local sum, count = 0, 0
                 for b = binStart, math.min(binEnd, #spectrum) do
                     sum = sum + (spectrum[b] or 0)
                     count = count + 1
                 end
                 local avg = (count > 0) and (sum / count) or 0
                 local specLevel = math.clamp(avg * 50.0, 0, 1)
-                if specLevel > 0.02 then
-                    return specLevel
-                end
+                if specLevel > 0.02 then return specLevel end
             end
-            -- Dynamic frequency band harmonic when audio engine has low gain
+
+            -- 3. Dynamic Rhythmic Harmonic Pulse Fallback
             local pulse = math.abs(math.sin(t * 1.5 + barIdx * 0.9) * 0.65 + math.cos(t * 2.4 + barIdx * 1.3) * 0.35)
             return math.clamp(pulse, 0.15, 1)
         end
@@ -1350,9 +1472,9 @@ return function(Shared)
             for i, bar in ipairs(bbVisBars) do
                 if bar and bar.Parent then
                     local h = getBandLevel(i, #bbVisBars)
-                    local barH = math.clamp(math.floor(h * 14) + 2, 2, 14)
+                    local barH = isPlaying and math.clamp(math.floor(h * 14) + 2, 2, 14) or 2
                     bar.Size = UDim2.new(0, 5, 0, barH)
-                    bar.BackgroundColor3 = Color3.fromHSV((0.36 + i * 0.04) % 1, 0.9, 0.95)
+                    bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.36 + i * 0.04) % 1, 0.9, 0.95) or Color3.fromRGB(70, 85, 110)
                 end
             end
         end
@@ -1360,9 +1482,9 @@ return function(Shared)
             for i, bar in ipairs(hudVisBars) do
                 if bar and bar.Parent then
                     local h = getBandLevel(i, #hudVisBars)
-                    local barH = math.clamp(math.floor(h * 18) + 2, 2, 18)
+                    local barH = isPlaying and math.clamp(math.floor(h * 18) + 2, 2, 18) or 3
                     bar.Size = UDim2.new(0, 6, 0, barH)
-                    bar.BackgroundColor3 = Color3.fromHSV((0.55 + i * 0.03) % 1, 0.85, 1)
+                    bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.55 + i * 0.03) % 1, 0.85, 1) or Color3.fromRGB(60, 75, 100)
                 end
             end
         end

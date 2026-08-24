@@ -280,11 +280,12 @@ return function(Shared)
         pcall(function()
             if writefile then
                 local data = {
-                    Flags        = Shared.Flags,
-                    SpotifyToken = Shared.Config.SpotifyToken or "",
-                    LastFMUser   = Shared.Config.LastFMUser or "",
-                    DarkMode     = isDark,
-                    Keybinds     = {}
+                    Flags               = Shared.Flags,
+                    SpotifyToken        = Shared.Config.SpotifyToken or "",
+                    SpotifyRefreshToken = Shared.Config.SpotifyRefreshToken or "",
+                    LastFMUser          = Shared.Config.LastFMUser or "",
+                    DarkMode            = isDark,
+                    Keybinds            = {}
                 }
                 for fKey, item in pairs(Shared.Toggles) do
                     if item.Key then data.Keybinds[fKey] = item.Key.Name end
@@ -309,8 +310,9 @@ return function(Shared)
             if isfile and readfile and isfile(CONFIG_FILE) then
                 local data = Http:JSONDecode(readfile(CONFIG_FILE))
                 if data then
-                    Shared.Config.SpotifyToken = data.SpotifyToken or ""
-                    Shared.Config.LastFMUser   = data.LastFMUser or ""
+                    Shared.Config.SpotifyToken        = data.SpotifyToken or ""
+                    Shared.Config.SpotifyRefreshToken = data.SpotifyRefreshToken or ""
+                    Shared.Config.LastFMUser          = data.LastFMUser or ""
                     if data.DarkMode == true then
                         applyThemeTransition(DarkTheme)
                         if themeBtn then themeBtn.Text = '☀️' end
