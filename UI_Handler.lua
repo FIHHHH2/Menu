@@ -2063,6 +2063,10 @@ return function(Shared)
     local GuiService = game:GetService("GuiService")
     local VirtualInput = game:GetService("VirtualInputManager")
 
+    local chatScroll = nil
+    local inputBar = nil
+    local chatResizeGrip = nil
+
     local chatWindow = Instance.new("Frame")
     chatWindow.Name = "Fih_CustomChat"
     chatWindow.Size = UDim2.new(0, 420, 0, 260)
@@ -2508,7 +2512,7 @@ return function(Shared)
     end
 
     -- Message Scroll Area with Message Deduplication Filter
-    local chatScroll = Instance.new("ScrollingFrame")
+    chatScroll = Instance.new("ScrollingFrame")
     chatScroll.Size = UDim2.new(1, -2, 1, -64)
     chatScroll.Position = UDim2.new(0, 1, 0, 27)
     chatScroll.BackgroundTransparency = 1
@@ -2567,7 +2571,7 @@ return function(Shared)
     end
 
     -- Bottom 3-Column Input Bar: [Quick] | [Text Box] | [Send]
-    local inputBar = Instance.new("Frame")
+    inputBar = Instance.new("Frame")
     inputBar.Size = UDim2.new(1, 0, 0, 34)
     inputBar.Position = UDim2.new(0, 0, 1, -34)
     inputBar.BackgroundColor3 = C.RowBg
@@ -2757,7 +2761,7 @@ return function(Shared)
     end)
 
     -- Bottom-Right Corner Resize Grip (◢)
-    local chatResizeGrip = Instance.new("TextLabel")
+    chatResizeGrip = Instance.new("TextLabel")
     chatResizeGrip.Size = UDim2.new(0, 14, 0, 14)
     chatResizeGrip.Position = UDim2.new(1, -14, 1, -14)
     chatResizeGrip.BackgroundTransparency = 1
