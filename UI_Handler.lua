@@ -741,6 +741,11 @@ return function(Shared)
                 resizing = true; rStartPos = i.Position; rStartSize = Window.AbsoluteSize
             end
         end)
+        UserInput.InputEnded:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                resizing = false
+            end
+        end)
         UserInput.InputChanged:Connect(function(i)
             if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
                 local d = i.Position - rStartPos
