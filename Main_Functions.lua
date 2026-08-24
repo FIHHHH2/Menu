@@ -371,11 +371,12 @@ return function(Shared)
             bg.ClipsDescendants       = false
             bg.Parent                 = bb
 
-            -- Ronald Cat Overlay on top of BG
+            -- Ronald Cat Overlay on top of BG (Far Right Edge)
             local ronaldImg = Instance.new("ImageLabel")
             ronaldImg.Name                   = "RonaldCatOverlay"
-            ronaldImg.Size                   = UDim2.new(0, 36, 0, 50)
-            ronaldImg.Position               = UDim2.new(1, -44, 0, -44)
+            ronaldImg.Size                   = UDim2.new(0, 36, 0, 48)
+            ronaldImg.AnchorPoint            = Vector2.new(1, 1)
+            ronaldImg.Position               = UDim2.new(1, 0, 0, 1)
             ronaldImg.BackgroundTransparency = 1
             ronaldImg.BorderSizePixel        = 0
             ronaldImg.ScaleType              = Enum.ScaleType.Fit

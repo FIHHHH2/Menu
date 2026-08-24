@@ -620,7 +620,44 @@ return function(Shared)
         bg.BackgroundTransparency = 0.15
         bg.BorderSizePixel      = 1
         bg.BorderColor3         = Color3.fromRGB(0, 160, 255)
+        bg.ClipsDescendants     = false
         bg.Parent               = billboard
+
+        -- Ronald Cat Overlay on top of BG (Far Right Edge)
+        local ronaldAsset = nil
+        local function getRonald()
+            if ronaldAsset then return ronaldAsset end
+            local gca = getcustomasset or getsynasset or (getgenv and (getgenv().getcustomasset or getgenv().getsynasset))
+            local wf  = writefile or (getgenv and getgenv().writefile)
+            local isf = isfile or (getgenv and getgenv().isfile)
+            local fname = "fih_ronald.png"
+            if gca and wf then
+                pcall(function()
+                    if not (isf and isf(fname)) then
+                        local bytes = game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu/main/ronald_cat.png")
+                        if bytes and #bytes > 1000 then wf(fname, bytes) end
+                    end
+                end)
+                local ok, a = pcall(function() return gca(fname) end)
+                if ok and a and a ~= "" then
+                    ronaldAsset = a
+                    return a
+                end
+            end
+            return "https://raw.githubusercontent.com/FIHHHH2/Menu/main/ronald_cat.png"
+        end
+
+        local ronaldImg = Instance.new("ImageLabel")
+        ronaldImg.Name                   = "RonaldCatOverlay"
+        ronaldImg.Size                   = UDim2.new(0, 36, 0, 48)
+        ronaldImg.AnchorPoint            = Vector2.new(1, 1)
+        ronaldImg.Position               = UDim2.new(1, 0, 0, 1)
+        ronaldImg.BackgroundTransparency = 1
+        ronaldImg.BorderSizePixel        = 0
+        ronaldImg.ScaleType              = Enum.ScaleType.Fit
+        ronaldImg.ZIndex                 = 25
+        ronaldImg.Image                  = getRonald()
+        ronaldImg.Parent                 = bg
 
         local bbCoverContainer = Instance.new("Frame")
         bbCoverContainer.Size             = UDim2.new(0, 50, 0, 50)
