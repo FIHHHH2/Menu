@@ -303,9 +303,74 @@ return function(Shared)
         return tok
     end
 
-    local function spotifyRequest(endpoint, method, body)
+    -- ── BASE64 ENCODER FOR SPOTIFY CLIENT AUTH ─────────────────────
+    local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    local function toBase64(data)
+        return ((data:gsub('.', function(x) 
+            local r,b='',x:byte()
+            for i=8,1,-1 do r=r..(b%2^i-b%2^(i-1)>0 and '1' or '0') end
+            return r;
+        end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
+            if (#x < 6) then return '' end
+            local c=0
+            for i=1,6 do c=c+(x:sub(i,i)=='1' and 2^(6-i) or 0) end
+            return b64chars:sub(c+1,c+1)
+        end)..({ '', '==', '=' })[#data%3+1])
+    end
+
+    -- ── PERMANENT SPOTIFY AUTO-REFRESH ENGINE ───────────────────────
+    local isRefreshingToken = false
+    local function refreshSpotifyToken()
+        local rToken   = cleanToken(Shared.Config.SpotifyRefreshToken)
+        local clientId = cleanToken(Shared.Config.SpotifyClientId)
+        local clientSec = cleanToken(Shared.Config.SpotifyClientSecret)
+
+        if not rToken or rToken == "" then return false, "No Refresh Token" end
+        if isRefreshingToken then return false, "Refresh in progress" end
+        isRefreshingToken = true
+
+        local headers = { ["Content-Type"] = "application/x-www-form-urlencoded" }
+        local body = "grant_type=refresh_token&refresh_token=" .. rToken
+
+        if clientId and clientId ~= "" and clientSec and clientSec ~= "" then
+            headers["Authorization"] = "Basic " .. toBase64(clientId .. ":" .. clientSec)
+        elseif clientId and clientId ~= "" then
+            body = body .. "&client_id=" .. clientId
+        end
+
+        local resp = Shared.HttpRequest({
+            Url     = "https://accounts.spotify.com/api/token",
+            Method  = "POST",
+            Headers = headers,
+            Body    = body,
+        })
+
+        isRefreshingToken = false
+
+        if resp and resp.Body then
+            local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
+            if ok and data and data.access_token then
+                Shared.Config.SpotifyToken = data.access_token
+                if data.refresh_token then
+                    Shared.Config.SpotifyRefreshToken = data.refresh_token
+                end
+                if Shared.SaveConfig then Shared.SaveConfig() end
+                return true, data.access_token
+            end
+        end
+        return false, (resp and resp.Body) or "Refresh failed"
+    end
+
+    local function spotifyRequest(endpoint, method, body, hasRetried)
         local token = cleanToken(Shared.Config.SpotifyToken)
-        if not token or token == "" then return nil, "No Token" end
+        if not token or token == "" then
+            if Shared.Config.SpotifyRefreshToken and not hasRetried then
+                local ok = refreshSpotifyToken()
+                if ok then return spotifyRequest(endpoint, method, body, true) end
+            end
+            return nil, "No Token"
+        end
+
         local payload = body and Http:JSONEncode(body) or ""
         local resp = Shared.HttpRequest({
             Url     = "https://api.spotify.com/v1/me/player" .. endpoint,
@@ -317,12 +382,26 @@ return function(Shared)
             },
             Body    = payload ~= "" and payload or nil,
         })
+
+        if resp and resp.StatusCode == 401 and not hasRetried and Shared.Config.SpotifyRefreshToken then
+            local ok = refreshSpotifyToken()
+            if ok then
+                return spotifyRequest(endpoint, method, body, true)
+            end
+        end
+
         return resp
     end
 
-    local function getSpotifyTrack()
+    local function getSpotifyTrack(hasRetried)
         local token = cleanToken(Shared.Config.SpotifyToken)
-        if not token or token == "" then return nil, "No Token" end
+        if not token or token == "" then
+            if Shared.Config.SpotifyRefreshToken and not hasRetried then
+                local ok = refreshSpotifyToken()
+                if ok then return getSpotifyTrack(true) end
+            end
+            return nil, "No Token"
+        end
 
         local resp = Shared.HttpRequest({
             Url     = "https://api.spotify.com/v1/me/player/currently-playing",
@@ -332,6 +411,14 @@ return function(Shared)
                 ["Content-Type"]  = "application/json",
             },
         })
+
+        if resp and resp.StatusCode == 401 and not hasRetried and Shared.Config.SpotifyRefreshToken then
+            local ok = refreshSpotifyToken()
+            if ok then
+                return getSpotifyTrack(true)
+            end
+            return nil, "Expired/Invalid Token (401)"
+        end
 
         if not resp or (resp.StatusCode and resp.StatusCode == 401) then
             return nil, "Expired/Invalid Token (401)"
@@ -1014,32 +1101,71 @@ return function(Shared)
         end
     end)
 
-    -- RIGHT COLUMN: SPOTIFY OAUTH & CONTROLS
-    MkSection(rightCol, "Spotify OAuth Token", 1)
+    -- RIGHT COLUMN: PERMANENT SPOTIFY OAUTH & CONTROLS
+    MkSection(rightCol, "Spotify Permanent OAuth", 1)
 
+    -- Refresh Token Input (Permanent - Never Expires)
+    local refreshBox = Instance.new("TextBox")
+    refreshBox.Name                  = "SpotifyRefreshTokenInput"
+    refreshBox.Size                  = UDim2.new(1, 0, 0, 24)
+    refreshBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
+    refreshBox.BorderSizePixel       = 1
+    refreshBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
+    refreshBox.Text                  = (Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "") and "Permanent Refresh Token: Set" or "Paste Spotify Refresh Token (Permanent)"
+    refreshBox.PlaceholderText       = "Paste Spotify Refresh Token"
+    refreshBox.TextColor3            = Color3.fromRGB(20, 20, 60)
+    refreshBox.Font                  = Enum.Font.Code
+    refreshBox.TextSize              = 10
+    refreshBox.LayoutOrder           = 2
+    refreshBox.Parent                = rightCol
+
+    refreshBox.FocusLost:Connect(function()
+        if refreshBox.Text ~= "" and not refreshBox.Text:find("Permanent Refresh Token: Set") then
+            Shared.Config.SpotifyRefreshToken = cleanToken(refreshBox.Text)
+            if Shared.SaveConfig then Shared.SaveConfig() end
+            refreshBox.Text = "Permanent Refresh Token: Set"
+            local ok, res = refreshSpotifyToken()
+            if ok then
+                Shared.Notify("Spotify", "Permanent OAuth connected & refreshed!", true)
+                local trk = getSpotifyTrack()
+                if trk then updateVisuals(trk) end
+            else
+                Shared.Notify("Spotify", "Refresh Token saved (Awaiting client trigger)", true)
+            end
+        end
+    end)
+
+    -- Standard Token Input (Fallback / Manual)
     local spotBox = Instance.new("TextBox")
     spotBox.Name                  = "SpotifyTokenInput"
     spotBox.Size                  = UDim2.new(1, 0, 0, 24)
     spotBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
     spotBox.BorderSizePixel       = 1
     spotBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
-    spotBox.Text                  = (Shared.Config.SpotifyToken and Shared.Config.SpotifyToken ~= "") and "Token: Set (Click to change)" or "Paste Spotify OAuth Token"
+    spotBox.Text                  = (Shared.Config.SpotifyToken and Shared.Config.SpotifyToken ~= "") and "Access Token: Set (Click to change)" or "Paste Spotify Access Token (1-Hr)"
+    spotBox.PlaceholderText       = "Paste Spotify Access Token"
     spotBox.TextColor3            = Color3.fromRGB(20, 20, 60)
     spotBox.Font                  = Enum.Font.Code
-    spotBox.TextSize              = 11
-    spotBox.LayoutOrder           = 2
+    spotBox.TextSize              = 10
+    spotBox.LayoutOrder           = 3
     spotBox.Parent                = rightCol
 
     spotBox.FocusLost:Connect(function()
-        if spotBox.Text ~= "" and not spotBox.Text:find("Token: Set") then
+        if spotBox.Text ~= "" and not spotBox.Text:find("Access Token: Set") then
             Shared.Config.SpotifyToken = cleanToken(spotBox.Text)
             if Shared.SaveConfig then Shared.SaveConfig() end
-            spotBox.Text = "Token: Set (Click to change)"
-            Shared.Notify("Spotify", "OAuth Token saved", true)
+            spotBox.Text = "Access Token: Set (Click to change)"
+            Shared.Notify("Spotify", "Access Token saved", true)
         end
     end)
 
-    MkButton(rightCol, "[ Test Spotify Token ]", 3, function()
+    MkButton(rightCol, "[ Test & Auto-Refresh Token ]", 4, function()
+        if Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "" then
+            local ok, err = refreshSpotifyToken()
+            if ok then
+                Shared.Notify("Spotify", "Permanent Token auto-refreshed successfully!", true)
+            end
+        end
         local trk, err = getSpotifyTrack()
         if trk then
             updateVisuals(trk)
