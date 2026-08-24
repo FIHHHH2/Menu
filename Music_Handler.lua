@@ -322,8 +322,8 @@ return function(Shared)
     local isRefreshingToken = false
     local function refreshSpotifyToken()
         local rToken   = cleanToken(Shared.Config.SpotifyRefreshToken)
-        local clientId = cleanToken(Shared.Config.SpotifyClientId)
-        local clientSec = cleanToken(Shared.Config.SpotifyClientSecret)
+        local clientId = cleanToken(Shared.Config.SpotifyClientId) or "1842aff694404946af4ac03a457c54ab"
+        local clientSec = cleanToken(Shared.Config.SpotifyClientSecret) or "b90742dc54544188a5e2f88d5383bd3c"
 
         if not rToken or rToken == "" then return false, "No Refresh Token" end
         if isRefreshingToken then return false, "Refresh in progress" end
