@@ -50,152 +50,152 @@ return function(Shared)
         end
     end)
 
-    -- ── 7-STAGE CASCADING ALBUM ARTWORK PIPELINE ────────────────
-    -- Strict binary header check — HTML error pages always rejected
+    -- ── PROVEN MULTI-METHOD COVER PIPELINE ──────────────────────
+    -- Mirrors the working approach from Universal Cheat Panel v10:
+    -- unified HTTP wrapper → Last.fm URL first → iTunes fallback
+
+    -- Unified HTTP: tries all executor methods in order
+    local function CoverHTTP(url)
+        if not url or url == "" then return nil end
+
+        -- Method 1: request / http_request / syn.request / http.request
+        local reqFn = (typeof(request) == "function" and request)
+                   or (typeof(http_request) == "function" and http_request)
+                   or (getgenv and typeof(getgenv().request) == "function" and getgenv().request)
+                   or (typeof(syn) == "table" and syn.request)
+                   or (typeof(http) == "table" and http.request)
+
+        if reqFn then
+            local ok1, res1 = pcall(reqFn, { Url = url, Method = "GET" })
+            if ok1 and res1 then
+                local b = res1.Body or res1.body
+                if b and type(b) == "string" and #b > 1000 then
+                    return b
+                end
+            end
+            local ok2, res2 = pcall(reqFn, { url = url, method = "GET" })
+            if ok2 and res2 then
+                local b = res2.Body or res2.body
+                if b and type(b) == "string" and #b > 1000 then
+                    return b
+                end
+            end
+        end
+
+        -- Method 2: game:HttpGet
+        local ok3, body3 = pcall(function() return game:HttpGet(url) end)
+        if ok3 and body3 and type(body3) == "string" and #body3 > 1000 then
+            return body3
+        end
+
+        -- Method 3: Shared.HttpRequest
+        local res4 = Shared.HttpRequest({ Url = url, Method = "GET" })
+        if res4 then
+            local b = res4.Body or res4.body
+            if b and type(b) == "string" and #b > 1000 then
+                return b
+            end
+        end
+
+        return nil
+    end
+
+    -- Strict header check: only real image binary passes
     local function isValidImageData(data)
-        if not data or type(data) ~= "string" or #data < 200 then return false end
-        local b1, b2, b3, b4 = string.byte(data, 1, 4)
+        if not data or type(data) ~= "string" or #data < 500 then return false end
+        local b1, b2, b3 = string.byte(data, 1, 3)
         -- JPEG: FF D8 FF
         if b1 == 255 and b2 == 216 and b3 == 255 then return true end
-        -- PNG: 89 50 4E 47
-        if b1 == 137 and b2 == 80 and b3 == 78 and b4 == 71 then return true end
+        -- PNG: 89 50 4E
+        if b1 == 137 and b2 == 80 and b3 == 78 then return true end
         -- GIF: 47 49 46
         if b1 == 71 and b2 == 73 and b3 == 70 then return true end
-        -- WEBP: 52 49 46 46 (...) 57 45 42 50
-        if b1 == 82 and b2 == 73 and b3 == 70 and b4 == 70 then return true end
-        -- BMP: 42 4D
+        -- WEBP / BMP
+        if b1 == 82 and b2 == 73 then return true end
         if b1 == 66 and b2 == 77 then return true end
         return false
     end
 
-    local function downloadImageBytes(url)
-        if not url or url == "" or not url:find("http") then return nil end
+    local function getImageExtension(data)
+        if not data or #data < 2 then return "jpg" end
+        local b1, b2 = string.byte(data, 1, 2)
+        if b1 == 255 and b2 == 216 then return "jpg" end
+        if b1 == 137 then return "png" end
+        return "jpg"
+    end
 
-        local ok, res = pcall(function() return game:HttpGet(url) end)
-        if ok and res and isValidImageData(res) then return res end
+    -- Write bytes to executor filesystem and return rbxasset:// URL
+    local function writeAndGetAsset(imgBytes)
+        local getcustomasset = getcustomasset or getsynasset
+                            or (getgenv and (getgenv().getcustomasset or getgenv().getsynasset))
+        local writefile_fn   = writefile or (getgenv and getgenv().writefile)
+        local delfile_fn     = delfile   or (getgenv and getgenv().delfile)
 
-        local reqRes = Shared.HttpRequest({
-            Url     = url,
-            Method  = "GET",
-            Headers = { ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-        })
-        if reqRes and reqRes.Body and isValidImageData(reqRes.Body) then
-            return reqRes.Body
+        if not getcustomasset or not writefile_fn then return nil end
+
+        local ext  = getImageExtension(imgBytes)
+        local name = "fih_cov_" .. tostring(os.time()) .. "_" .. tostring(math.random(1000,9999)) .. "." .. ext
+        local okW  = pcall(function() writefile_fn(name, imgBytes) end)
+        if not okW then return nil end
+
+        local okA, asset = pcall(function() return getcustomasset(name) end)
+        if okA and asset and asset ~= "" then
+            -- Clean up previous cover file
+            if previousCoverFile ~= "" and previousCoverFile ~= name and delfile_fn then
+                pcall(function() delfile_fn(previousCoverFile) end)
+            end
+            previousCoverFile = name
+            return asset
         end
         return nil
     end
 
-    -- Collects candidate URLs across multiple public databases
-    local function gatherCoverCandidates(artist, trackName, primaryUrl)
-        local list = {}
-        if primaryUrl and primaryUrl ~= "" and primaryUrl:find("http") then
-            table.insert(list, primaryUrl)
-        end
+    -- Fetch cover from iTunes Search API (proven to work in all executors)
+    local function fetchiTunesCover(artist, song)
+        if not artist or not song or artist == "" or song == "" then return nil end
+        local query = Http:UrlEncode(artist .. " " .. song)
+        local url   = "https://itunes.apple.com/search?term=" .. query .. "&media=music&entity=song&limit=1"
 
-        if not artist or not trackName or trackName == "Not Playing" or trackName == "Unknown" then
-            return list
-        end
+        local res = CoverHTTP(url)
+        if not res or #res < 10 then return nil end
 
-        -- Cleaned search term (strip parentheses, feat., remaster, etc.)
-        local cleanArtist = tostring(artist):gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-        local cleanTrack  = tostring(trackName):gsub("%b()", ""):gsub("%b[]", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("%-.*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-        local termClean = Http:UrlEncode(cleanArtist .. " " .. cleanTrack)
-        local termRaw   = Http:UrlEncode(tostring(artist) .. " " .. tostring(trackName))
+        local ok, data = pcall(function() return Http:JSONDecode(res) end)
+        if not ok or not data or not data.results or #data.results == 0 then return nil end
 
-        -- 1. Apple iTunes Search API (HD 600x600)
-        for _, term in ipairs({ termClean, termRaw }) do
-            pcall(function()
-                local res = game:HttpGet("https://itunes.apple.com/search?term=" .. term .. "&media=music&entity=song&limit=1")
-                if res and #res > 0 then
-                    local data = Http:JSONDecode(res)
-                    if data and data.results and data.results[1] and data.results[1].artworkUrl100 then
-                        local art = data.results[1].artworkUrl100:gsub("100x100bb", "600x600bb")
-                        table.insert(list, art)
-                        table.insert(list, data.results[1].artworkUrl100)
-                    end
-                end
-            end)
-            if #list > 1 then break end
-        end
+        local artUrl = data.results[1].artworkUrl100
+        if not artUrl or artUrl == "" then return nil end
 
-        -- 2. Deezer Search API
-        pcall(function()
-            local res = game:HttpGet("https://api.deezer.com/search?q=" .. termClean .. "&limit=1")
-            if res and #res > 0 then
-                local data = Http:JSONDecode(res)
-                if data and data.data and data.data[1] and data.data[1].album then
-                    local alb = data.data[1].album
-                    if alb.cover_xl then table.insert(list, alb.cover_xl) end
-                    if alb.cover_big then table.insert(list, alb.cover_big) end
-                    if alb.cover_medium then table.insert(list, alb.cover_medium) end
-                end
-            end
-        end)
+        -- Try HD first (600x600), fall back to 100x100
+        local hdUrl = artUrl:gsub("100x100bb", "600x600bb")
+        local imgBytes = CoverHTTP(hdUrl)
+        if imgBytes and isValidImageData(imgBytes) then return imgBytes end
 
-        -- 3. Last.fm track.getInfo API
-        pcall(function()
-            local url = "https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=" .. LASTFM_API_KEY .. "&artist=" .. Http:UrlEncode(artist) .. "&track=" .. Http:UrlEncode(trackName) .. "&format=json"
-            local res = game:HttpGet(url)
-            if res and #res > 0 then
-                local data = Http:JSONDecode(res)
-                if data and data.track and data.track.album and data.track.album.image then
-                    for i = #data.track.album.image, 1, -1 do
-                        local imgObj = data.track.album.image[i]
-                        if imgObj and imgObj["#text"] and #imgObj["#text"] > 0 then
-                            table.insert(list, imgObj["#text"])
-                        end
-                    end
-                end
-            end
-        end)
+        imgBytes = CoverHTTP(artUrl)
+        if imgBytes and isValidImageData(imgBytes) then return imgBytes end
 
-        -- 4. Genius Multi-Search API
-        pcall(function()
-            local res = game:HttpGet("https://genius.com/api/search/multi?q=" .. termClean)
-            if res and #res > 0 then
-                local data = Http:JSONDecode(res)
-                if data and data.response and data.response.sections then
-                    for _, sec in ipairs(data.response.sections) do
-                        if sec.hits and sec.hits[1] and sec.hits[1].result then
-                            local r = sec.hits[1].result
-                            if r.song_art_image_url then table.insert(list, r.song_art_image_url) end
-                            if r.header_image_url then table.insert(list, r.header_image_url) end
-                            break
-                        end
-                    end
-                end
-            end
-        end)
-
-        -- 5. Last.fm artist.getInfo fallback (Artist avatar if no album cover)
-        pcall(function()
-            local url = "https://ws.audioscrobbler.com/2.0/?method=artist.getInfo&api_key=" .. LASTFM_API_KEY .. "&artist=" .. Http:UrlEncode(artist) .. "&format=json"
-            local res = game:HttpGet(url)
-            if res and #res > 0 then
-                local data = Http:JSONDecode(res)
-                if data and data.artist and data.artist.image then
-                    for i = #data.artist.image, 1, -1 do
-                        local imgObj = data.artist.image[i]
-                        if imgObj and imgObj["#text"] and #imgObj["#text"] > 0 then
-                            table.insert(list, imgObj["#text"])
-                        end
-                    end
-                end
-            end
-        end)
-
-        return list
+        return nil
     end
 
-    -- Detect JPEG vs PNG from header bytes to use correct extension
-    local function getImageExtension(data)
-        if not data or #data < 4 then return "png" end
-        local b1, b2 = string.byte(data, 1, 2)
-        if b1 == 255 and b2 == 216 then return "jpg" end
-        return "png"
+    -- Also try artist-only iTunes lookup (for obscure tracks where artist+title fails)
+    local function fetchiTunesArtistCover(artist)
+        if not artist or artist == "" then return nil end
+        local query = Http:UrlEncode(artist)
+        local url   = "https://itunes.apple.com/search?term=" .. query .. "&media=music&entity=musicArtist&limit=1"
+        local res   = CoverHTTP(url)
+        if not res or #res < 10 then return nil end
+        local ok, data = pcall(function() return Http:JSONDecode(res) end)
+        if not ok or not data or not data.results or #data.results == 0 then return nil end
+        local r = data.results[1]
+        local artUrl = r.artworkUrl100 or r.artworkUrl60
+        if not artUrl then return nil end
+        local hdUrl = artUrl:gsub("100x100bb", "600x600bb")
+        local imgBytes = CoverHTTP(hdUrl)
+        if imgBytes and isValidImageData(imgBytes) then return imgBytes end
+        return nil
     end
 
     local currentLoadingToken = 0
+
     local function applyImage(imgLabel, trackOrUrl, optArtist)
         if not imgLabel then return end
 
@@ -213,7 +213,7 @@ return function(Shared)
             trackName = currentTrack.name or ""
         end
 
-        -- Immediately set transparent background so nothing white shows while loading
+        -- Immediately clear so no white shows during async load
         if imgLabel and imgLabel.Parent then
             imgLabel.BackgroundTransparency = 1
             imgLabel.Image = ""
@@ -223,58 +223,59 @@ return function(Shared)
         local myToken = currentLoadingToken
 
         task.spawn(function()
-            local getcustomasset = getcustomasset or getsynasset or (getgenv and getgenv().getcustomasset)
-            local writefile      = writefile or (getgenv and getgenv().writefile)
-            local delfile        = delfile or (getgenv and getgenv().delfile)
+            local function apply(imgBytes)
+                if myToken ~= currentLoadingToken then return false end
+                if not imgLabel or not imgLabel.Parent then return false end
+                local asset = writeAndGetAsset(imgBytes)
+                if asset then
+                    currentCoverAsset  = asset
+                    lastLoadedCoverUrl = rawUrl
+                    imgLabel.BackgroundTransparency = 1
+                    imgLabel.Image   = asset
+                    imgLabel.Visible = true
+                    return true
+                end
+                -- No getcustomasset available — set direct URL as fallback
+                imgLabel.BackgroundTransparency = 1
+                imgLabel.Image   = rawUrl ~= "" and rawUrl or ""
+                imgLabel.Visible = true
+                return true
+            end
 
-            -- Gather candidates sequentially (gatherCoverCandidates is concurrent internally)
-            local candidates = gatherCoverCandidates(artist, trackName, rawUrl)
-
-            for _, candidateUrl in ipairs(candidates) do
-                if myToken ~= currentLoadingToken then return end
-
-                local imgBytes = downloadImageBytes(candidateUrl)
-                if not imgBytes then continue end
-                if not isValidImageData(imgBytes) then continue end
-
-                -- Try getcustomasset path first (executor file system)
-                if getcustomasset and writefile then
-                    local ext = getImageExtension(imgBytes)
-                    local uniqueName = "fih_cov_" .. tostring(os.time()) .. "_" .. tostring(math.random(1000,9999)) .. "." .. ext
-                    local okW = pcall(function() writefile(uniqueName, imgBytes) end)
-                    if okW then
-                        local okA, newAsset = pcall(function() return getcustomasset(uniqueName) end)
-                        if okA and newAsset and newAsset ~= "" then
-                            if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
-                                if previousCoverFile ~= "" and previousCoverFile ~= uniqueName and delfile then
-                                    pcall(function() delfile(previousCoverFile) end)
-                                end
-                                previousCoverFile = uniqueName
-                                currentCoverAsset = newAsset
-                                lastLoadedCoverUrl = candidateUrl
-
-                                imgLabel.BackgroundTransparency = 1
-                                imgLabel.Image = newAsset
-                                imgLabel.Visible = true
-                                return
-                            end
-                        end
-                    end
-                else
-                    -- Fallback: direct URL (works in some executors)
-                    if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
-                        imgLabel.BackgroundTransparency = 1
-                        imgLabel.Image = candidateUrl
-                        imgLabel.Visible = true
-                        return
-                    end
+            -- Step 1: Try the Last.fm provided URL (already-known image from the API response)
+            if rawUrl ~= "" and not rawUrl:find("2a96cbd8b46e442fc41c2b86b821562f") then
+                local imgBytes = CoverHTTP(rawUrl)
+                if imgBytes and isValidImageData(imgBytes) then
+                    if apply(imgBytes) then return end
                 end
             end
 
-            -- All candidates exhausted — keep transparent, show note icon placeholder
+            -- Step 2: iTunes with full artist + title
+            local imgBytes = fetchiTunesCover(artist, trackName)
+            if imgBytes then
+                if apply(imgBytes) then return end
+            end
+
+            -- Step 3: iTunes with cleaned artist + title (strip features/remasters)
+            local cleanArtist = tostring(artist):gsub("%b()", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+            local cleanTrack  = tostring(trackName):gsub("%b()", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("%-.*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+            if cleanArtist ~= artist or cleanTrack ~= trackName then
+                imgBytes = fetchiTunesCover(cleanArtist, cleanTrack)
+                if imgBytes then
+                    if apply(imgBytes) then return end
+                end
+            end
+
+            -- Step 4: iTunes artist-only fallback
+            imgBytes = fetchiTunesArtistCover(cleanArtist ~= "" and cleanArtist or artist)
+            if imgBytes then
+                if apply(imgBytes) then return end
+            end
+
+            -- All sources exhausted — leave transparent placeholder
             if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
                 imgLabel.BackgroundTransparency = 1
-                imgLabel.Image = ""
+                imgLabel.Image   = ""
                 imgLabel.Visible = true
             end
         end)
