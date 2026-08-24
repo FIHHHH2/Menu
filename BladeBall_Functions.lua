@@ -32,6 +32,7 @@ return function(Shared)
 
     -- ── CACHED GAME REMOTES ───────────────────────────────────────
     local parryButtonPress = nil
+    local parryTester      = nil
     local parryAttempt     = nil
     local customParry      = nil
     local abilityRemote    = nil
@@ -40,6 +41,7 @@ return function(Shared)
         pcall(function()
             local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage
             parryButtonPress = remotes:FindFirstChild("ParryButtonPress")
+            parryTester      = remotes:FindFirstChild("ParryTester")
             parryAttempt     = remotes:FindFirstChild("ParryAttempt")
             customParry      = remotes:FindFirstChild("CustomParry")
             abilityRemote    = remotes:FindFirstChild("UseAbility") or remotes:FindFirstChild("AbilityButtonPress")
@@ -53,27 +55,66 @@ return function(Shared)
     local lastBallTime = os.clock()
 
     local function findActiveBall()
+        local myHRP = getHRP()
+        local candidateBalls = {}
+
+        -- 1. Check workspace.Balls folder
         local folder = Workspace:FindFirstChild("Balls")
         if folder then
             for _, b in ipairs(folder:GetChildren()) do
-                if b:IsA("BasePart") and b:GetAttribute("realBall") == true then
-                    return b
-                end
-            end
-            for _, b in ipairs(folder:GetChildren()) do
-                if b:IsA("BasePart") and b.Name ~= "Temp" then
-                    return b
+                if b:IsA("BasePart") then
+                    table.insert(candidateBalls, b)
                 end
             end
         end
+
+        -- 2. Check TrainingBalls or LobbyTraining folders
+        local tBalls = Workspace:FindFirstChild("TrainingBalls") or Workspace:FindFirstChild("Training")
+        if tBalls then
+            for _, b in ipairs(tBalls:GetChildren()) do
+                if b:IsA("BasePart") then table.insert(candidateBalls, b) end
+            end
+        end
+
+        local lTraining = Workspace:FindFirstChild("Spawn") and Workspace.Spawn:FindFirstChild("LobbyTraining")
+        if lTraining then
+            for _, d in ipairs(lTraining:GetDescendants()) do
+                if d:IsA("BasePart") and (d.Name:lower():find("ball") or d:GetAttribute("realBall") ~= nil or d:GetAttribute("Training") ~= nil or d.Shape == Enum.PartType.Ball) then
+                    table.insert(candidateBalls, d)
+                end
+            end
+        end
+
+        -- 3. Check Workspace direct children
         for _, b in ipairs(Workspace:GetChildren()) do
-            if b.Name == "Ball" or b.Name:find("Ball") then
-                if b:IsA("BasePart") then return b end
-                local p = b:FindFirstChildOfClass("BasePart")
-                if p then return p end
+            if (b.Name == "Ball" or b.Name:find("Ball") or b.Name:find("Training")) and b:IsA("BasePart") then
+                table.insert(candidateBalls, b)
             end
         end
-        return nil
+
+        if #candidateBalls == 0 then return nil end
+
+        -- If only 1 ball, return it
+        if #candidateBalls == 1 then return candidateBalls[1] end
+
+        -- Prioritize realBall == true, or closest active ball to player
+        local bestBall = nil
+        local bestDist = math.huge
+
+        for _, b in ipairs(candidateBalls) do
+            if b:GetAttribute("realBall") == true and isTargetingMe(b) then
+                return b
+            end
+            if myHRP then
+                local d = (b.Position - myHRP.Position).Magnitude
+                if d < bestDist then
+                    bestDist = d
+                    bestBall = b
+                end
+            end
+        end
+
+        return bestBall or candidateBalls[1]
     end
 
     local function isTargetingMe(ball)
@@ -81,7 +122,7 @@ return function(Shared)
         local t = ball:GetAttribute("target") or ball:GetAttribute("Target")
         if t then
             local tStr = tostring(t)
-            if tStr == Player.Name or tStr == Player.DisplayName or tStr == tostring(Player.UserId) or tStr == "all" then
+            if tStr == Player.Name or tStr == Player.DisplayName or tStr == tostring(Player.UserId) or tStr == "all" or tStr:lower():find("training") then
                 return true
             end
         end
@@ -93,10 +134,28 @@ return function(Shared)
             end
         end
 
+        -- Check if it's a Training Ball near the player
+        local pName = ball.Parent and ball.Parent.Name:lower() or ""
+        local bName = ball.Name:lower()
+        if pName:find("train") or bName:find("train") or ball:GetAttribute("Training") or ball:GetAttribute("practice") then
+            local hrp = getHRP()
+            if hrp then
+                local dist = (ball.Position - hrp.Position).Magnitude
+                if dist < 65 then return true end
+            end
+        end
+
+        -- Proximity & Velocity fallback
         local hrp = getHRP()
         if hrp then
             local dist = (ball.Position - hrp.Position).Magnitude
-            if dist < 22 then return true end
+            if dist < 24 then return true end
+            if dist < 50 and ball.AssemblyLinearVelocity then
+                local toMe = (hrp.Position - ball.Position).Unit
+                if toMe:Dot(ball.AssemblyLinearVelocity.Unit) > 0.75 then
+                    return true
+                end
+            end
         end
         return false
     end
@@ -107,9 +166,12 @@ return function(Shared)
         if now - lastParryTime < 0.015 then return end
         lastParryTime = now
 
-        -- Method 1: BindableEvent internal trigger
+        -- Method 1: BindableEvent internal parry & training tester triggers
         pcall(function()
             if parryButtonPress then parryButtonPress:Fire() end
+        end)
+        pcall(function()
+            if parryTester then parryTester:Fire() end
         end)
 
         -- Method 2: RemoteEvent server parry attempt
