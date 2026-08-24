@@ -535,7 +535,8 @@ return function(Shared)
 
             -- 1. Local File Relay (Multi-Client / Same Machine)
             if writefile then
-                local fname = "fih_peer_" .. curJobIdClean .. "_" .. tostring(Player.UserId) .. ".json"
+                local fname1 = "fih_peer_" .. curJobIdClean .. "_" .. tostring(Player.UserId) .. ".json"
+                local fname2 = "fih_peer_" .. tostring(Player.UserId) .. ".json"
                 local payload = game:GetService("HttpService"):JSONEncode({
                     u = Player.UserId,
                     n = Player.Name,
@@ -545,24 +546,8 @@ return function(Shared)
                     c = c,
                     t = os.time()
                 })
-                pcall(function() writefile(fname, payload) end)
-            end
-
-            -- 2. In-Game Text Chat Beacon
-            local TextChatService = game:GetService("TextChatService")
-            local packet = "[FIH_PEER:" .. game:GetService("HttpService"):JSONEncode({ u = Player.UserId, s = s, a = a, c = c }) .. "]"
-            if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-                local channels = TextChatService:FindFirstChild("TextChannels")
-                local rbac = channels and channels:FindFirstChild("RBXGeneral")
-                if rbac then
-                    pcall(function() rbac:SendAsync(packet) end)
-                end
-            else
-                local sayEv = game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
-                local sayReq = sayEv and sayEv:FindFirstChild("SayMessageRequest")
-                if sayReq then
-                    pcall(function() sayReq:FireServer(packet, "All") end)
-                end
+                pcall(function() writefile(fname1, payload) end)
+                pcall(function() writefile(fname2, payload) end)
             end
         end)
     end
@@ -574,52 +559,19 @@ return function(Shared)
         local ok, files = pcall(function() return listfiles("") end)
         if not ok or not files then return end
 
-        local prefix = "fih_peer_" .. curJobIdClean .. "_"
         local now = os.time()
         for _, file in ipairs(files) do
             local basename = file:match("([^\\/]+)$") or file
-            if basename:find("^" .. prefix) then
+            if basename:find("^fih_peer_") and basename:find("%.json$") then
                 local okR, content = pcall(function() return readfile(file) end)
                 if okR and content and #content > 10 then
                     local okJ, data = pcall(function() return game:GetService("HttpService"):JSONDecode(content) end)
-                    if okJ and data and data.u and (now - (data.t or 0)) < 35 then
+                    if okJ and data and data.u and (now - (data.t or 0)) < 30 then
                         registerPeerData(data.u, data.n, data.d, data.s, data.a, data.c)
                     end
                 end
             end
         end
-    end
-
-    -- Listen to in-game chat messages for peer packets
-    local TextChatService = game:GetService("TextChatService")
-    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        TextChatService.MessageReceived:Connect(function(msg)
-            if msg.Text and msg.Text:find("%[FIH_PEER:") then
-                local rawJson = msg.Text:match("%[FIH_PEER:(.*)%]")
-                if rawJson then
-                    local okJ, data = pcall(function() return game:GetService("HttpService"):JSONDecode(rawJson) end)
-                    if okJ and data and data.u then
-                        registerPeerData(data.u, nil, nil, data.s, data.a, data.c)
-                    end
-                end
-            end
-        end)
-    else
-        local function attachPlayerChat(plr)
-            plr.Chatted:Connect(function(msg)
-                if msg and msg:find("%[FIH_PEER:") then
-                    local rawJson = msg:match("%[FIH_PEER:(.*)%]")
-                    if rawJson then
-                        local okJ, data = pcall(function() return game:GetService("HttpService"):JSONDecode(rawJson) end)
-                        if okJ and data and data.u then
-                            registerPeerData(data.u, nil, nil, data.s, data.a, data.c)
-                        end
-                    end
-                end
-            end)
-        end
-        for _, p in ipairs(Players:GetPlayers()) do attachPlayerChat(p) end
-        Players.PlayerAdded:Connect(attachPlayerChat)
     end
 
     -- Animate Peer Billboard Equalizers
@@ -645,14 +597,12 @@ return function(Shared)
         end
     end)
 
-    -- Background loop: periodic broadcast and scan
+    -- Background loop: periodic broadcast and scan every 2 seconds
     task.spawn(function()
         while true do
-            task.wait(5)
-            if Shared.Flags["PeerDetect"] or Shared.Flags["UniversalESP"] then
-                broadcastBeacon()
-                scanFileRelay()
-            end
+            task.wait(2)
+            broadcastBeacon()
+            scanFileRelay()
         end
     end)
 
