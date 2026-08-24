@@ -175,41 +175,13 @@ return function(Shared)
             end
         end)
 
-        -- 1. TopBarApp & Health Bar (High-Contrast Icons, Sharp Aero Health, Hide Redundant Chat Icon)
+        -- 1. TopBarApp (Hide native TopBar completely so ChatBar serves as the unified TopBar)
         pcall(function()
             local topbar = CoreGui:FindFirstChild("TopBarApp")
             if topbar then
-                for _, obj in ipairs(topbar:GetDescendants()) do
-                    -- Hide native speech bubble chat button if custom chat is enabled
-                    if customCoreEnabled and (obj.Name == "chat" or obj.Name == "Chat" or (obj:IsA("GuiObject") and obj.Name:lower():find("chat"))) then
-                        if not obj:IsDescendantOf(ScreenGui) then
-                            obj.Visible = false
-                        end
-                    end
-                    if obj:IsA("Frame") and obj.BackgroundTransparency < 0.95 then
-                        -- Check if this frame is the Health indicator bar (green fill)
-                        if obj.BackgroundColor3.G > 0.55 and obj.BackgroundColor3.R < 0.45 then
-                            obj.BackgroundColor3       = dark and Color3.fromRGB(0, 220, 140) or Color3.fromRGB(0, 190, 110)
-                            obj.BackgroundTransparency = 0
-                            obj.BorderSizePixel        = 1
-                            obj.BorderColor3           = borderCol
-                        else
-                            obj.BackgroundColor3       = bgCol
-                            obj.BackgroundTransparency = 0.2
-                            obj.BorderSizePixel        = 1
-                            obj.BorderColor3           = borderCol
-                        end
-                    end
-                    if obj:IsA("UIStroke") then
-                        obj.Color = borderCol
-                        obj.Thickness = 1
-                    end
-                    if obj:IsA("TextLabel") then
-                        obj.TextColor3 = iconCol
-                    end
-                    if obj:IsA("ImageLabel") then
-                        obj.ImageColor3 = iconCol
-                    end
+                local topbarApp = topbar:FindFirstChild("TopBarApp")
+                if topbarApp then
+                    topbarApp.Visible = not customCoreEnabled
                 end
             end
         end)
@@ -1503,14 +1475,39 @@ return function(Shared)
     end)
 
 
-    -- ── CUSTOM WINDOWS AERO CHAT (MENU ≡, VC 🎙, [□] MAXIMIZE & DEDUP) ─
+    -- ── CUSTOM WINDOWS AERO CHAT (UNIFIED TOPBAR: ROBLOX, ≡, 🎙, DEDUP) ─
     local GuiService = game:GetService("GuiService")
-    local VoiceChatService = pcall(function() return game:GetService("VoiceChatService") end) and game:GetService("VoiceChatService") or nil
+    local VirtualInput = game:GetService("VirtualInputManager")
+
+    -- Helper to trigger native button clicks reliably
+    local function triggerNativeButton(buttonName)
+        local topbar = CoreGui:FindFirstChild("TopBarApp")
+        if not topbar then return false end
+        for _, d in ipairs(topbar:GetDescendants()) do
+            if d:IsA("GuiButton") and d.Name == buttonName then
+                if firesignal then
+                    pcall(function() firesignal(d.MouseButton1Click) end)
+                    pcall(function() firesignal(d.Activated) end)
+                end
+                if getconnections then
+                    for _, c in ipairs(getconnections(d.MouseButton1Click)) do pcall(function() c:Fire() end) end
+                    for _, c in ipairs(getconnections(d.Activated)) do pcall(function() c:Fire() end) end
+                end
+                pcall(function()
+                    local pos = d.AbsolutePosition + d.AbsoluteSize / 2
+                    VirtualInput:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
+                    VirtualInput:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 1)
+                end)
+                return true
+            end
+        end
+        return false
+    end
 
     local chatWindow = Instance.new("Frame")
     chatWindow.Name = "Fih_CustomChat"
     chatWindow.Size = UDim2.new(0, 420, 0, 290)
-    chatWindow.Position = UDim2.new(0, 10, 0, 48)
+    chatWindow.Position = UDim2.new(0, 10, 0, 4)
     chatWindow.BackgroundColor3 = C.BodyBg
     chatWindow.BackgroundTransparency = 0.45
     chatWindow.BorderSizePixel = 1
@@ -1523,7 +1520,7 @@ return function(Shared)
     chatWinCorner.CornerRadius = UDim.new(0, 0)
     chatWinCorner.Parent = chatWindow
 
-    -- TitleBar (Unified Header: [≡] [🎙] Title ... [-] [□] Controls)
+    -- TitleBar (Unified TopBar: [Roblox] [≡] [🎙] Title ... [-] [□])
     local chatTitleBar = Instance.new("Frame")
     chatTitleBar.Size = UDim2.new(1, 0, 0, 26)
     chatTitleBar.BackgroundColor3 = C.TitleBar
@@ -1537,18 +1534,38 @@ return function(Shared)
     chatTitleCorner.CornerRadius = UDim.new(0, 0)
     chatTitleCorner.Parent = chatTitleBar
 
-    -- Left Navigation Integrated Controls: [≡] Hamburger & [🎙] VC
+    -- Left Navigation Integrated Controls: [Roblox] [≡] [🎙]
     local leftNavHolder = Instance.new("Frame")
-    leftNavHolder.Size = UDim2.new(0, 52, 0, 20)
+    leftNavHolder.Size = UDim2.new(0, 78, 0, 20)
     leftNavHolder.Position = UDim2.new(0, 4, 0, 3)
     leftNavHolder.BackgroundTransparency = 1
     leftNavHolder.ZIndex = 42
     leftNavHolder.Parent = chatTitleBar
 
-    -- [≡] Hamburger / Escape Menu Button
+    -- 1. [Roblox Logo] Button (Toggles Pause / Escape Menu)
+    local rbxLogoBtn = Instance.new("ImageButton")
+    rbxLogoBtn.Size = UDim2.new(0, 22, 0, 20)
+    rbxLogoBtn.Position = UDim2.new(0, 0, 0, 0)
+    rbxLogoBtn.BackgroundColor3 = C.BtnBg
+    rbxLogoBtn.BorderSizePixel = 1
+    rbxLogoBtn.BorderColor3 = C.BtnBorder
+    rbxLogoBtn.Image = "rbxasset://textures/ui/TopBar/icon_roblox.png"
+    rbxLogoBtn.ImageColor3 = C.BtnText
+    rbxLogoBtn.ScaleType = Enum.ScaleType.Fit
+    rbxLogoBtn.ZIndex = 43
+    rbxLogoBtn.Parent = leftNavHolder
+    registerThemed(rbxLogoBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", ImageColor3 = "BtnText" })
+
+    rbxLogoBtn.MouseButton1Click:Connect(function()
+        if not triggerNativeButton("IconHitArea") then
+            pcall(function() GuiService:TogglePauseMenu() end)
+        end
+    end)
+
+    -- 2. [≡] Three Lines Menu Button (Toggles Nine-Dot / In-game Quick Menu)
     local menuBtn = Instance.new("TextButton")
     menuBtn.Size = UDim2.new(0, 22, 0, 20)
-    menuBtn.Position = UDim2.new(0, 0, 0, 0)
+    menuBtn.Position = UDim2.new(0, 26, 0, 0)
     menuBtn.BackgroundColor3 = C.BtnBg
     menuBtn.BorderSizePixel = 1
     menuBtn.BorderColor3 = C.BtnBorder
@@ -1561,15 +1578,15 @@ return function(Shared)
     registerThemed(menuBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
 
     menuBtn.MouseButton1Click:Connect(function()
-        pcall(function()
-            GuiService:TogglePauseMenu()
-        end)
+        if not triggerNativeButton("IconHitArea_nine_dot") then
+            pcall(function() GuiService:TogglePauseMenu() end)
+        end
     end)
 
-    -- [🎙] Voice Chat Mute/Unmute Button
+    -- 3. [🎙] Voice Chat Mute/Unmute Button
     local vcBtn = Instance.new("TextButton")
     vcBtn.Size = UDim2.new(0, 22, 0, 20)
-    vcBtn.Position = UDim2.new(0, 26, 0, 0)
+    vcBtn.Position = UDim2.new(0, 52, 0, 0)
     vcBtn.BackgroundColor3 = C.BtnBg
     vcBtn.BorderSizePixel = 1
     vcBtn.BorderColor3 = C.BtnBorder
@@ -1583,29 +1600,15 @@ return function(Shared)
 
     local isMicMuted = true
     vcBtn.MouseButton1Click:Connect(function()
-        pcall(function()
-            local topbar = CoreGui:FindFirstChild("TopBarApp")
-            if topbar then
-                for _, btn in ipairs(topbar:GetDescendants()) do
-                    if btn:IsA("ImageButton") and btn.Name:lower():find("mic") then
-                        for _, conn in ipairs(getconnections and getconnections(btn.MouseButton1Click) or {}) do
-                            conn:Fire()
-                        end
-                        for _, conn in ipairs(getconnections and getconnections(btn.Activated) or {}) do
-                            conn:Fire()
-                        end
-                    end
-                end
-            end
-        end)
+        triggerNativeButton("IconHitArea_toggle_mic_mute")
         isMicMuted = not isMicMuted
         vcBtn.TextColor3 = isMicMuted and C.BtnText or Color3.fromRGB(0, 220, 140)
     end)
 
     -- Title Label
     local chatTitleText = Instance.new("TextLabel")
-    chatTitleText.Size = UDim2.new(1, -120, 1, 0)
-    chatTitleText.Position = UDim2.new(0, 62, 0, 0)
+    chatTitleText.Size = UDim2.new(1, -144, 1, 0)
+    chatTitleText.Position = UDim2.new(0, 88, 0, 0)
     chatTitleText.BackgroundTransparency = 1
     chatTitleText.Text = "Chat"
     chatTitleText.TextColor3 = C.TitleText
