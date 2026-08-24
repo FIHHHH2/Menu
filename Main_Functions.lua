@@ -721,16 +721,7 @@ return function(Shared)
                         end
 
                         local themeCol = isPeer and Color3.fromRGB(255, 205, 30) or Color3.fromRGB(0, 190, 255)
-                        local tagPrefix = isPeer and "[👑 FIH USER] " or ""
-
-                        local songLine = ""
-                        if isPeer and peerInfo.song and peerInfo.song ~= "" then
-                            local artTxt = (peerInfo.artist ~= "") and (" - " .. peerInfo.artist) or ""
-                            songLine = "\n🎵 " .. peerInfo.song .. artTxt
-                            entry.gui.Size = UDim2.new(0, 170, 0, 52)
-                        else
-                            entry.gui.Size = UDim2.new(0, 150, 0, 40)
-                        end
+                        entry.gui.Size = UDim2.new(0, 140, 0, 32)
 
                         if entry.hl and entry.hl.Parent then
                             entry.hl.FillColor    = themeCol
@@ -739,7 +730,7 @@ return function(Shared)
                         if entry.bg and entry.lbl then
                             entry.bg.BorderColor3 = themeCol
                             entry.lbl.TextColor3  = themeCol
-                            entry.lbl.Text        = tagPrefix .. plr.DisplayName .. " (@" .. plr.Name .. ")" .. heldName .. songLine .. "\n" .. hp .. "/" .. maxHp .. " HP | " .. dist .. "m"
+                            entry.lbl.Text        = plr.DisplayName .. " (@" .. plr.Name .. ")" .. heldName .. "\n" .. hp .. "/" .. maxHp .. " HP | " .. dist .. "m"
                         end
                     end
                 end
