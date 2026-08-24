@@ -216,6 +216,9 @@ return function(Shared)
                         d.ScrollBarThickness = 0
                         d.ScrollBarImageTransparency = 1
                     end
+                    if d:IsA("TextLabel") and (d.Text == "three-dots-horizontal" or d.Text:find("arrow") or d.Text:find("bolt") or d.Text:find("lightning")) then
+                        pcall(function() d.Visible = false end)
+                    end
                 end
 
                 local appLayout = expChat:FindFirstChild("appLayout")
