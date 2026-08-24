@@ -194,7 +194,8 @@ return function(Shared)
         return nil
     end
 
-    local currentLoadingToken = 0
+    local labelTokens = {}
+    local cachedCoverTrackKey = ""
 
     local function applyImage(imgLabel, trackOrUrl, optArtist)
         if not imgLabel then return end
@@ -213,36 +214,47 @@ return function(Shared)
             trackName = currentTrack.name or ""
         end
 
+        local trackKey = tostring(rawUrl) .. "|" .. tostring(trackName) .. "|" .. tostring(artist)
+
+        -- If asset already cached for this exact track, apply synchronously to avoid race conditions
+        if currentCoverAsset and currentCoverAsset ~= "" and trackKey == cachedCoverTrackKey then
+            imgLabel.BackgroundTransparency = 1
+            imgLabel.Image = currentCoverAsset
+            imgLabel.Visible = true
+            return
+        end
+
         -- Immediately clear so no white shows during async load
         if imgLabel and imgLabel.Parent then
             imgLabel.BackgroundTransparency = 1
             imgLabel.Image = ""
         end
 
-        currentLoadingToken = currentLoadingToken + 1
-        local myToken = currentLoadingToken
+        labelTokens[imgLabel] = (labelTokens[imgLabel] or 0) + 1
+        local myToken = labelTokens[imgLabel]
 
         task.spawn(function()
             local function apply(imgBytes)
-                if myToken ~= currentLoadingToken then return false end
+                if labelTokens[imgLabel] ~= myToken then return false end
                 if not imgLabel or not imgLabel.Parent then return false end
                 local asset = writeAndGetAsset(imgBytes)
                 if asset then
-                    currentCoverAsset  = asset
-                    lastLoadedCoverUrl = rawUrl
+                    currentCoverAsset   = asset
+                    cachedCoverTrackKey = trackKey
+                    lastLoadedCoverUrl  = rawUrl
                     imgLabel.BackgroundTransparency = 1
                     imgLabel.Image   = asset
                     imgLabel.Visible = true
                     return true
                 end
-                -- No getcustomasset available — set direct URL as fallback
+                -- Fallback direct URL if getcustomasset unavailable
                 imgLabel.BackgroundTransparency = 1
                 imgLabel.Image   = rawUrl ~= "" and rawUrl or ""
                 imgLabel.Visible = true
                 return true
             end
 
-            -- Step 1: Try the Last.fm provided URL (already-known image from the API response)
+            -- Step 1: Try the Last.fm provided URL
             if rawUrl ~= "" and not rawUrl:find("2a96cbd8b46e442fc41c2b86b821562f") then
                 local imgBytes = CoverHTTP(rawUrl)
                 if imgBytes and isValidImageData(imgBytes) then
@@ -256,7 +268,7 @@ return function(Shared)
                 if apply(imgBytes) then return end
             end
 
-            -- Step 3: iTunes with cleaned artist + title (strip features/remasters)
+            -- Step 3: iTunes with cleaned artist + title
             local cleanArtist = tostring(artist):gsub("%b()", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
             local cleanTrack  = tostring(trackName):gsub("%b()", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("%-.*", ""):gsub("^%s+", ""):gsub("%s+$", "")
             if cleanArtist ~= artist or cleanTrack ~= trackName then
@@ -273,7 +285,7 @@ return function(Shared)
             end
 
             -- All sources exhausted — leave transparent placeholder
-            if myToken == currentLoadingToken and imgLabel and imgLabel.Parent then
+            if labelTokens[imgLabel] == myToken and imgLabel and imgLabel.Parent then
                 imgLabel.BackgroundTransparency = 1
                 imgLabel.Image   = ""
                 imgLabel.Visible = true
@@ -495,7 +507,10 @@ return function(Shared)
         billboard.Name          = "MusicBillboard"
         billboard.Size          = UDim2.new(0, 275, 0, 62)
         billboard.StudsOffset   = Vector3.new(0, 3.8, 0)
-        billboard.AlwaysOnTop   = false
+        billboard.AlwaysOnTop   = true
+        billboard.Active        = true
+        billboard.MaxDistance   = 150
+        billboard.LightInfluence = 0
         billboard.Adornee       = hrp
         billboard.Parent        = Shared.GUI
 
@@ -572,15 +587,26 @@ return function(Shared)
             btn.Size                  = UDim2.new(0, 22, 0, 20)
             btn.Position              = UDim2.new(0, posX, 0, 0)
             btn.BackgroundColor3      = Color3.fromRGB(25, 30, 42)
-            btn.BackgroundTransparency = 0.2
+            btn.BackgroundTransparency = 0.1
             btn.BorderSizePixel       = 1
-            btn.BorderColor3          = Color3.fromRGB(60, 80, 110)
+            btn.BorderColor3          = Color3.fromRGB(0, 160, 255)
             btn.Text                  = txt
-            btn.TextColor3            = Color3.fromRGB(220, 235, 255)
+            btn.TextColor3            = Color3.fromRGB(255, 255, 255)
             btn.Font                  = Enum.Font.GothamBold
-            btn.TextSize              = 10
+            btn.TextSize              = 11
+            btn.Active                = true
+            btn.Selectable            = true
+            btn.AutoButtonColor       = true
+            btn.ZIndex                = 20
             btn.Parent                = ctrlBox
-            btn.MouseButton1Click:Connect(fn)
+
+            btn.MouseButton1Click:Connect(function()
+                TweenSvc:Create(btn, TweenInfo.new(0.08), { BackgroundColor3 = Color3.fromRGB(0, 180, 255) }):Play()
+                task.delay(0.12, function()
+                    TweenSvc:Create(btn, TweenInfo.new(0.12), { BackgroundColor3 = Color3.fromRGB(25, 30, 42) }):Play()
+                end)
+                fn()
+            end)
             return btn
         end
 

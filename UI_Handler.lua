@@ -602,12 +602,19 @@ return function(Shared)
     local isMM2 = (game.PlaceId == 142823291 or game.GameId == 66654135 or game.PlaceId == 335132309 or game.PlaceId == 63518381)
     if Shared.IsMM2 ~= nil then isMM2 = Shared.IsMM2 end
 
+    local isNDS = (game.PlaceId == 189707 or game.GameId == 65241)
+    if Shared.IsNDS ~= nil then isNDS = Shared.IsNDS end
+
     local tabDefs = {
         {name="Main",     order=1},
     }
     local curOrder = 2
     if isMM2 then
         table.insert(tabDefs, {name="MM2", order=curOrder})
+        curOrder = curOrder + 1
+    end
+    if isNDS then
+        table.insert(tabDefs, {name="NDS", order=curOrder})
         curOrder = curOrder + 1
     end
     table.insert(tabDefs, {name="Music",    order=curOrder})
