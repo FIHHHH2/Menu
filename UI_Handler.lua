@@ -1685,7 +1685,7 @@ return function(Shared)
     vcBtn.Parent = leftNavHolder
     registerThemed(vcBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
 
-    -- 4. Mic Volume Threshold Visualizer Meter (4-bar audio meter)
+    -- 4. Mic Volume Threshold Visualizer Meter (Hardware Mic AudioDeviceInput + AudioAnalyzer)
     local micMeter = Instance.new("Frame")
     micMeter.Name = "MicVolumeMeter"
     micMeter.Size = UDim2.new(0, 24, 0, 16)
@@ -1707,6 +1707,22 @@ return function(Shared)
         micBars[i] = mb
     end
 
+    -- Real-time Hardware Microphone Capture Pipeline
+    local hwMicInput, hwMicAnalyzer, hwMicWire
+    pcall(function()
+        hwMicInput = Instance.new("AudioDeviceInput")
+        hwMicInput.Player = Players.LocalPlayer
+        hwMicInput.Parent = workspace
+
+        hwMicAnalyzer = Instance.new("AudioAnalyzer")
+        hwMicAnalyzer.Parent = workspace
+
+        hwMicWire = Instance.new("Wire")
+        hwMicWire.SourceInstance = hwMicInput
+        hwMicWire.TargetInstance = hwMicAnalyzer
+        hwMicWire.Parent = workspace
+    end)
+
     local isMicMuted = true
     vcBtn.MouseButton1Click:Connect(function()
         isMicMuted = not isMicMuted
@@ -1722,18 +1738,40 @@ return function(Shared)
         end
     end)
 
-    -- Animate mic volume meter threshold
+    -- Live Hardware Microphone Audio Level Renderer
     RunService.RenderStepped:Connect(function()
-        local t = os.clock() * 10
+        local rawLevel = 0
+        if hwMicAnalyzer and not isMicMuted then
+            pcall(function()
+                local rms  = hwMicAnalyzer.RmsLevel or 0
+                local peak = hwMicAnalyzer.PeakLevel or 0
+                rawLevel = math.max(rms * 12.0, peak * 6.0)
+            end)
+        end
+
+        local level = isMicMuted and 0 or math.clamp(rawLevel, 0, 1)
+        local fallbackT = os.clock() * 8
+
         for i, mb in ipairs(micBars) do
             if mb and mb.Parent then
-                if not isMicMuted then
-                    local h = math.clamp(math.abs(math.sin(t + i * 1.3) * 0.7 + math.cos(t * 2 + i * 0.7) * 0.3), 0.25, 1)
-                    mb.Size = UDim2.new(0, 4, 0, math.floor(h * 15) + 1)
-                    mb.BackgroundColor3 = (i == 4) and Color3.fromRGB(255, 90, 90) or ((i >= 3) and Color3.fromRGB(255, 200, 40) or Color3.fromRGB(0, 220, 140))
-                else
+                if isMicMuted then
                     mb.Size = UDim2.new(0, 4, 0, 3)
-                    mb.BackgroundColor3 = Color3.fromRGB(70, 85, 110)
+                    mb.BackgroundColor3 = Color3.fromRGB(60, 70, 90)
+                else
+                    local threshold = (i / 4.0)
+                    local barLevel
+                    if rawLevel > 0.005 then
+                        -- True hardware mic volume
+                        barLevel = math.clamp((level - (threshold - 0.25)) / 0.25, 0.15, 1)
+                    else
+                        -- Fallback active breathing pulse when mic is open but quiet
+                        barLevel = 0.2 + 0.1 * math.sin(fallbackT + i * 0.8)
+                    end
+                    local barH = math.clamp(math.floor(barLevel * 15) + 1, 3, 16)
+                    mb.Size = UDim2.new(0, 4, 0, barH)
+                    mb.BackgroundColor3 = (i == 4) and Color3.fromRGB(255, 80, 80)
+                        or ((i >= 3) and Color3.fromRGB(255, 205, 40)
+                        or Color3.fromRGB(0, 230, 140))
                 end
             end
         end

@@ -1281,17 +1281,62 @@ return function(Shared)
         end)
     end
 
+    -- ── HARDWARE AUDIO SPECTRUM CAPTURE (AudioListener + AudioAnalyzer) ──
+    local gameAudioListener, gameAudioAnalyzer, gameAudioWire
+    pcall(function()
+        gameAudioListener = Instance.new("AudioListener")
+        gameAudioListener.Parent = workspace
+
+        gameAudioAnalyzer = Instance.new("AudioAnalyzer")
+        gameAudioAnalyzer.Parent = workspace
+
+        gameAudioWire = Instance.new("Wire")
+        gameAudioWire.SourceInstance = gameAudioListener
+        gameAudioWire.TargetInstance = gameAudioAnalyzer
+        gameAudioWire.Parent = workspace
+    end)
+
     -- ── AUDIO EQUALIZER VISUALIZER ANIMATION LOOP ──
     RunService.RenderStepped:Connect(function()
         local isPlaying = (currentTrack.name ~= "Not Playing" and currentTrack.name ~= "Error loading" and currentTrack.name ~= "" and currentTrack.name ~= nil)
         local t = os.clock() * 9
+
+        -- Read live frequency spectrum from Roblox audio engine
+        local spectrum = nil
+        if gameAudioAnalyzer then
+            pcall(function() spectrum = gameAudioAnalyzer:GetSpectrum() end)
+        end
+
+        local function getBandLevel(barIdx, totalBars)
+            if spectrum and #spectrum >= 64 then
+                local binStart = math.floor((barIdx - 1) * (#spectrum / totalBars)) + 1
+                local binEnd   = math.floor(barIdx * (#spectrum / totalBars))
+                local sum = 0
+                local count = 0
+                for b = binStart, math.min(binEnd, #spectrum) do
+                    sum = sum + (spectrum[b] or 0)
+                    count = count + 1
+                end
+                local avg = (count > 0) and (sum / count) or 0
+                local specLevel = math.clamp(avg * 45.0, 0, 1)
+                if specLevel > 0.04 then
+                    return specLevel
+                end
+            end
+            -- Fallback rhythm harmonic when audio engine is quiet
+            if isPlaying then
+                return math.clamp(math.abs(math.sin(t + barIdx * 1.05) * 0.65 + math.cos(t * 1.7 + barIdx * 0.85) * 0.35), 0.15, 1)
+            end
+            return 0
+        end
+
         if bbVisBars then
             for i, bar in ipairs(bbVisBars) do
                 if bar and bar.Parent then
                     if isPlaying then
-                        local h = math.clamp(math.abs(math.sin(t + i * 1.1) * 0.7 + math.cos(t * 1.6 + i * 0.8) * 0.3), 0.15, 1)
-                        bar.Size = UDim2.new(0, 5, 0, math.floor(h * 13) + 2)
-                        bar.BackgroundColor3 = Color3.fromHSV((0.38 + i * 0.04) % 1, 0.9, 0.95)
+                        local h = getBandLevel(i, #bbVisBars)
+                        bar.Size = UDim2.new(0, 5, 0, math.clamp(math.floor(h * 13) + 2, 2, 14))
+                        bar.BackgroundColor3 = Color3.fromHSV((0.36 + i * 0.04) % 1, 0.9, 0.95)
                     else
                         bar.Size = UDim2.new(0, 5, 0, 2)
                         bar.BackgroundColor3 = Color3.fromRGB(70, 85, 110)
@@ -1303,8 +1348,8 @@ return function(Shared)
             for i, bar in ipairs(hudVisBars) do
                 if bar and bar.Parent then
                     if isPlaying then
-                        local h = math.clamp(math.abs(math.sin(t + i * 0.95) * 0.65 + math.cos(t * 1.8 + i * 1.2) * 0.35), 0.15, 1)
-                        bar.Size = UDim2.new(0, 6, 0, math.floor(h * 17) + 2)
+                        local h = getBandLevel(i, #hudVisBars)
+                        bar.Size = UDim2.new(0, 6, 0, math.clamp(math.floor(h * 17) + 2, 2, 18))
                         bar.BackgroundColor3 = Color3.fromHSV((0.55 + i * 0.03) % 1, 0.85, 1)
                     else
                         bar.Size = UDim2.new(0, 6, 0, 3)
