@@ -1,4 +1,4 @@
-﻿-- BladeBall_Functions.lua
+-- BladeBall_Functions.lua
 -- Blade Ball Ultimate Automation & Predictive Auto-Parry Engine
 -- Complete production suite with latency compensation, clash detection, ball trajectory ESP & auto-curve
 
