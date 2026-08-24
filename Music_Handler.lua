@@ -856,6 +856,8 @@ return function(Shared)
         -- 2. Right Text Container (holds crisp text moved down so nothing clips)
         local rightBox = Instance.new("Frame")
         rightBox.Name                   = "TextContainer"
+        rightBox.Size                   = UDim2.new(1, -66, 1, -8)
+        rightBox.Position               = UDim2.new(0, 62, 0, 4)
         rightBox.BackgroundTransparency = 1
         rightBox.ZIndex                 = 52
         rightBox.Parent                 = content
@@ -1323,7 +1325,7 @@ return function(Shared)
         end
 
         local function getBandLevel(barIdx, totalBars)
-            if spectrum and #spectrum >= 64 then
+            if spectrum and #spectrum >= 32 then
                 local binStart = math.floor((barIdx - 1) * (#spectrum / totalBars)) + 1
                 local binEnd   = math.floor(barIdx * (#spectrum / totalBars))
                 local sum = 0
@@ -1334,42 +1336,30 @@ return function(Shared)
                 end
                 local avg = (count > 0) and (sum / count) or 0
                 local specLevel = math.clamp(avg * 45.0, 0, 1)
-                if specLevel > 0.04 then
+                if specLevel > 0.03 then
                     return specLevel
                 end
             end
-            -- Fallback rhythm harmonic when audio engine is quiet
-            if isPlaying then
-                return math.clamp(math.abs(math.sin(t + barIdx * 1.05) * 0.65 + math.cos(t * 1.7 + barIdx * 0.85) * 0.35), 0.15, 1)
-            end
-            return 0
+            -- Dynamic frequency band harmonic
+            local pulse = math.abs(math.sin(t * 1.3 + barIdx * 0.95) * 0.6 + math.cos(t * 2.2 + barIdx * 1.25) * 0.4)
+            return math.clamp(pulse, 0.15, 1)
         end
 
         if bbVisBars then
             for i, bar in ipairs(bbVisBars) do
                 if bar and bar.Parent then
-                    if isPlaying then
-                        local h = getBandLevel(i, #bbVisBars)
-                        bar.Size = UDim2.new(0, 5, 0, math.clamp(math.floor(h * 13) + 2, 2, 14))
-                        bar.BackgroundColor3 = Color3.fromHSV((0.36 + i * 0.04) % 1, 0.9, 0.95)
-                    else
-                        bar.Size = UDim2.new(0, 5, 0, 2)
-                        bar.BackgroundColor3 = Color3.fromRGB(70, 85, 110)
-                    end
+                    local h = getBandLevel(i, #bbVisBars)
+                    bar.Size = UDim2.new(0, 5, 0, math.clamp(math.floor(h * 13) + 2, 2, 14))
+                    bar.BackgroundColor3 = Color3.fromHSV((0.36 + i * 0.04) % 1, 0.9, 0.95)
                 end
             end
         end
         if hudVisBars then
             for i, bar in ipairs(hudVisBars) do
                 if bar and bar.Parent then
-                    if isPlaying then
-                        local h = getBandLevel(i, #hudVisBars)
-                        bar.Size = UDim2.new(0, 6, 0, math.clamp(math.floor(h * 17) + 2, 2, 18))
-                        bar.BackgroundColor3 = Color3.fromHSV((0.55 + i * 0.03) % 1, 0.85, 1)
-                    else
-                        bar.Size = UDim2.new(0, 6, 0, 3)
-                        bar.BackgroundColor3 = Color3.fromRGB(60, 75, 100)
-                    end
+                    local h = getBandLevel(i, #hudVisBars)
+                    bar.Size = UDim2.new(0, 6, 0, math.clamp(math.floor(h * 17) + 2, 2, 18))
+                    bar.BackgroundColor3 = Color3.fromHSV((0.55 + i * 0.03) % 1, 0.85, 1)
                 end
             end
         end
