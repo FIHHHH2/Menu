@@ -1570,15 +1570,15 @@ return function(Shared)
     local quickMenu = Instance.new("Frame")
     quickMenu.Name = "Fih_QuickActionsMenu"
     quickMenu.Size = UDim2.new(0, 160, 0, 145)
-    quickMenu.Position = UDim2.new(0, 26, 1, 2)
+    quickMenu.Position = UDim2.new(0, 26, 0, 84)
     quickMenu.BackgroundColor3 = C.BodyBg
     quickMenu.BackgroundTransparency = 0.15
     quickMenu.BorderSizePixel = 1
     quickMenu.BorderColor3 = C.WinBorder
     quickMenu.ClipsDescendants = true
     quickMenu.Visible = false
-    quickMenu.ZIndex = 80
-    quickMenu.Parent = chatTitleBar
+    quickMenu.ZIndex = 100
+    quickMenu.Parent = ScreenGui
     registerThemed(quickMenu, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
     local qmCorner = Instance.new("UICorner")
     qmCorner.CornerRadius = UDim.new(0, 0)
@@ -1602,7 +1602,7 @@ return function(Shared)
         itemBtn.TextSize = 12
         itemBtn.TextXAlignment = Enum.TextXAlignment.Left
         itemBtn.LayoutOrder = order
-        itemBtn.ZIndex = 81
+        itemBtn.ZIndex = 101
         itemBtn.Parent = quickMenu
         registerThemed(itemBtn, { BackgroundColor3 = "BtnBg", TextColor3 = "BtnText" })
         local ic = Instance.new("UICorner")
