@@ -1570,7 +1570,7 @@ return function(Shared)
     local quickMenu = Instance.new("Frame")
     quickMenu.Name = "Fih_QuickActionsMenu"
     quickMenu.Size = UDim2.new(0, 160, 0, 145)
-    quickMenu.Position = UDim2.new(0, 32, 0, 88)
+    quickMenu.Position = UDim2.new(0, 33, 0, 29)
     quickMenu.BackgroundColor3 = C.BodyBg
     quickMenu.BackgroundTransparency = 0.15
     quickMenu.BorderSizePixel = 1
@@ -1666,8 +1666,18 @@ return function(Shared)
         end)
     end)
 
+    local function updateQuickMenuPos()
+        local pos = menuBtn.AbsolutePosition
+        local sz  = menuBtn.AbsoluteSize
+        local sgPos = ScreenGui.AbsolutePosition
+        quickMenu.Position = UDim2.new(0, (pos.X - sgPos.X), 0, (pos.Y - sgPos.Y) + sz.Y + 3)
+    end
+
     menuBtn.MouseButton1Click:Connect(function()
         quickMenu.Visible = not quickMenu.Visible
+        if quickMenu.Visible then
+            updateQuickMenuPos()
+        end
     end)
 
     -- 3. [🎙] Voice Chat Mute/Unmute Button (Direct VoiceChatInternal toggle + Toast Notification)
