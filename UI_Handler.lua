@@ -208,7 +208,7 @@ return function(Shared)
                 cwc.BackgroundColor3       = bgCol
                 cwc.BackgroundTransparency = 0.15
                 cwc.TextColor3             = textCol
-                cwc.FontFace               = Font.fromEnum(Enum.Font.Code)
+                -- NOTE: Do NOT set cwc.FontFace — it overrides BuilderIcons on ligature icon labels
             end
             local cibc = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
             if cibc then
@@ -1269,6 +1269,9 @@ return function(Shared)
     lbWindow.ZIndex = 40
     lbWindow.Parent = ScreenGui
     registerThemed(lbWindow, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
+    local lbWinCorner = Instance.new("UICorner")
+    lbWinCorner.CornerRadius = UDim.new(0, 0)
+    lbWinCorner.Parent = lbWindow
 
     -- TitleBar (Movable / Draggable)
     local lbTitleBar = Instance.new("Frame")
@@ -1280,6 +1283,9 @@ return function(Shared)
     lbTitleBar.ZIndex = 41
     lbTitleBar.Parent = lbWindow
     registerThemed(lbTitleBar, { BackgroundColor3 = "TitleBar", BorderColor3 = "WinBorder" })
+    local lbTitleCorner = Instance.new("UICorner")
+    lbTitleCorner.CornerRadius = UDim.new(0, 0)
+    lbTitleCorner.Parent = lbTitleBar
 
     local lbTitleText = Instance.new("TextLabel")
     lbTitleText.Size = UDim2.new(1, -30, 1, 0)
@@ -1430,6 +1436,10 @@ return function(Shared)
             avatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. tostring(plr.UserId) .. "&width=48&height=48&format=png"
             avatar.ZIndex = 43
             avatar.Parent = row
+            -- Force square avatar: 0px corner radius
+            local avatarCorner = Instance.new("UICorner")
+            avatarCorner.CornerRadius = UDim.new(0, 0)
+            avatarCorner.Parent = avatar
 
             local dName = Instance.new("TextLabel")
             dName.Size = UDim2.new(1, -32, 0, 13)
