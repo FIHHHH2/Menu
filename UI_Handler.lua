@@ -114,6 +114,100 @@ return function(Shared)
     Shared.IsDark = function() return isDark end
     Shared.GetTheme = function() return C end
 
+        -- ── ROBLOX CORE UI (CHAT, PLAYERLIST, TOPBAR) THEMING ENGINE ──
+    local function styleRobloxCoreUI(targetTheme, isDarkMode)
+        local theme = targetTheme or C
+        local dark  = (isDarkMode ~= nil) and isDarkMode or isDark
+
+        local bgCol     = dark and Color3.fromRGB(16, 20, 30) or Color3.fromRGB(240, 244, 252)
+        local borderCol = dark and Color3.fromRGB(30, 75, 130) or Color3.fromRGB(140, 170, 210)
+        local textCol   = dark and Color3.fromRGB(225, 235, 255) or Color3.fromRGB(15, 25, 60)
+        local inputCol  = dark and Color3.fromRGB(24, 30, 44) or Color3.fromRGB(255, 255, 255)
+        local accentCol = dark and Color3.fromRGB(0, 160, 255) or Color3.fromRGB(0, 120, 215)
+
+        -- 1. TextChatService Styling (In-game Chat Box & Input Bar)
+        pcall(function()
+            local TextChatService = game:GetService("TextChatService")
+            local cwc = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
+            if cwc then
+                cwc.BackgroundColor3       = bgCol
+                cwc.BackgroundTransparency = 0.15
+                cwc.TextColor3             = textCol
+                cwc.FontFace               = Font.fromEnum(Enum.Font.Code)
+            end
+            local cibc = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
+            if cibc then
+                cibc.BackgroundColor3       = inputCol
+                cibc.BackgroundTransparency = 0.1
+                cibc.TextColor3             = textCol
+                cibc.PlaceholderColor3      = dark and Color3.fromRGB(120, 150, 190) or Color3.fromRGB(130, 140, 160)
+            end
+        end)
+
+        -- 2. CoreGui PlayerList / Leaderboard Styling
+        pcall(function()
+            local pl = CoreGui:FindFirstChild("PlayerList")
+            if pl then
+                for _, obj in ipairs(pl:GetDescendants()) do
+                    if obj:IsA("Frame") or obj:IsA("ImageLabel") or obj:IsA("ScrollingFrame") then
+                        if obj.BackgroundTransparency < 0.95 then
+                            obj.BackgroundColor3 = bgCol
+                            obj.BorderSizePixel  = 1
+                            obj.BorderColor3     = borderCol
+                        end
+                    end
+                    if obj:IsA("TextLabel") then
+                        obj.Font = Enum.Font.Code
+                        obj.TextColor3 = textCol
+                    end
+                end
+            end
+        end)
+
+        -- 3. TopBarApp / Chrome / Health Bar Styling
+        pcall(function()
+            local topbar = CoreGui:FindFirstChild("TopBarApp")
+            if topbar then
+                for _, obj in ipairs(topbar:GetDescendants()) do
+                    if obj:IsA("Frame") and obj.BackgroundTransparency < 0.95 then
+                        obj.BackgroundColor3 = bgCol
+                        obj.BorderSizePixel  = 1
+                        obj.BorderColor3     = borderCol
+                    end
+                end
+            end
+        end)
+
+        -- 4. Roblox Notification Toasts Styling
+        pcall(function()
+            local rgui = CoreGui:FindFirstChild("RobloxGui")
+            if rgui then
+                local nFrame = rgui:FindFirstChild("NotificationFrame")
+                if nFrame then
+                    for _, obj in ipairs(nFrame:GetDescendants()) do
+                        if obj:IsA("Frame") and obj.BackgroundTransparency < 0.95 then
+                            obj.BackgroundColor3 = bgCol
+                            obj.BorderSizePixel  = 1
+                            obj.BorderColor3     = borderCol
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
+    -- Run initial Core UI skinning and watch for dynamically added elements
+    task.spawn(function()
+        task.wait(0.5)
+        styleRobloxCoreUI(C, isDark)
+        local pl = CoreGui:FindFirstChild("PlayerList")
+        if pl then
+            pl.DescendantAdded:Connect(function()
+                task.delay(0.1, function() styleRobloxCoreUI(C, isDark) end)
+            end)
+        end
+    end)
+
     local function applyThemeTransition(targetTheme)
         C = targetTheme
         isDark = targetTheme.IsDark
@@ -135,6 +229,9 @@ return function(Shared)
         for _, cb in ipairs(themeCallbacks) do
             pcall(cb, targetTheme, isDark)
         end
+
+        -- Re-skin Roblox Core UI (Chat, PlayerList, TopBar) on theme transition
+        styleRobloxCoreUI(targetTheme, isDark)
     end
 
     -- ── ZERO-LAG DEBOUNCED CONFIG SAVING ────────────────────────
