@@ -49,10 +49,33 @@ return function(Shared)
     end
     findParryRemotes()
 
-    -- ── BALL TRACKING ENGINE ──────────────────────────────────────
+    -- ── BALL TRACKING & ANTI-DOUBLE PARRY ENGINE ─────────────────
     local lastParryTime = 0
     local lastBallPos = nil
     local lastBallTime = os.clock()
+    local hasParriedCurrentVolley = false
+    local lastParryTick = 0
+
+    -- Hook Blade Ball's parry confirmation events to acknowledge deflected state
+    pcall(function()
+        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+        if remotes then
+            for _, rName in ipairs({"ParrySuccess", "ParrySuccessClient", "ParrySuccessAll", "VisualCD", "VisualBindableCD"}) do
+                local rObj = remotes:FindFirstChild(rName)
+                if rObj then
+                    if rObj:IsA("RemoteEvent") then
+                        rObj.OnClientEvent:Connect(function()
+                            hasParriedCurrentVolley = true
+                        end)
+                    elseif rObj:IsA("BindableEvent") then
+                        rObj.Event:Connect(function()
+                            hasParriedCurrentVolley = true
+                        end)
+                    end
+                end
+            end
+        end
+    end)
 
     local function findActiveBall()
         local myHRP = getHRP()
@@ -164,8 +187,10 @@ return function(Shared)
     -- ── PARRY EXECUTION MECHANISMS ────────────────────────────────
     local function executeParry()
         local now = os.clock()
-        if now - lastParryTime < 0.015 then return end
+        if now - lastParryTime < 0.05 or hasParriedCurrentVolley then return end
         lastParryTime = now
+        lastParryTick = now
+        hasParriedCurrentVolley = true
 
         -- Method 1: BindableEvent internal parry & training tester triggers
         pcall(function()
@@ -473,13 +498,21 @@ return function(Shared)
             if zoneSphereAdorn then pcall(function() zoneSphereAdorn:Destroy() end); zoneSphereAdorn = nil end
         end
 
+        -- Reset parried volley flag when ball leaves or deflects away
+        if hasParriedCurrentVolley then
+            local timeSinceParry = now - lastParryTick
+            if not isTarget or approachSpeed < -2 or timeSinceParry > 0.45 then
+                hasParriedCurrentVolley = false
+            end
+        end
+
         -- 3. AUTO PARRY ENGINE (Velocity & Physics-Driven)
         if Shared.Flags["BB_AutoParry"] then
             local shouldParry = false
 
-            -- STRICT RULE: ONLY parry if the ball is actually targeted on local player
-            if isTarget then
-                -- If ball is traveling away from the player at speed, do not parry prematurely
+            -- STRICT RULE: ONLY parry if the ball is actually targeted on local player AND not already parried in this volley
+            if isTarget and not hasParriedCurrentVolley then
+                -- If ball is traveling towards the player at speed
                 if approachSpeed > 0 or speed < 5 then
                     -- Trigger parry based on calculated time to impact or velocity distance window
                     if timeToImpact <= (0.36 + pingOffsetSec) or dist <= dynamicParryDistance then
