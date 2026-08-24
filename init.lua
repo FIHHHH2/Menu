@@ -116,17 +116,23 @@ Shared.IsNDS = isNDS
 local isBladeBall = (game.PlaceId == 13772394625 or game.PlaceId == 14732610803 or game.PlaceId == 15131065025 or game.PlaceId == 15264892126 or game.PlaceId == 17135832729 or game.PlaceId == 15552588147 or game.GameId == 4777817887)
 Shared.IsBladeBall = isBladeBall
 
--- Load order
+-- Load order with zero-freeze staggered micro-yields
 loadModule("UI_Handler")(Shared)
+task.wait(0.01)
 loadModule("Main_Functions")(Shared)
+task.wait(0.01)
 if isMM2 then
     loadModule("MM2_Functions")(Shared)
+    task.wait(0.01)
 end
 if isNDS then
     loadModule("NDS_Functions")(Shared)
+    task.wait(0.01)
 end
 if isBladeBall or (Shared.Tabs and (Shared.Tabs["Blade Ball"] or Shared.Tabs["BladeBall"])) then
     loadModule("BladeBall_Functions")(Shared)
+    task.wait(0.01)
 end
 loadModule("Troll_Functions")(Shared)
+task.wait(0.01)
 loadModule("Music_Handler")(Shared)

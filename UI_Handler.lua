@@ -103,8 +103,95 @@ return function(Shared)
         IsDark        = true
     }
 
-    local isDark = false
-    local C = LightTheme
+    -- ── ADAPTIVE SONG THEME PALETTE ENGINE ────────────────────────
+    local function generateAdaptivePalette(track)
+        local title = (track and track.name) or "Unknown Track"
+        local artist = (track and track.artist) or "Unknown Artist"
+        local cover = (track and track.cover) or ""
+
+        -- Hash-based deterministic harmonic seed from track name, artist and cover
+        local hash = 5381
+        local combined = title .. ":" .. artist .. ":" .. cover
+        for i = 1, #combined do
+            hash = bit32.band(hash * 33 + string.byte(combined, i), 0x7FFFFFFF)
+        end
+
+        local hue = (hash % 360) / 360
+        local secondaryHue = ((hash + 137) % 360) / 360
+        local accentHue = ((hash + 210) % 360) / 360
+
+        -- Generate deep, rich opaque surfaces with guaranteed contrast
+        local winBorderCol = Color3.fromHSV(accentHue, 0.70, 0.65)
+        local titleBarCol  = Color3.fromHSV(hue, 0.45, 0.18)
+        local titleTextCol = Color3.fromRGB(245, 248, 255)
+        local navBarCol    = Color3.fromHSV(hue, 0.50, 0.14)
+        local navTextCol   = Color3.fromHSV(hue, 0.25, 0.90)
+        local navLinkCol   = Color3.fromHSV(accentHue, 0.65, 0.95)
+        local navHoverCol  = Color3.fromHSV((accentHue + 0.1) % 1, 0.85, 1.0)
+        local bodyBgCol    = Color3.fromHSV(hue, 0.40, 0.08)
+        local cellACol     = Color3.fromHSV(hue, 0.35, 0.11)
+        local cellBCol     = Color3.fromHSV(hue, 0.35, 0.14)
+        local sideBorder   = Color3.fromHSV(hue, 0.45, 0.25)
+        local btnBgCol     = Color3.fromHSV(hue, 0.30, 0.17)
+        local btnBorderCol = Color3.fromHSV(hue, 0.35, 0.28)
+        local btnHoverCol  = Color3.fromHSV(hue, 0.35, 0.24)
+        local btnDownCol   = Color3.fromHSV(hue, 0.40, 0.12)
+        local btnTextCol   = Color3.fromRGB(240, 245, 255)
+        local tabActiveBg  = Color3.fromHSV(hue, 0.40, 0.08)
+        local tabActiveTxt = Color3.fromHSV(accentHue, 0.70, 0.95)
+        local secBgCol     = Color3.fromHSV(secondaryHue, 0.40, 0.15)
+        local secTextCol   = Color3.fromHSV(secondaryHue, 0.20, 0.92)
+        local rowBgCol     = Color3.fromHSV(hue, 0.32, 0.11)
+        local rowBorderCol = Color3.fromHSV(hue, 0.35, 0.20)
+        local rowHoverCol  = Color3.fromHSV(hue, 0.35, 0.16)
+        local accentCol    = Color3.fromHSV(accentHue, 0.75, 0.90)
+        local drawerBgCol  = Color3.fromHSV(hue, 0.38, 0.10)
+        local notifyBgCol  = Color3.fromHSV(hue, 0.40, 0.12)
+        local notifyBrdCol = Color3.fromHSV(accentHue, 0.65, 0.60)
+        local bannerBgCol  = Color3.fromHSV(hue, 0.42, 0.12)
+        local bannerTitle  = Color3.fromHSV(accentHue, 0.30, 0.95)
+        local bannerSub    = Color3.fromHSV(hue, 0.25, 0.70)
+
+        return {
+            WinBorder     = winBorderCol,
+            TitleBar      = titleBarCol,
+            TitleText     = titleTextCol,
+            NavBar        = navBarCol,
+            NavText       = navTextCol,
+            NavLink       = navLinkCol,
+            NavLinkHover  = navHoverCol,
+            BodyBg        = bodyBgCol,
+            SidebarCellA  = cellACol,
+            SidebarCellB  = cellBCol,
+            SidebarBorder = sideBorder,
+            BtnBg         = btnBgCol,
+            BtnBorder     = btnBorderCol,
+            BtnHover      = btnHoverCol,
+            BtnDown       = btnDownCol,
+            BtnText       = btnTextCol,
+            TabActiveBg   = tabActiveBg,
+            TabActiveText = tabActiveTxt,
+            SectionBg     = secBgCol,
+            SectionText   = secTextCol,
+            RowBg         = rowBgCol,
+            RowBorder     = rowBorderCol,
+            RowHover      = rowHoverCol,
+            Accent        = accentCol,
+            DrawerBg      = drawerBgCol,
+            NotifyBg      = notifyBgCol,
+            NotifyBorder  = notifyBrdCol,
+            BannerBg      = bannerBgCol,
+            BannerTitle   = bannerTitle,
+            BannerSub     = bannerSub,
+            IsDark        = true,
+            IsAdaptive    = true
+        }
+    end
+
+    local themeMode = "Dark"
+    local isDark = true
+    local C = DarkTheme
+    local currentAdaptiveTrack = nil
 
     -- Theme Registry: elements register to automatically update on theme transitions
     local themeRegistry = {}
@@ -116,6 +203,19 @@ return function(Shared)
     Shared.RegisterThemeCallback = function(fn) table.insert(themeCallbacks, fn) end
     Shared.IsDark = function() return isDark end
     Shared.GetTheme = function() return C end
+    Shared.GetThemeMode = function() return themeMode end
+
+    local applyThemeTransition = nil -- forward declaration
+
+    Shared.SetAdaptiveThemeTrack = function(track)
+        currentAdaptiveTrack = track
+        if themeMode == "Adaptive" and track then
+            local palette = generateAdaptivePalette(track)
+            if applyThemeTransition then
+                applyThemeTransition(palette, 0.65)
+            end
+        end
+    end
 
         -- ── ROBLOX CORE UI (TOGGLEABLE RETRO AERO & CHAT ENGINE) ──────
     local StarterGui = game:GetService("StarterGui")
@@ -246,10 +346,13 @@ return function(Shared)
         end)
     end)
 
-    local function applyThemeTransition(targetTheme)
+    applyThemeTransition = function(targetTheme, duration)
         C = targetTheme
-        isDark = targetTheme.IsDark
+        isDark = (targetTheme.IsDark ~= nil) and targetTheme.IsDark or true
         Shared.Config.DarkMode = isDark
+
+        local tweenDuration = duration or 0.25
+        local tweenInfo = TweenInfo.new(tweenDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
         for _, item in ipairs(themeRegistry) do
             if item.inst and item.inst.Parent then
@@ -259,13 +362,13 @@ return function(Shared)
                         goal[propName] = C[themeKey]
                     end
                 end
-                TweenService:Create(item.inst, TweenInfo.new(0.25, Enum.EasingStyle.Quad), goal):Play()
+                TweenService:Create(item.inst, tweenInfo, goal):Play()
             end
         end
 
         -- Notify external modules (Music_Handler HUD, Billboard, etc.)
         for _, cb in ipairs(themeCallbacks) do
-            pcall(cb, targetTheme, isDark)
+            pcall(cb, targetTheme, isDark, tweenDuration)
         end
 
         -- Re-skin Roblox Core UI (Chat, PlayerList, TopBar) on theme transition
@@ -285,6 +388,7 @@ return function(Shared)
                     SpotifyRefreshToken = Shared.Config.SpotifyRefreshToken or "",
                     LastFMUser          = Shared.Config.LastFMUser or "",
                     DarkMode            = isDark,
+                    ThemeMode           = themeMode,
                     Keybinds            = {}
                 }
                 for fKey, item in pairs(Shared.Toggles) do
@@ -313,9 +417,16 @@ return function(Shared)
                     Shared.Config.SpotifyToken        = data.SpotifyToken or ""
                     Shared.Config.SpotifyRefreshToken = data.SpotifyRefreshToken or ""
                     Shared.Config.LastFMUser          = data.LastFMUser or ""
-                    if data.DarkMode == true then
-                        applyThemeTransition(DarkTheme)
-                        if themeBtn then themeBtn.Text = '☀️' end
+                    if data.ThemeMode == "Adaptive" then
+                        themeMode = "Adaptive"
+                        local pal = generateAdaptivePalette(currentAdaptiveTrack)
+                        applyThemeTransition(pal, 0.25)
+                    elseif data.ThemeMode == "Light" or data.DarkMode == false then
+                        themeMode = "Light"
+                        applyThemeTransition(LightTheme, 0.25)
+                    else
+                        themeMode = "Dark"
+                        applyThemeTransition(DarkTheme, 0.25)
                     end
                     if data.Flags then
                         for k, v in pairs(data.Flags) do
@@ -577,16 +688,30 @@ return function(Shared)
     end)
 
     local function updateThemeButtonIcon()
-        themeBtn.Text = isDark and "☀️" or "🌙"
+        if themeMode == "Light" then
+            themeBtn.Text = "☀️"
+        elseif themeMode == "Adaptive" then
+            themeBtn.Text = "🎨"
+        else
+            themeBtn.Text = "🌙"
+        end
     end
 
     themeBtn.MouseButton1Click:Connect(function()
-        if isDark then
-            applyThemeTransition(LightTheme)
+        if themeMode == "Dark" then
+            themeMode = "Light"
+            applyThemeTransition(LightTheme, 0.25)
             updateThemeButtonIcon()
             sendNotification("Theme Engine", "Light Theme Applied", true)
+        elseif themeMode == "Light" then
+            themeMode = "Adaptive"
+            local pal = generateAdaptivePalette(currentAdaptiveTrack or (Shared.CurrentTrack and Shared.CurrentTrack()))
+            applyThemeTransition(pal, 0.65)
+            updateThemeButtonIcon()
+            sendNotification("Theme Engine", "🎨 Opaque Adaptive UI (Song Cover Sync) Active", true)
         else
-            applyThemeTransition(DarkTheme)
+            themeMode = "Dark"
+            applyThemeTransition(DarkTheme, 0.25)
             updateThemeButtonIcon()
             sendNotification("Theme Engine", "Dark Theme Applied", true)
         end
@@ -1144,10 +1269,25 @@ return function(Shared)
             sendNotification("Core UI Engine", "Default Roblox Core UI restored", false)
         end
     end)
-    makeButton(DrawerScroll, "Save Config File (Manual)", 3, function()
+    makeToggle(DrawerScroll, "Opaque Adaptive UI (Song Cover Sync)", "AdaptiveTheme", 3, function(state)
+        if state then
+            themeMode = "Adaptive"
+            local pal = generateAdaptivePalette(currentAdaptiveTrack or (Shared.CurrentTrack and Shared.CurrentTrack()))
+            applyThemeTransition(pal, 0.65)
+            updateThemeButtonIcon()
+            sendNotification("Theme Engine", "🎨 Opaque Adaptive UI Enabled", true)
+        else
+            themeMode = isDark and "Dark" or "Light"
+            applyThemeTransition(isDark and DarkTheme or LightTheme, 0.25)
+            updateThemeButtonIcon()
+            sendNotification("Theme Engine", isDark and "Dark Theme Restored" or "Light Theme Restored", false)
+        end
+        saveConfigDebounced()
+    end)
+    makeButton(DrawerScroll, "Save Config File (Manual)", 4, function()
         saveConfigDirect(); sendNotification("Config Manager", "Saved to FihUi_Config.json", true)
     end)
-    makeButton(DrawerScroll, "Unload / Force Close Menu", 3, function()
+    makeButton(DrawerScroll, "Unload / Force Close Menu", 5, function()
         saveConfigDirect(); if Shared.GUI then Shared.GUI:Destroy() end; for k in pairs(Shared.Flags) do Shared.Flags[k] = false end
     end)
 

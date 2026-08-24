@@ -1102,11 +1102,18 @@ return function(Shared)
         if hudArtistLbl then hudArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
         if hudCoverImg then applyImage(hudCoverImg, track) end
 
+        -- Update Opaque Adaptive UI Theme if active
+        if Shared.SetAdaptiveThemeTrack then
+            pcall(Shared.SetAdaptiveThemeTrack, track)
+        end
+
         -- Broadcast updated track to peer script users immediately
         if Shared.BroadcastBeacon then
             pcall(Shared.BroadcastBeacon)
         end
     end
+
+    Shared.CurrentTrack = function() return currentTrack end
 
     -- Persistent Polling Engine
     local function startPolling()
