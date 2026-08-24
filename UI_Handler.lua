@@ -1566,13 +1566,108 @@ return function(Shared)
     menuBtn.Parent = leftNavHolder
     registerThemed(menuBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
 
-    menuBtn.MouseButton1Click:Connect(function()
+    -- Quick Actions Dropdown Menu (Underneath the [≡] button)
+    local quickMenu = Instance.new("Frame")
+    quickMenu.Name = "Fih_QuickActionsMenu"
+    quickMenu.Size = UDim2.new(0, 160, 0, 145)
+    quickMenu.Position = UDim2.new(0, 26, 0, 28)
+    quickMenu.BackgroundColor3 = C.BodyBg
+    quickMenu.BackgroundTransparency = 0.15
+    quickMenu.BorderSizePixel = 1
+    quickMenu.BorderColor3 = C.WinBorder
+    quickMenu.ClipsDescendants = true
+    quickMenu.Visible = false
+    quickMenu.ZIndex = 60
+    quickMenu.Parent = ScreenGui
+    registerThemed(quickMenu, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
+    local qmCorner = Instance.new("UICorner")
+    qmCorner.CornerRadius = UDim.new(0, 0)
+    qmCorner.Parent = quickMenu
+
+    local qmLayout = Instance.new("UIListLayout")
+    qmLayout.FillDirection = Enum.FillDirection.Vertical
+    qmLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    qmLayout.Padding = UDim.new(0, 1)
+    qmLayout.Parent = quickMenu
+
+    local function createQuickMenuItem(text, order, callback)
+        local itemBtn = Instance.new("TextButton")
+        itemBtn.Size = UDim2.new(1, 0, 0, 28)
+        itemBtn.BackgroundColor3 = C.BtnBg
+        itemBtn.BackgroundTransparency = 0.4
+        itemBtn.BorderSizePixel = 0
+        itemBtn.Text = "  " .. text
+        itemBtn.TextColor3 = C.BtnText
+        itemBtn.Font = Enum.Font.ArimoBold
+        itemBtn.TextSize = 12
+        itemBtn.TextXAlignment = Enum.TextXAlignment.Left
+        itemBtn.LayoutOrder = order
+        itemBtn.ZIndex = 61
+        itemBtn.Parent = quickMenu
+        registerThemed(itemBtn, { BackgroundColor3 = "BtnBg", TextColor3 = "BtnText" })
+        local ic = Instance.new("UICorner")
+        ic.CornerRadius = UDim.new(0, 0)
+        ic.Parent = itemBtn
+
+        itemBtn.MouseEnter:Connect(function()
+            itemBtn.BackgroundTransparency = 0.1
+        end)
+        itemBtn.MouseLeave:Connect(function()
+            itemBtn.BackgroundTransparency = 0.4
+        end)
+        itemBtn.MouseButton1Click:Connect(function()
+            quickMenu.Visible = false
+            callback()
+        end)
+        return itemBtn
+    end
+
+    createQuickMenuItem("👥  Leaderboard", 1, function()
+        local lb = ScreenGui:FindFirstChild("Fih_CustomLeaderboard")
+        if lb then
+            lb.Visible = not lb.Visible
+        end
+    end)
+
+    createQuickMenuItem("🎭  Emotes", 2, function()
+        pcall(function()
+            VirtualInput:SendKeyEvent(true, Enum.KeyCode.Period, false, game)
+            task.delay(0.03, function()
+                VirtualInput:SendKeyEvent(false, Enum.KeyCode.Period, false, game)
+            end)
+        end)
+    end)
+
+    createQuickMenuItem("🎒  Inventory / Backpack", 3, function()
+        pcall(function()
+            VirtualInput:SendKeyEvent(true, Enum.KeyCode.Backquote, false, game)
+            task.delay(0.03, function()
+                VirtualInput:SendKeyEvent(false, Enum.KeyCode.Backquote, false, game)
+            end)
+        end)
+    end)
+
+    createQuickMenuItem("🔄  Reset Character", 4, function()
+        pcall(function()
+            local char = Players.LocalPlayer and Players.LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then hum.Health = 0 else char:BreakJoints() end
+            end
+        end)
+    end)
+
+    createQuickMenuItem("⚙️  Roblox Menu", 5, function()
         pcall(function()
             VirtualInput:SendKeyEvent(true, Enum.KeyCode.Escape, false, game)
             task.delay(0.03, function()
                 VirtualInput:SendKeyEvent(false, Enum.KeyCode.Escape, false, game)
             end)
         end)
+    end)
+
+    menuBtn.MouseButton1Click:Connect(function()
+        quickMenu.Visible = not quickMenu.Visible
     end)
 
     -- 3. [🎙] Voice Chat Mute/Unmute Button (Direct VoiceChatInternal toggle)
