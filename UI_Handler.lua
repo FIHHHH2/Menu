@@ -114,8 +114,44 @@ return function(Shared)
     Shared.IsDark = function() return isDark end
     Shared.GetTheme = function() return C end
 
-        -- ── ROBLOX CORE UI (HIGH-CONTRAST TOPBAR & SEMI-TRANSPARENT CHAT) ──
+        -- ── ROBLOX CORE UI (TOGGLEABLE RETRO AERO & CHAT ENGINE) ──────
+    local StarterGui = game:GetService("StarterGui")
+    local customCoreEnabled = true
+    Shared.Flags["CustomCoreUI"] = true
+
+    local function restoreDefaultRobloxCoreUI()
+        pcall(function()
+            StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, true)
+        end)
+        local TextChatService = game:GetService("TextChatService")
+        pcall(function()
+            local cwc = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
+            if cwc then
+                cwc.BackgroundColor3       = Color3.fromRGB(25, 27, 38)
+                cwc.BackgroundTransparency = 0.3
+                cwc.TextColor3             = Color3.fromRGB(255, 255, 255)
+                cwc.FontFace               = Font.fromEnum(Enum.Font.BuilderSans)
+            end
+            local cibc = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
+            if cibc then
+                cibc.BackgroundColor3       = Color3.fromRGB(25, 27, 38)
+                cibc.BackgroundTransparency = 0.2
+                cibc.TextColor3             = Color3.fromRGB(255, 255, 255)
+                cibc.PlaceholderColor3      = Color3.fromRGB(178, 178, 178)
+            end
+        end)
+        local expChat = CoreGui:FindFirstChild("ExperienceChat")
+        if expChat then
+            for _, d in ipairs(expChat:GetDescendants()) do
+                if d:IsA("TextLabel") or d:IsA("ImageLabel") or d:IsA("ImageButton") then
+                    pcall(function() d.Visible = true end)
+                end
+            end
+        end
+    end
+
     local function styleRobloxCoreUI(targetTheme, isDarkMode)
+        if not customCoreEnabled then return end
         local theme = targetTheme or C
         local dark  = (isDarkMode ~= nil) and isDarkMode or isDark
 
@@ -127,21 +163,14 @@ return function(Shared)
         local inputBg   = dark and Color3.fromRGB(24, 30, 44) or Color3.fromRGB(255, 255, 255)
         local placeCol  = dark and Color3.fromRGB(120, 150, 190) or Color3.fromRGB(100, 120, 150)
 
-        -- Clean any obsolete grid artifacts
-        for _, d in ipairs(CoreGui:GetDescendants()) do
-            if d.Name == "Fih_LeaderboardGrid" or d.Name == "Fih_ChatGrid" then
-                d:Destroy()
-            end
-        end
-
-        -- 0. Universal Squircles Killer (0px corner radius across CoreGui)
+        -- Universal Squircles Killer (0px corner radius across CoreGui)
         for _, d in ipairs(CoreGui:GetDescendants()) do
             if d:IsA("UICorner") then
                 d.CornerRadius = UDim.new(0, 0)
             end
         end
 
-        -- 1. TopBarApp (Frames & High-Contrast Icons in both Light and Dark mode)
+        -- 1. TopBarApp (Frames & High-Contrast Icons)
         pcall(function()
             local topbar = CoreGui:FindFirstChild("TopBarApp")
             if topbar then
@@ -167,13 +196,12 @@ return function(Shared)
             end
         end)
 
-        -- 2. ExperienceChat (Semi-transparent Top Tab Bar, Clean Aero Frame)
+        -- 2. ExperienceChat (Semi-transparent Top Tab Bar, Clean Aero Frame, Preserves Buttons)
         pcall(function()
             local expChat = CoreGui:FindFirstChild("ExperienceChat")
             if expChat and expChat:FindFirstChild("appLayout") then
                 local app = expChat.appLayout
 
-                -- Semi-transparent top channel tab bar
                 local topPanel = app:FindFirstChild("topPanel")
                 if topPanel then
                     topPanel.BackgroundColor3       = cardBg
@@ -210,8 +238,9 @@ return function(Shared)
                         d.ScrollBarThickness = 0
                         d.ScrollBarImageTransparency = 1
                     end
-                    if d:IsA("TextLabel") and (d.Text == "three-dots-horizontal" or d.Text:find("arrow") or d.Text:find("bolt") or d.Text:find("lightning")) then
-                        pcall(function() d.Visible = false end)
+                    -- Ensure all chat icons and buttons remain fully visible
+                    if d:IsA("ImageLabel") or d:IsA("ImageButton") or d:IsA("TextButton") then
+                        d.Visible = true
                     end
                 end
             end
@@ -237,13 +266,14 @@ return function(Shared)
         end)
     end
 
-    -- Persistent Watcher: Re-enforces clean retro styling continuously
+    -- Persistent Watcher: Re-enforces styling when active
     task.spawn(function()
         task.wait(0.3)
         styleRobloxCoreUI(C, isDark)
 
         local elapsed = 0
         RunService.Heartbeat:Connect(function(dt)
+            if not customCoreEnabled then return end
             elapsed = elapsed + dt
             if elapsed >= 0.8 then
                 elapsed = 0
@@ -252,7 +282,7 @@ return function(Shared)
         end)
 
         CoreGui.DescendantAdded:Connect(function(desc)
-            if desc:IsA("UICorner") then
+            if customCoreEnabled and desc:IsA("UICorner") then
                 desc.CornerRadius = UDim.new(0, 0)
             end
         end)
@@ -1120,7 +1150,21 @@ return function(Shared)
     local Lighting = game:GetService("Lighting")
 
     makeSection(DrawerScroll, "General & Engine", 1)
-    makeButton(DrawerScroll, "Save Config File (Manual)", 2, function()
+    makeToggle(DrawerScroll, "Custom Windows Aero Core UI", "CustomCoreUI", 2, function(state)
+        customCoreEnabled = state
+        local lb = ScreenGui:FindFirstChild("Fih_CustomLeaderboard")
+        if state then
+            pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false) end)
+            if lb then lb.Visible = true end
+            styleRobloxCoreUI(C, isDark)
+            sendNotification("Core UI Engine", "Custom Windows Aero Core UI enabled", true)
+        else
+            if lb then lb.Visible = false end
+            restoreDefaultRobloxCoreUI()
+            sendNotification("Core UI Engine", "Default Roblox Core UI restored", false)
+        end
+    end)
+    makeButton(DrawerScroll, "Save Config File (Manual)", 3, function()
         saveConfigDirect(); sendNotification("Config Manager", "Saved to FihUi_Config.json", true)
     end)
     makeButton(DrawerScroll, "Unload / Force Close Menu", 3, function()
