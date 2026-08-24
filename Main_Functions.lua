@@ -351,16 +351,18 @@ return function(Shared)
         if not info.billboard or not info.billboard.Parent or info.billboard.Adornee ~= hrp then
             if info.billboard then pcall(function() info.billboard:Destroy() end) end
 
+            local head = plr.Character:FindFirstChild("Head") or hrp
+
             local bb = Instance.new("BillboardGui")
-            bb.Name          = "PeerMusicBillboard_" .. tostring(plr.UserId)
-            bb.Size          = UDim2.new(0, 280, 0, 68)
-            bb.StudsOffset   = Vector3.new(0, 5.8, 0)
-            bb.AlwaysOnTop   = true
-            bb.Active        = true
-            bb.MaxDistance   = 1200
-            bb.ClipsDescendants = false
-            bb.Adornee       = hrp
-            bb.Parent        = Shared.GUI
+            bb.Name                   = "PeerMusicBillboard_" .. tostring(plr.UserId)
+            bb.Size                   = UDim2.new(0, 280, 0, 68)
+            bb.StudsOffsetWorldSpace  = Vector3.new(0, 4.2, 0)
+            bb.AlwaysOnTop            = (Shared.Flags and Shared.Flags["UniversalESP"]) or false
+            bb.Active                 = true
+            bb.MaxDistance            = 75
+            bb.ClipsDescendants       = false
+            bb.Adornee                = head
+            bb.Parent                 = Shared.GUI
 
             local bg = Instance.new("Frame")
             bg.Size                   = UDim2.new(1, 0, 1, 0)
@@ -371,12 +373,12 @@ return function(Shared)
             bg.ClipsDescendants       = false
             bg.Parent                 = bb
 
-            -- Ronald Cat Overlay on top of BG (Far Right Edge)
+            -- Ronald Cat Overlay INSIDE BG on far right side
             local ronaldImg = Instance.new("ImageLabel")
             ronaldImg.Name                   = "RonaldCatOverlay"
-            ronaldImg.Size                   = UDim2.new(0, 36, 0, 48)
-            ronaldImg.AnchorPoint            = Vector2.new(1, 1)
-            ronaldImg.Position               = UDim2.new(1, 0, 0, 1)
+            ronaldImg.Size                   = UDim2.new(0, 38, 0, 52)
+            ronaldImg.AnchorPoint            = Vector2.new(1, 0.5)
+            ronaldImg.Position               = UDim2.new(1, -6, 0.5, 0)
             ronaldImg.BackgroundTransparency = 1
             ronaldImg.BorderSizePixel        = 0
             ronaldImg.ScaleType              = Enum.ScaleType.Fit
@@ -630,6 +632,16 @@ return function(Shared)
     MkToggle(rightCol, "Universal Player ESP & Chams", "UniversalESP", 36, function(state)
         clearAllUniversalESP()
         if universalESPConn then universalESPConn:Disconnect(); universalESPConn = nil end
+
+        -- Update AlwaysOnTop on all peer billboards
+        for _, pInfo in pairs(peerUsers) do
+            if pInfo.billboard then
+                pcall(function() pInfo.billboard.AlwaysOnTop = state end)
+            end
+        end
+        local selfBB = Shared.GUI and Shared.GUI:FindFirstChild("MusicBillboard")
+        if selfBB then pcall(function() selfBB.AlwaysOnTop = state end) end
+
         if not state then return end
 
         broadcastBeacon()

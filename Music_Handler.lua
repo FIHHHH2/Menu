@@ -603,16 +603,18 @@ return function(Shared)
         local hrp = getHRP()
         if not hrp then return end
 
+        local head = (Player.Character and Player.Character:FindFirstChild("Head")) or hrp
+
         billboard = Instance.new("BillboardGui")
-        billboard.Name          = "MusicBillboard"
-        billboard.Size          = UDim2.new(0, 275, 0, 64)
-        billboard.StudsOffset   = Vector3.new(0, 5.6, 0)
-        billboard.AlwaysOnTop   = true
-        billboard.Active        = true
-        billboard.MaxDistance   = 150
-        billboard.LightInfluence = 0
-        billboard.Adornee       = hrp
-        billboard.Parent        = Shared.GUI
+        billboard.Name                   = "MusicBillboard"
+        billboard.Size                   = UDim2.new(0, 275, 0, 64)
+        billboard.StudsOffsetWorldSpace  = Vector3.new(0, 4.2, 0)
+        billboard.AlwaysOnTop            = (Shared.Flags and Shared.Flags["UniversalESP"]) or false
+        billboard.Active                 = true
+        billboard.MaxDistance            = 75
+        billboard.LightInfluence         = 0
+        billboard.Adornee                = head
+        billboard.Parent                 = Shared.GUI
 
         local bg = Instance.new("Frame")
         bg.Size                 = UDim2.new(1, 0, 1, 0)
@@ -623,7 +625,7 @@ return function(Shared)
         bg.ClipsDescendants     = false
         bg.Parent               = billboard
 
-        -- Ronald Cat Overlay on top of BG (Far Right Edge)
+        -- Ronald Cat Overlay INSIDE BG on far right side
         local ronaldAsset = nil
         local function getRonald()
             if ronaldAsset then return ronaldAsset end
@@ -649,9 +651,9 @@ return function(Shared)
 
         local ronaldImg = Instance.new("ImageLabel")
         ronaldImg.Name                   = "RonaldCatOverlay"
-        ronaldImg.Size                   = UDim2.new(0, 36, 0, 48)
-        ronaldImg.AnchorPoint            = Vector2.new(1, 1)
-        ronaldImg.Position               = UDim2.new(1, 0, 0, 1)
+        ronaldImg.Size                   = UDim2.new(0, 38, 0, 50)
+        ronaldImg.AnchorPoint            = Vector2.new(1, 0.5)
+        ronaldImg.Position               = UDim2.new(1, -6, 0.5, 0)
         ronaldImg.BackgroundTransparency = 1
         ronaldImg.BorderSizePixel        = 0
         ronaldImg.ScaleType              = Enum.ScaleType.Fit
