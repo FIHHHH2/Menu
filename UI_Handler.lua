@@ -139,15 +139,6 @@ return function(Shared)
                 cibc.TextColor3             = Color3.fromRGB(255, 255, 255)
                 cibc.PlaceholderColor3      = Color3.fromRGB(178, 178, 178)
             end
-        end)
-        local expChat = CoreGui:FindFirstChild("ExperienceChat")
-        if expChat then
-            for _, d in ipairs(expChat:GetDescendants()) do
-                if d:IsA("TextLabel") or d:IsA("ImageLabel") or d:IsA("ImageButton") then
-                    pcall(function() d.Visible = true end)
-                end
-            end
-        end
     end
 
     local function styleRobloxCoreUI(targetTheme, isDarkMode)
@@ -163,21 +154,23 @@ return function(Shared)
         local inputBg   = dark and Color3.fromRGB(24, 30, 44) or Color3.fromRGB(255, 255, 255)
         local placeCol  = dark and Color3.fromRGB(120, 150, 190) or Color3.fromRGB(100, 120, 150)
 
-        -- Universal Squircles Killer (0px corner radius across CoreGui)
-        for _, d in ipairs(CoreGui:GetDescendants()) do
-            if d:IsA("UICorner") then
-                d.CornerRadius = UDim.new(0, 0)
+        -- Universal Squircles Killer: scoped only to TopBarApp (never touches ExperienceChat)
+        pcall(function()
+            local topbar = CoreGui:FindFirstChild("TopBarApp")
+            if topbar then
+                for _, d in ipairs(topbar:GetDescendants()) do
+                    if d:IsA("UICorner") then d.CornerRadius = UDim.new(0, 0) end
+                end
             end
-        end
+        end)
 
         -- 1. TopBarApp & Health Bar (High-Contrast Icons & Sharp Aero Health)
         pcall(function()
             local topbar = CoreGui:FindFirstChild("TopBarApp")
             if topbar then
                 for _, obj in ipairs(topbar:GetDescendants()) do
-                    if obj:IsA("UICorner") then obj.CornerRadius = UDim.new(0, 0) end
                     if obj:IsA("Frame") and obj.BackgroundTransparency < 0.95 then
-                        -- Check if this frame is the Health indicator bar (green)
+                        -- Check if this frame is the Health indicator bar (green fill)
                         if obj.BackgroundColor3.G > 0.55 and obj.BackgroundColor3.R < 0.45 then
                             obj.BackgroundColor3       = dark and Color3.fromRGB(0, 220, 140) or Color3.fromRGB(0, 190, 110)
                             obj.BackgroundTransparency = 0
@@ -204,25 +197,8 @@ return function(Shared)
             end
         end)
 
-        -- 2. ExperienceChat (Clean Glass Backdrop & 0px Squircles, Preserves Native Layout)
-        pcall(function()
-            local expChat = CoreGui:FindFirstChild("ExperienceChat")
-            if expChat then
-                for _, d in ipairs(expChat:GetDescendants()) do
-                    if d:IsA("UICorner") then d.CornerRadius = UDim.new(0, 0) end
-                    if d:IsA("ScrollingFrame") then
-                        d.ScrollBarThickness = 0
-                        d.ScrollBarImageTransparency = 1
-                    end
-                    if d:IsA("TextLabel") or d:IsA("ImageLabel") or d:IsA("ImageButton") or d:IsA("TextButton") or d:IsA("TextBox") then
-                        d.Visible = true
-                        if d.Name == "Icon" or d.Name == "Children" then
-                            pcall(function() d.FontFace = Font.fromName("BuilderIcons") end)
-                        end
-                    end
-                end
-            end
-        end)
+        -- 2. ExperienceChat: ONLY use TextChatService API. Never traverse ExperienceChat
+        --    descendants directly — that breaks BuilderIcons font ligatures (lightning, dots).
 
         -- 3. TextChatService Configurations
         pcall(function()
@@ -260,8 +236,16 @@ return function(Shared)
         end)
 
         CoreGui.DescendantAdded:Connect(function(desc)
-            if customCoreEnabled and desc:IsA("UICorner") then
-                desc.CornerRadius = UDim.new(0, 0)
+            if not customCoreEnabled then return end
+            if desc:IsA("UICorner") then
+                -- Never touch UICorners inside ExperienceChat - corrupts BuilderIcons ligatures
+                local inChat = false
+                local p = desc.Parent
+                while p and p ~= CoreGui do
+                    if p.Name == "ExperienceChat" then inChat = true break end
+                    p = p.Parent
+                end
+                if not inChat then desc.CornerRadius = UDim.new(0, 0) end
             end
         end)
     end)
