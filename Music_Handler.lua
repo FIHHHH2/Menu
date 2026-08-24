@@ -1159,6 +1159,57 @@ return function(Shared)
         end
 
         applyImage(hudCoverImg, currentTrack)
+
+        if Shared.RegisterThemeCallback then
+            Shared.RegisterThemeCallback(function(targetTheme, isDarkMode)
+                if hudWidget and hudWidget.Parent then
+                    TweenService:Create(hudWidget, TweenInfo.new(0.25), {
+                        BackgroundColor3 = targetTheme.BodyBg or Color3.fromRGB(10, 12, 16),
+                        BorderColor3     = targetTheme.WinBorder or Color3.fromRGB(0, 160, 255)
+                    }):Play()
+                    if tBar and tBar.Parent then
+                        TweenService:Create(tBar, TweenInfo.new(0.25), {
+                            BackgroundColor3 = targetTheme.TitleBar or Color3.fromRGB(18, 20, 26),
+                            BorderColor3     = targetTheme.WinBorder or Color3.fromRGB(0, 160, 255)
+                        }):Play()
+                    end
+                    if tLbl and tLbl.Parent then
+                        TweenService:Create(tLbl, TweenInfo.new(0.25), {
+                            TextColor3 = targetTheme.TitleText or Color3.fromRGB(248, 250, 255)
+                        }):Play()
+                    end
+                    if hudSongLbl and hudSongLbl.Parent then
+                        TweenService:Create(hudSongLbl, TweenInfo.new(0.25), {
+                            TextColor3 = targetTheme.BtnText or Color3.fromRGB(248, 250, 255)
+                        }):Play()
+                    end
+                    if hudArtistLbl and hudArtistLbl.Parent then
+                        TweenService:Create(hudArtistLbl, TweenInfo.new(0.25), {
+                            TextColor3 = targetTheme.Accent or Color3.fromRGB(0, 200, 255)
+                        }):Play()
+                    end
+                    if hudVisBars then
+                        for _, bar in ipairs(hudVisBars) do
+                            if bar and bar.Parent then
+                                TweenService:Create(bar, TweenInfo.new(0.25), {
+                                    BackgroundColor3 = targetTheme.Accent or Color3.fromRGB(0, 200, 255)
+                                    }):Play()
+                            end
+                        end
+                    end
+                    if hudPlaceLbl and hudPlaceLbl.Parent then
+                        TweenService:Create(hudPlaceLbl, TweenInfo.new(0.25), {
+                            TextColor3 = targetTheme.BannerSub or Color3.fromRGB(160, 175, 200)
+                        }):Play()
+                    end
+                    if hudUserLbl and hudUserLbl.Parent then
+                        TweenService:Create(hudUserLbl, TweenInfo.new(0.25), {
+                            TextColor3 = targetTheme.BannerSub or Color3.fromRGB(160, 175, 200)
+                        }):Play()
+                    end
+                end
+            end)
+        end
     end
 
     -- ── SPOTIFY AUDIO ANALYSIS FETCHER (Segments, Beats, Loudness, Pitches) ──

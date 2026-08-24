@@ -935,11 +935,6 @@ return function(Shared)
     CAPad.PaddingBottom = UDim.new(0, 12)
     CAPad.Parent        = ContentArea
 
-    local CALayout = Instance.new("UIListLayout")
-    CALayout.SortOrder = Enum.SortOrder.LayoutOrder
-    CALayout.Padding   = UDim.new(0, 0)
-    CALayout.Parent    = ContentArea
-
     -- SETTINGS DRAWER
     local Drawer = Instance.new("Frame")
     Drawer.Name = "Drawer"; Drawer.Size = UDim2.new(1,-SIDEBAR_W,1,0)
