@@ -2,7 +2,16 @@
 -- Modular Loadstring Entry Point with Cache Busting
 -- Usage: loadstring(game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu/main/init.lua?t=" .. tick()))()
 
-local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/main"
+local commitSha = nil
+pcall(function()
+    local res = game:HttpGet("https://api.github.com/repos/FIHHHH2/Menu/commits/main?t=" .. tostring(os.time()) .. tostring(math.random(1000, 9999)))
+    local data = game:GetService("HttpService"):JSONDecode(res)
+    if data and data.sha then
+        commitSha = data.sha
+    end
+end)
+
+local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/" .. (commitSha or "main")
 
 local function loadModule(name)
     -- Cache busting prevents GitHub CDN from serving stale code
