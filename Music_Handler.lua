@@ -292,6 +292,7 @@ return function(Shared)
             end
         end)
     end
+    Shared.ApplyArtworkImage = applyImage
 
     -- SPOTIFY API
     local function cleanToken(tok)

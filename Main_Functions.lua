@@ -307,53 +307,13 @@ return function(Shared)
     -- ── RIGHT COLUMN: UNIVERSAL ESP & CROSS-PLAYER DETECTION ──────
     MkSection(rightCol, "Universal ESP & Peer Radar", 35)
 
-    local peerUsers = {}          -- [UserId] = { isPeer = true, song = "", artist = "", billboard = nil }
+    local peerUsers = {}          -- [UserId] = { isPeer = true, song = "", artist = "", cover = "", billboard = nil, visBars = {}, lastSeen = 0 }
     local universalESPList = {}   -- [Player] = { gui = BillboardGui, hl = Highlight, lbl = TextLabel, bg = Frame }
     local universalESPConn = nil
 
-    -- Silent peer sync via character StringValue — zero chat messages sent
     local TAG_NAME = "Fih_PeerTag"
+    local curJobIdClean = (game.JobId ~= "" and game.JobId:gsub("-", "")) or "local_server"
 
-    local function getSelfTag()
-        local char = Player.Character or Player.CharacterAdded:Wait()
-        local tag = char:FindFirstChild(TAG_NAME)
-        if not tag then
-            tag = Instance.new("StringValue")
-            tag.Name = TAG_NAME
-            tag.Parent = char
-        end
-        return tag
-    end
-
-    local function broadcastBeacon()
-        pcall(function()
-            local curTrack = Shared.GetCurrentTrack and Shared.GetCurrentTrack() or { name = "", artist = "" }
-            local s = (curTrack.name and curTrack.name ~= "Not Playing") and curTrack.name or ""
-            local a = (curTrack.artist and curTrack.artist ~= "No Artist") and curTrack.artist or ""
-            local tag = getSelfTag()
-            tag.Value = s:sub(1,40) .. "//" .. a:sub(1,30)
-        end)
-    end
-    Shared.BroadcastBeacon = broadcastBeacon
-
-    local function readPeerTag(plr)
-        if not plr.Character then return nil, nil end
-        local tag = plr.Character:FindFirstChild(TAG_NAME)
-        if not tag or tag.Value == "" then return nil, nil end
-        local s, a = tag.Value:match("^(.-)//(.*)$")
-        return (s and s ~= "") and s or nil, (a and a ~= "") and a or nil
-    end
-
-    -- Create or update an AlwaysOnTop 3D Overhead Music Billboard on a Peer Player
-    local function updatePeerBillboard(plr, songName, artistName)
-        if not plr or not plr.Character then return end
-        local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-
-        local info = peerUsers[plr.UserId]
-        if not info then return end
-
-    -- Ronald Cat Asset Loader for Peer Billboards
     local ronaldAsset = nil
     local function getRonaldAsset()
         if ronaldAsset then return ronaldAsset end
@@ -376,13 +336,25 @@ return function(Shared)
         end
         return "https://raw.githubusercontent.com/FIHHHH2/Menu/main/ronald_cat.png"
     end
+
+    -- Create or update an AlwaysOnTop 3D Overhead Music Billboard on a Peer Player
+    local function updatePeerBillboard(plr, songName, artistName, coverUrl)
+        if not plr or not plr.Character then return end
+        local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        local info = peerUsers[plr.UserId]
+        if not info then return end
+
+        local isPlaying = (songName and songName ~= "" and songName ~= "Not Playing")
+
         if not info.billboard or not info.billboard.Parent or info.billboard.Adornee ~= hrp then
             if info.billboard then pcall(function() info.billboard:Destroy() end) end
 
             local bb = Instance.new("BillboardGui")
             bb.Name          = "PeerMusicBillboard_" .. tostring(plr.UserId)
-            bb.Size          = UDim2.new(0, 280, 0, 64)
-            bb.StudsOffset   = Vector3.new(0, 5.6, 0)
+            bb.Size          = UDim2.new(0, 280, 0, 68)
+            bb.StudsOffset   = Vector3.new(0, 5.8, 0)
             bb.AlwaysOnTop   = true
             bb.Active        = true
             bb.MaxDistance   = 1200
@@ -399,7 +371,7 @@ return function(Shared)
             bg.ClipsDescendants       = false
             bg.Parent                 = bb
 
-            -- ── RONALD CAT OVERLAY ON TOP OF BG ──
+            -- Ronald Cat Overlay on top of BG
             local ronaldImg = Instance.new("ImageLabel")
             ronaldImg.Name                   = "RonaldCatOverlay"
             ronaldImg.Size                   = UDim2.new(0, 36, 0, 50)
@@ -411,30 +383,48 @@ return function(Shared)
             ronaldImg.Image                  = getRonaldAsset()
             ronaldImg.Parent                 = bg
 
-            -- Dark vinyl note frame
+            -- Album Cover Container
             local coverFrame = Instance.new("Frame")
             coverFrame.Name             = "CoverContainer"
-            coverFrame.Size             = UDim2.new(0, 48, 0, 48)
+            coverFrame.Size             = UDim2.new(0, 52, 0, 52)
             coverFrame.Position         = UDim2.new(0, 6, 0, 8)
             coverFrame.BackgroundColor3 = Color3.fromRGB(22, 26, 36)
             coverFrame.BorderSizePixel  = 1
             coverFrame.BorderColor3     = Color3.fromRGB(255, 205, 30)
+            coverFrame.ClipsDescendants = true
             coverFrame.Parent           = bg
 
             local note = Instance.new("TextLabel")
+            note.Name                   = "NoteFallback"
             note.Size                   = UDim2.new(1, 0, 1, 0)
             note.BackgroundTransparency = 1
             note.Text                   = "🎵"
-            note.TextSize               = 24
+            note.TextSize               = 22
             note.TextColor3             = Color3.fromRGB(255, 215, 50)
+            note.ZIndex                 = 1
             note.Parent                 = coverFrame
+
+            local coverImg = Instance.new("ImageLabel")
+            coverImg.Name                   = "CoverArtwork"
+            coverImg.Size                   = UDim2.new(1, 0, 1, 0)
+            coverImg.BackgroundTransparency = 1
+            coverImg.BorderSizePixel        = 0
+            coverImg.ScaleType              = Enum.ScaleType.Crop
+            coverImg.ZIndex                 = 2
+            coverImg.Parent                 = coverFrame
+
+            if Shared.ApplyArtworkImage then
+                Shared.ApplyArtworkImage(coverImg, { cover = coverUrl or "", name = songName or "", artist = artistName or "" })
+            elseif coverUrl and coverUrl ~= "" then
+                coverImg.Image = coverUrl
+            end
 
             local songLbl = Instance.new("TextLabel")
             songLbl.Name                  = "SongTitle"
-            songLbl.Size                  = UDim2.new(1, -95, 0, 18)
-            songLbl.Position              = UDim2.new(0, 60, 0, 8)
+            songLbl.Size                  = UDim2.new(1, -95, 0, 16)
+            songLbl.Position              = UDim2.new(0, 64, 0, 6)
             songLbl.BackgroundTransparency = 1
-            songLbl.Text                  = (songName ~= "") and songName or "No Active Playback"
+            songLbl.Text                  = (isPlaying and songName) or "No Active Playback"
             songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
             songLbl.Font                  = Enum.Font.ArimoBold
             songLbl.TextSize              = 11
@@ -444,10 +434,10 @@ return function(Shared)
 
             local artistLbl = Instance.new("TextLabel")
             artistLbl.Name                  = "ArtistTitle"
-            artistLbl.Size                  = UDim2.new(1, -95, 0, 16)
-            artistLbl.Position              = UDim2.new(0, 60, 0, 26)
+            artistLbl.Size                  = UDim2.new(1, -95, 0, 14)
+            artistLbl.Position              = UDim2.new(0, 64, 0, 22)
             artistLbl.BackgroundTransparency = 1
-            artistLbl.Text                  = (artistName ~= "") and artistName or "[👑 FIH USER]"
+            artistLbl.Text                  = (isPlaying and artistName and artistName ~= "") and artistName or "[👑 FIH USER]"
             artistLbl.TextColor3            = Color3.fromRGB(0, 230, 150)
             artistLbl.Font                  = Enum.Font.Code
             artistLbl.TextSize              = 10
@@ -455,11 +445,33 @@ return function(Shared)
             artistLbl.TextTruncate          = Enum.TextTruncate.AtEnd
             artistLbl.Parent                = bg
 
+            -- 6-Bar Peer Overhead Equalizer
+            local visBox = Instance.new("Frame")
+            visBox.Name                   = "PeerEqualizer"
+            visBox.Size                   = UDim2.new(0, 52, 0, 16)
+            visBox.Position               = UDim2.new(0, 64, 0, 42)
+            visBox.BackgroundTransparency = 1
+            visBox.BorderSizePixel        = 0
+            visBox.Parent                 = bg
+
+            local vBars = {}
+            for i = 1, 6 do
+                local bar = Instance.new("Frame")
+                bar.Size = UDim2.new(0, 5, 0, 3)
+                bar.Position = UDim2.new(0, (i - 1) * 8, 1, 0)
+                bar.AnchorPoint = Vector2.new(0, 1)
+                bar.BackgroundColor3 = Color3.fromRGB(255, 205, 30)
+                bar.BorderSizePixel = 0
+                bar.Parent = visBox
+                vBars[i] = bar
+            end
+            info.visBars = vBars
+
             local badgeLbl = Instance.new("TextLabel")
-            badgeLbl.Size                  = UDim2.new(1, -95, 0, 14)
-            badgeLbl.Position              = UDim2.new(0, 60, 0, 44)
+            badgeLbl.Size                  = UDim2.new(1, -125, 0, 14)
+            badgeLbl.Position              = UDim2.new(0, 120, 0, 44)
             badgeLbl.BackgroundTransparency = 1
-            badgeLbl.Text                  = "👑 " .. plr.DisplayName .. " (@" .. plr.Name .. ")"
+            badgeLbl.Text                  = "👑 " .. plr.DisplayName
             badgeLbl.TextColor3            = Color3.fromRGB(255, 205, 30)
             badgeLbl.Font                  = Enum.Font.Code
             badgeLbl.TextSize              = 9
@@ -472,45 +484,174 @@ return function(Shared)
             local bg = info.billboard:FindFirstChildOfClass("Frame")
             if bg then
                 local sLbl = bg:FindFirstChild("SongTitle")
-                if sLbl then sLbl.Text = (songName ~= "") and songName or "No Active Playback" end
+                if sLbl then sLbl.Text = (isPlaying and songName) or "No Active Playback" end
                 local aLbl = bg:FindFirstChild("ArtistTitle")
-                if aLbl then aLbl.Text = (artistName ~= "") and artistName or "[👑 FIH USER]" end
-            end
-        end
-    end
-
-    -- Silently scan all player characters for the peer tag StringValue
-    local function scanForPeers()
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= Player and plr.Character then
-                local tag = plr.Character:FindFirstChild(TAG_NAME)
-                if tag and tag.Value ~= "" then
-                    local songName, artistName = readPeerTag(plr)
-                    local isNew = not peerUsers[plr.UserId]
-                    local prevBB = peerUsers[plr.UserId] and peerUsers[plr.UserId].billboard or nil
-                    peerUsers[plr.UserId] = {
-                        isPeer    = true,
-                        song      = songName or "",
-                        artist    = artistName or "",
-                        billboard = prevBB
-                    }
-                    updatePeerBillboard(plr, songName or "", artistName or "")
-                    if isNew then
-                        local songMsg = (songName and songName ~= "") and (" (🎵 " .. songName .. ")") or ""
-                        Shared.Notify("Peer Detected", plr.DisplayName .. " is running this script!" .. songMsg, true)
+                if aLbl then aLbl.Text = (isPlaying and artistName and artistName ~= "") and artistName or "[👑 FIH USER]" end
+                local cFrame = bg:FindFirstChild("CoverContainer")
+                if cFrame then
+                    local cImg = cFrame:FindFirstChild("CoverArtwork")
+                    if cImg and Shared.ApplyArtworkImage then
+                        Shared.ApplyArtworkImage(cImg, { cover = coverUrl or "", name = songName or "", artist = artistName or "" })
                     end
                 end
             end
         end
     end
 
-    -- Background silent loop: update our own tag + scan others
+    local function registerPeerData(userId, name, dispName, song, artist, cover)
+        local uid = tonumber(userId)
+        if not uid or uid == Player.UserId then return end
+        local p = Players:GetPlayerByUserId(uid)
+        if not p then return end
+
+        local isNew = not peerUsers[uid]
+        local prevBB = peerUsers[uid] and peerUsers[uid].billboard or nil
+        local prevBars = peerUsers[uid] and peerUsers[uid].visBars or {}
+
+        peerUsers[uid] = {
+            isPeer    = true,
+            song      = song or "",
+            artist    = artist or "",
+            cover     = cover or "",
+            billboard = prevBB,
+            visBars   = prevBars,
+            lastSeen  = os.time()
+        }
+
+        updatePeerBillboard(p, song or "", artist or "", cover or "")
+
+        if isNew then
+            local songMsg = (song and song ~= "" and song ~= "Not Playing") and (" (🎵 " .. song .. ")") or ""
+            Shared.Notify("Peer Detected", p.DisplayName .. " is running FIH UI!" .. songMsg, true)
+        end
+    end
+
+    local function broadcastBeacon()
+        pcall(function()
+            local curTrack = Shared.GetCurrentTrack and Shared.GetCurrentTrack() or { name = "", artist = "", cover = "" }
+            local s = (curTrack.name and curTrack.name ~= "Not Playing") and curTrack.name or ""
+            local a = (curTrack.artist and curTrack.artist ~= "No Artist") and curTrack.artist or ""
+            local c = curTrack.cover or ""
+
+            -- 1. Local File Relay (Multi-Client / Same Machine)
+            if writefile then
+                local fname = "fih_peer_" .. curJobIdClean .. "_" .. tostring(Player.UserId) .. ".json"
+                local payload = game:GetService("HttpService"):JSONEncode({
+                    u = Player.UserId,
+                    n = Player.Name,
+                    d = Player.DisplayName,
+                    s = s,
+                    a = a,
+                    c = c,
+                    t = os.time()
+                })
+                pcall(function() writefile(fname, payload) end)
+            end
+
+            -- 2. In-Game Text Chat Beacon
+            local TextChatService = game:GetService("TextChatService")
+            local packet = "[FIH_PEER:" .. game:GetService("HttpService"):JSONEncode({ u = Player.UserId, s = s, a = a, c = c }) .. "]"
+            if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+                local channels = TextChatService:FindFirstChild("TextChannels")
+                local rbac = channels and channels:FindFirstChild("RBXGeneral")
+                if rbac then
+                    pcall(function() rbac:SendAsync(packet) end)
+                end
+            else
+                local sayEv = game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
+                local sayReq = sayEv and sayEv:FindFirstChild("SayMessageRequest")
+                if sayReq then
+                    pcall(function() sayReq:FireServer(packet, "All") end)
+                end
+            end
+        end)
+    end
+    Shared.BroadcastBeacon = broadcastBeacon
+
+    -- Scan local file relay for active peers
+    local function scanFileRelay()
+        if not (listfiles and readfile) then return end
+        local ok, files = pcall(function() return listfiles("") end)
+        if not ok or not files then return end
+
+        local prefix = "fih_peer_" .. curJobIdClean .. "_"
+        local now = os.time()
+        for _, file in ipairs(files) do
+            local basename = file:match("([^\\/]+)$") or file
+            if basename:find("^" .. prefix) then
+                local okR, content = pcall(function() return readfile(file) end)
+                if okR and content and #content > 10 then
+                    local okJ, data = pcall(function() return game:GetService("HttpService"):JSONDecode(content) end)
+                    if okJ and data and data.u and (now - (data.t or 0)) < 35 then
+                        registerPeerData(data.u, data.n, data.d, data.s, data.a, data.c)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Listen to in-game chat messages for peer packets
+    local TextChatService = game:GetService("TextChatService")
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        TextChatService.MessageReceived:Connect(function(msg)
+            if msg.Text and msg.Text:find("%[FIH_PEER:") then
+                local rawJson = msg.Text:match("%[FIH_PEER:(.*)%]")
+                if rawJson then
+                    local okJ, data = pcall(function() return game:GetService("HttpService"):JSONDecode(rawJson) end)
+                    if okJ and data and data.u then
+                        registerPeerData(data.u, nil, nil, data.s, data.a, data.c)
+                    end
+                end
+            end
+        end)
+    else
+        local function attachPlayerChat(plr)
+            plr.Chatted:Connect(function(msg)
+                if msg and msg:find("%[FIH_PEER:") then
+                    local rawJson = msg:match("%[FIH_PEER:(.*)%]")
+                    if rawJson then
+                        local okJ, data = pcall(function() return game:GetService("HttpService"):JSONDecode(rawJson) end)
+                        if okJ and data and data.u then
+                            registerPeerData(data.u, nil, nil, data.s, data.a, data.c)
+                        end
+                    end
+                end
+            end)
+        end
+        for _, p in ipairs(Players:GetPlayers()) do attachPlayerChat(p) end
+        Players.PlayerAdded:Connect(attachPlayerChat)
+    end
+
+    -- Animate Peer Billboard Equalizers
+    RunService.RenderStepped:Connect(function()
+        local t = os.clock()
+        for uid, pInfo in pairs(peerUsers) do
+            if pInfo.visBars and #pInfo.visBars > 0 then
+                local isPlaying = (pInfo.song and pInfo.song ~= "" and pInfo.song ~= "Not Playing")
+                for i, bar in ipairs(pInfo.visBars) do
+                    if bar and bar.Parent then
+                        local h = 2
+                        if isPlaying then
+                            local n = (math.noise(i * 0.6, t * 3.8, uid % 200) + 1) * 0.5
+                            h = math.clamp(math.floor((n ^ 1.6) * 16) + 2, 2, 16)
+                            bar.BackgroundColor3 = Color3.fromHSV((0.12 + i * 0.04) % 1, 0.9, 1)
+                        else
+                            bar.BackgroundColor3 = Color3.fromRGB(70, 85, 110)
+                        end
+                        bar.Size = UDim2.new(0, 5, 0, h)
+                    end
+                end
+            end
+        end
+    end)
+
+    -- Background loop: periodic broadcast and scan
     task.spawn(function()
         while true do
-            task.wait(6)
+            task.wait(5)
             if Shared.Flags["PeerDetect"] or Shared.Flags["UniversalESP"] then
                 broadcastBeacon()
-                scanForPeers()
+                scanFileRelay()
             end
         end
     end)

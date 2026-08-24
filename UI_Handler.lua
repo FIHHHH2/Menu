@@ -2180,17 +2180,20 @@ return function(Shared)
 
     if isModernTextChat then
         TextChatService.MessageReceived:Connect(function(msg)
+            if msg.Text and msg.Text:find("%[FIH_PEER:") then return end
             local sender = (msg.TextSource and msg.TextSource.Name) or "System"
             addChatMessage(sender, msg.Text, getUniquePlayerHex(sender))
         end)
     else
         for _, p in ipairs(Players:GetPlayers()) do
             p.Chatted:Connect(function(msg)
+                if msg and msg:find("%[FIH_PEER:") then return end
                 addChatMessage(p.DisplayName or p.Name, msg, getUniquePlayerHex(p.Name))
             end)
         end
         Players.PlayerAdded:Connect(function(p)
             p.Chatted:Connect(function(msg)
+                if msg and msg:find("%[FIH_PEER:") then return end
                 addChatMessage(p.DisplayName or p.Name, msg, getUniquePlayerHex(p.Name))
             end)
         end)
