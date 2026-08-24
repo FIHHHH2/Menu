@@ -175,11 +175,17 @@ return function(Shared)
             end
         end)
 
-        -- 1. TopBarApp & Health Bar (High-Contrast Icons & Sharp Aero Health)
+        -- 1. TopBarApp & Health Bar (High-Contrast Icons, Sharp Aero Health, Hide Redundant Chat Icon)
         pcall(function()
             local topbar = CoreGui:FindFirstChild("TopBarApp")
             if topbar then
                 for _, obj in ipairs(topbar:GetDescendants()) do
+                    -- Hide native speech bubble chat button if custom chat is enabled
+                    if customCoreEnabled and (obj.Name == "chat" or obj.Name == "Chat" or (obj:IsA("GuiObject") and obj.Name:lower():find("chat"))) then
+                        if not obj:IsDescendantOf(ScreenGui) then
+                            obj.Visible = false
+                        end
+                    end
                     if obj:IsA("Frame") and obj.BackgroundTransparency < 0.95 then
                         -- Check if this frame is the Health indicator bar (green fill)
                         if obj.BackgroundColor3.G > 0.55 and obj.BackgroundColor3.R < 0.45 then
@@ -1497,7 +1503,10 @@ return function(Shared)
     end)
 
 
-    -- ── CUSTOM WINDOWS AERO CHAT (TOPBAR INTEGRATED & DYNAMIC COLORS) ─
+    -- ── CUSTOM WINDOWS AERO CHAT (MENU ≡, VC 🎙, [□] MAXIMIZE & DEDUP) ─
+    local GuiService = game:GetService("GuiService")
+    local VoiceChatService = pcall(function() return game:GetService("VoiceChatService") end) and game:GetService("VoiceChatService") or nil
+
     local chatWindow = Instance.new("Frame")
     chatWindow.Name = "Fih_CustomChat"
     chatWindow.Size = UDim2.new(0, 420, 0, 290)
@@ -1514,7 +1523,7 @@ return function(Shared)
     chatWinCorner.CornerRadius = UDim.new(0, 0)
     chatWinCorner.Parent = chatWindow
 
-    -- TitleBar (Unified Header: [-] [ ] Controls, no [X])
+    -- TitleBar (Unified Header: [≡] [🎙] Title ... [-] [□] Controls)
     local chatTitleBar = Instance.new("Frame")
     chatTitleBar.Size = UDim2.new(1, 0, 0, 26)
     chatTitleBar.BackgroundColor3 = C.TitleBar
@@ -1528,9 +1537,75 @@ return function(Shared)
     chatTitleCorner.CornerRadius = UDim.new(0, 0)
     chatTitleCorner.Parent = chatTitleBar
 
+    -- Left Navigation Integrated Controls: [≡] Hamburger & [🎙] VC
+    local leftNavHolder = Instance.new("Frame")
+    leftNavHolder.Size = UDim2.new(0, 52, 0, 20)
+    leftNavHolder.Position = UDim2.new(0, 4, 0, 3)
+    leftNavHolder.BackgroundTransparency = 1
+    leftNavHolder.ZIndex = 42
+    leftNavHolder.Parent = chatTitleBar
+
+    -- [≡] Hamburger / Escape Menu Button
+    local menuBtn = Instance.new("TextButton")
+    menuBtn.Size = UDim2.new(0, 22, 0, 20)
+    menuBtn.Position = UDim2.new(0, 0, 0, 0)
+    menuBtn.BackgroundColor3 = C.BtnBg
+    menuBtn.BorderSizePixel = 1
+    menuBtn.BorderColor3 = C.BtnBorder
+    menuBtn.Text = "≡"
+    menuBtn.TextColor3 = C.BtnText
+    menuBtn.Font = Enum.Font.ArimoBold
+    menuBtn.TextSize = 14
+    menuBtn.ZIndex = 43
+    menuBtn.Parent = leftNavHolder
+    registerThemed(menuBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
+
+    menuBtn.MouseButton1Click:Connect(function()
+        pcall(function()
+            GuiService:TogglePauseMenu()
+        end)
+    end)
+
+    -- [🎙] Voice Chat Mute/Unmute Button
+    local vcBtn = Instance.new("TextButton")
+    vcBtn.Size = UDim2.new(0, 22, 0, 20)
+    vcBtn.Position = UDim2.new(0, 26, 0, 0)
+    vcBtn.BackgroundColor3 = C.BtnBg
+    vcBtn.BorderSizePixel = 1
+    vcBtn.BorderColor3 = C.BtnBorder
+    vcBtn.Text = "🎙"
+    vcBtn.TextColor3 = C.BtnText
+    vcBtn.Font = Enum.Font.ArimoBold
+    vcBtn.TextSize = 11
+    vcBtn.ZIndex = 43
+    vcBtn.Parent = leftNavHolder
+    registerThemed(vcBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
+
+    local isMicMuted = true
+    vcBtn.MouseButton1Click:Connect(function()
+        pcall(function()
+            local topbar = CoreGui:FindFirstChild("TopBarApp")
+            if topbar then
+                for _, btn in ipairs(topbar:GetDescendants()) do
+                    if btn:IsA("ImageButton") and btn.Name:lower():find("mic") then
+                        for _, conn in ipairs(getconnections and getconnections(btn.MouseButton1Click) or {}) do
+                            conn:Fire()
+                        end
+                        for _, conn in ipairs(getconnections and getconnections(btn.Activated) or {}) do
+                            conn:Fire()
+                        end
+                    end
+                end
+            end
+        end)
+        isMicMuted = not isMicMuted
+        vcBtn.TextColor3 = isMicMuted and C.BtnText or Color3.fromRGB(0, 220, 140)
+    end)
+
+    -- Title Label
     local chatTitleText = Instance.new("TextLabel")
-    chatTitleText.Size = UDim2.new(1, -60, 1, 0)
-    chatTitleText.Position = UDim2.new(0, 10, 0, 0)
+    chatTitleText.Size = UDim2.new(1, -120, 1, 0)
+    chatTitleText.Position = UDim2.new(0, 62, 0, 0)
     chatTitleText.BackgroundTransparency = 1
     chatTitleText.Text = "Chat"
     chatTitleText.TextColor3 = C.TitleText
@@ -1541,10 +1616,10 @@ return function(Shared)
     chatTitleText.Parent = chatTitleBar
     registerThemed(chatTitleText, { TextColor3 = "TitleText" })
 
-    -- Control Buttons Container [-] [ ] (No X button)
+    -- Right Control Buttons: [-] Minimize, [□] Maximize/Fullscreen
     local chatCtrlHolder = Instance.new("Frame")
-    chatCtrlHolder.Size = UDim2.new(0, 46, 0, 20)
-    chatCtrlHolder.Position = UDim2.new(1, -50, 0, 3)
+    chatCtrlHolder.Size = UDim2.new(0, 48, 0, 20)
+    chatCtrlHolder.Position = UDim2.new(1, -52, 0, 3)
     chatCtrlHolder.BackgroundTransparency = 1
     chatCtrlHolder.ZIndex = 42
     chatCtrlHolder.Parent = chatTitleBar
@@ -1569,7 +1644,7 @@ return function(Shared)
     chatMaxBtn.BackgroundColor3 = C.BtnBg
     chatMaxBtn.BorderSizePixel = 1
     chatMaxBtn.BorderColor3 = C.BtnBorder
-    chatMaxBtn.Text = " "
+    chatMaxBtn.Text = "□"
     chatMaxBtn.TextColor3 = C.BtnText
     chatMaxBtn.Font = Enum.Font.ArimoBold
     chatMaxBtn.TextSize = 11
@@ -1594,12 +1669,17 @@ return function(Shared)
         end
     end)
 
+    -- [□] Maximize / Fullscreen toggle
     chatMaxBtn.MouseButton1Click:Connect(function()
         isChatMaximized = not isChatMaximized
         if isChatMaximized then
-            chatWindow.Size = UDim2.new(0, 520, 0, 380)
+            savedChatHeight = chatWindow.AbsoluteSize.Y
+            savedChatWidth  = chatWindow.AbsoluteSize.X
+            chatWindow.Size = UDim2.new(0, 580, 0, 440)
+            chatMaxBtn.Text = "❐"
         else
-            chatWindow.Size = UDim2.new(0, 420, 0, 290)
+            chatWindow.Size = UDim2.new(0, savedChatWidth or 420, 0, savedChatHeight or 290)
+            chatMaxBtn.Text = "□"
         end
     end)
 
@@ -1645,7 +1725,7 @@ return function(Shared)
         return col:ToHex()
     end
 
-    -- Message Scroll Area (Larger font, Player: text format)
+    -- Message Scroll Area with Message Deduplication Filter
     local chatScroll = Instance.new("ScrollingFrame")
     chatScroll.Size = UDim2.new(1, -2, 1, -64)
     chatScroll.Position = UDim2.new(0, 1, 0, 27)
@@ -1671,7 +1751,17 @@ return function(Shared)
     chatPad.PaddingBottom = UDim.new(0, 5)
     chatPad.Parent = chatScroll
 
+    local recentMsgCache = {}
+
     local function addChatMessage(senderName, text, customColorHex)
+        if not text or #text == 0 then return end
+        local dedupKey = senderName .. "::" .. text
+        local now = os.clock()
+        if recentMsgCache[dedupKey] and (now - recentMsgCache[dedupKey]) < 0.6 then
+            return -- Suppress duplicate message!
+        end
+        recentMsgCache[dedupKey] = now
+
         local msgLabel = Instance.new("TextLabel")
         msgLabel.Size = UDim2.new(1, 0, 0, 0)
         msgLabel.BackgroundTransparency = 1
@@ -1694,7 +1784,7 @@ return function(Shared)
         end)
     end
 
-    -- Bottom 3-Column Input Bar: [Quick] | [Text Box] | [Send] (Larger 34px height)
+    -- Bottom 3-Column Input Bar: [Quick] | [Text Box] | [Send]
     local inputBar = Instance.new("Frame")
     inputBar.Size = UDim2.new(1, 0, 0, 34)
     inputBar.Position = UDim2.new(0, 0, 1, -34)
@@ -1832,25 +1922,27 @@ return function(Shared)
         quickMenu.Visible = not quickMenu.Visible
     end)
 
-    -- Stream Incoming Messages with Unique Colors
+    -- Stream Incoming Messages (Deduplicated Single Event Stream)
     local TextChatService = game:GetService("TextChatService")
-    pcall(function()
+    local isModernTextChat = (TextChatService.ChatVersion == Enum.ChatVersion.TextChatService)
+
+    if isModernTextChat then
         TextChatService.MessageReceived:Connect(function(msg)
             local sender = (msg.TextSource and msg.TextSource.Name) or "System"
             addChatMessage(sender, msg.Text, getUniquePlayerHex(sender))
         end)
-    end)
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        p.Chatted:Connect(function(msg)
-            addChatMessage(p.DisplayName or p.Name, msg, getUniquePlayerHex(p.Name))
+    else
+        for _, p in ipairs(Players:GetPlayers()) do
+            p.Chatted:Connect(function(msg)
+                addChatMessage(p.DisplayName or p.Name, msg, getUniquePlayerHex(p.Name))
+            end)
+        end
+        Players.PlayerAdded:Connect(function(p)
+            p.Chatted:Connect(function(msg)
+                addChatMessage(p.DisplayName or p.Name, msg, getUniquePlayerHex(p.Name))
+            end)
         end)
     end
-    Players.PlayerAdded:Connect(function(p)
-        p.Chatted:Connect(function(msg)
-            addChatMessage(p.DisplayName or p.Name, msg, getUniquePlayerHex(p.Name))
-        end)
-    end)
 
     -- Slash key '/' focus listener
     UserInput.InputBegan:Connect(function(input, gpe)
