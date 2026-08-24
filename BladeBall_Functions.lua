@@ -31,46 +31,45 @@ return function(Shared)
     local function getHum()   local c = getChar(); return c and c:FindFirstChildOfClass("Humanoid") end
 
     -- ── CACHED GAME REMOTES ───────────────────────────────────────
-    local parryRemote = nil
-    local abilityRemote = nil
+    local parryButtonPress = nil
+    local parryAttempt     = nil
+    local customParry      = nil
+    local abilityRemote    = nil
 
     local function findParryRemotes()
         pcall(function()
             local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage
-            parryRemote = remotes:FindFirstChild("ParryButtonPress")
-                       or remotes:FindFirstChild("CustomParry")
-                       or remotes:FindFirstChild("ParryAttempt")
-                       or remotes:FindFirstChild("Parry")
-                       or (remotes:FindFirstChild("PlrParry") and remotes.PlrParry)
-
-            abilityRemote = remotes:FindFirstChild("UseAbility")
-                         or remotes:FindFirstChild("AbilityButtonPress")
-                         or remotes:FindFirstChild("Ability")
+            parryButtonPress = remotes:FindFirstChild("ParryButtonPress")
+            parryAttempt     = remotes:FindFirstChild("ParryAttempt")
+            customParry      = remotes:FindFirstChild("CustomParry")
+            abilityRemote    = remotes:FindFirstChild("UseAbility") or remotes:FindFirstChild("AbilityButtonPress")
         end)
     end
     findParryRemotes()
 
     -- ── BALL TRACKING ENGINE ──────────────────────────────────────
-    local activeBall = nil
     local lastParryTime = 0
-
-    local function getBallsFolder()
-        return Workspace:FindFirstChild("Balls") or Workspace:FindFirstChild("Ball") or Workspace
-    end
+    local lastBallPos = nil
+    local lastBallTime = os.clock()
 
     local function findActiveBall()
-        local folder = getBallsFolder()
-        if folder ~= Workspace then
-            for _, obj in ipairs(folder:GetChildren()) do
-                if obj:IsA("BasePart") or obj:FindFirstChildOfClass("BasePart") or obj:GetAttribute("realBall") then
-                    return obj:IsA("BasePart") and obj or obj:FindFirstChildOfClass("BasePart")
+        local folder = Workspace:FindFirstChild("Balls")
+        if folder then
+            for _, b in ipairs(folder:GetChildren()) do
+                if b:IsA("BasePart") and b:GetAttribute("realBall") == true then
+                    return b
+                end
+            end
+            for _, b in ipairs(folder:GetChildren()) do
+                if b:IsA("BasePart") and b.Name ~= "Temp" then
+                    return b
                 end
             end
         end
-        for _, obj in ipairs(Workspace:GetChildren()) do
-            if obj.Name == "Ball" or obj.Name:find("Ball") or obj:GetAttribute("target") then
-                if obj:IsA("BasePart") then return obj end
-                local p = obj:FindFirstChildOfClass("BasePart")
+        for _, b in ipairs(Workspace:GetChildren()) do
+            if b.Name == "Ball" or b.Name:find("Ball") then
+                if b:IsA("BasePart") then return b end
+                local p = b:FindFirstChildOfClass("BasePart")
                 if p then return p end
             end
         end
@@ -79,23 +78,25 @@ return function(Shared)
 
     local function isTargetingMe(ball)
         if not ball then return false end
-        local targetAttr = ball:GetAttribute("target") or ball:GetAttribute("Target")
-        if targetAttr then
-            return tostring(targetAttr) == Player.Name or tostring(targetAttr) == tostring(Player.UserId)
+        local t = ball:GetAttribute("target") or ball:GetAttribute("Target")
+        if t then
+            local tStr = tostring(t)
+            if tStr == Player.Name or tStr == Player.DisplayName or tStr == tostring(Player.UserId) or tStr == "all" then
+                return true
+            end
         end
 
         local targetVal = ball:FindFirstChild("target") or ball:FindFirstChild("Target")
         if targetVal and targetVal:IsA("ValueBase") then
-            return tostring(targetVal.Value) == Player.Name or targetVal.Value == Player.Character
+            if tostring(targetVal.Value) == Player.Name or targetVal.Value == Player.Character then
+                return true
+            end
         end
 
         local hrp = getHRP()
-        if hrp and ball.AssemblyLinearVelocity then
-            local toMe = (hrp.Position - ball.Position)
-            local dist = toMe.Magnitude
-            if dist < 60 and toMe.Unit:Dot(ball.AssemblyLinearVelocity.Unit) > 0.85 then
-                return true
-            end
+        if hrp then
+            local dist = (ball.Position - hrp.Position).Magnitude
+            if dist < 22 then return true end
         end
         return false
     end
@@ -103,35 +104,39 @@ return function(Shared)
     -- ── PARRY EXECUTION MECHANISMS ────────────────────────────────
     local function executeParry()
         local now = os.clock()
-        if now - lastParryTime < 0.02 then return end
+        if now - lastParryTime < 0.015 then return end
         lastParryTime = now
 
-        -- Method 1: Remote Trigger
-        if parryRemote then
-            pcall(function()
-                if parryRemote:IsA("RemoteEvent") then
-                    parryRemote:FireServer(0.5, CFrame.new(), {}, Vector2.new())
-                elseif parryRemote:IsA("RemoteFunction") then
-                    parryRemote:InvokeServer(0.5, CFrame.new(), {}, Vector2.new())
-                end
-            end)
-        end
+        -- Method 1: BindableEvent internal trigger
+        pcall(function()
+            if parryButtonPress then parryButtonPress:Fire() end
+        end)
 
-        -- Method 2: Virtual Input Simulation (KeyCode.F & Mouse1)
+        -- Method 2: RemoteEvent server parry attempt
+        pcall(function()
+            if parryAttempt then parryAttempt:FireServer(0.5, CFrame.new(), {}, Vector2.new()) end
+        end)
+
+        -- Method 3: CustomParry remote fallback
+        pcall(function()
+            if customParry then customParry:FireServer() end
+        end)
+
+        -- Method 4: Virtual Input Simulation (F key + mouse click)
         pcall(function()
             if VirtualInputManager then
                 VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
-                task.delay(0.015, function()
+                task.delay(0.01, function()
                     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
                 end)
                 VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                task.delay(0.015, function()
+                task.delay(0.01, function()
                     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
                 end)
             end
         end)
 
-        -- Method 3: Mouse click executor fallback
+        -- Method 5: Executor mouse click
         pcall(function()
             if mouse1click then mouse1click() end
         end)
@@ -272,45 +277,57 @@ return function(Shared)
     RunService.RenderStepped:Connect(function(dt)
         local ball = findActiveBall()
         local hrp  = getHRP()
-        local myChar = getChar()
 
         if not ball or not hrp then
             statusText.Text = "⚡ Ball: Waiting for round..."
             statusText.TextColor3 = Color3.fromRGB(140, 160, 190)
             statusFrame.BorderColor3 = Color3.fromRGB(0, 160, 255)
             clearBallVisuals()
+            lastBallPos = nil
             return
         end
 
+        local now = os.clock()
         local ballPos = ball.Position
         local myPos   = hrp.Position
         local dist    = (ballPos - myPos).Magnitude
-        local vel     = ball.AssemblyLinearVelocity or Vector3.zero
-        local speed   = vel.Magnitude
 
-        -- Trajectory calculation: dot product towards local player
+        -- Calculate instantaneous velocity from frame-to-frame position delta
+        local vel = ball.AssemblyLinearVelocity or Vector3.zero
+        if lastBallPos then
+            local timeDelta = math.clamp(now - lastBallTime, 0.001, 0.1)
+            local calcVel = (ballPos - lastBallPos) / timeDelta
+            if calcVel.Magnitude > vel.Magnitude then
+                vel = calcVel
+            end
+        end
+        lastBallPos = ballPos
+        lastBallTime = now
+
+        local speed = vel.Magnitude
         local dirToMe = (myPos - ballPos).Unit
         local approachSpeed = (speed > 1) and vel:Dot(dirToMe) or speed
         local isTarget = isTargetingMe(ball)
 
-        -- Dynamic ping offset calculation (seconds)
+        -- Dynamic ping offset
         local pingMs = Shared.Flags["BB_PingOffset"] or 45
         local pingOffsetSec = pingMs / 1000
 
-        -- Time to Impact (seconds)
-        local timeToImpact = (approachSpeed > 1) and (dist / approachSpeed) or 999
+        -- Time to Impact
+        local timeToImpact = (approachSpeed > 1) and (dist / approachSpeed) or (dist / math.max(speed, 1))
 
-        -- Configured threshold
-        local customDist = Shared.Flags["BB_ParryDist"] or 28
-        local dynamicParryDistance = customDist + math.clamp(speed * (pingOffsetSec + 0.05), 0, 45)
+        -- Configured parry threshold
+        local customDist = Shared.Flags["BB_ParryDist"] or 30
+        local dynamicParryDistance = customDist + math.clamp(speed * (0.35 + pingOffsetSec), 0, 55)
 
-        -- Update Status Banner
+        -- Status Banner update
+        local targetName = tostring(ball:GetAttribute("target") or "None")
         if isTarget then
             statusText.Text = string.format("🔴 INCOMING! Dist: %dm | Spd: %d | Time: %.2fs", math.floor(dist), math.floor(speed), math.max(0, timeToImpact))
             statusText.TextColor3 = Color3.fromRGB(255, 60, 60)
             statusFrame.BorderColor3 = Color3.fromRGB(255, 60, 60)
         else
-            statusText.Text = string.format("🟢 Safe | Dist: %dm | Speed: %d", math.floor(dist), math.floor(speed))
+            statusText.Text = string.format("🟢 Target: %s | Dist: %dm | Spd: %d", targetName:sub(1, 10), math.floor(dist), math.floor(speed))
             statusText.TextColor3 = Color3.fromRGB(0, 220, 140)
             statusFrame.BorderColor3 = Color3.fromRGB(0, 160, 255)
         end
@@ -333,18 +350,18 @@ return function(Shared)
             if ballHighlight then pcall(function() ballHighlight:Destroy() end); ballHighlight = nil end
         end
 
-        -- 2. AUTO PARRY ENGINE (Predictive + Clash Logic)
+        -- 2. AUTO PARRY ENGINE
         if Shared.Flags["BB_AutoParry"] then
             local shouldParry = false
 
             if isTarget then
-                if dist <= dynamicParryDistance or timeToImpact <= (0.12 + pingOffsetSec) then
+                if dist <= dynamicParryDistance or timeToImpact <= (0.42 + pingOffsetSec) then
                     shouldParry = true
                 end
             end
 
-            -- Clash Standoff Mode: If very close (< 14 studs) and high speed or spam active
-            if Shared.Flags["BB_ClashSpam"] and dist <= 14 then
+            -- Clash Standoff Mode
+            if Shared.Flags["BB_ClashSpam"] and dist <= 16 then
                 shouldParry = true
             end
 
@@ -361,7 +378,7 @@ return function(Shared)
 
                 if Shared.Flags["BB_AutoAbility"] then
                     local thresh = Shared.Flags["BB_AbilitySpeed"] or 140
-                    if speed >= thresh and dist < 22 then
+                    if speed >= thresh and dist < 25 then
                         executeAbility()
                     end
                 end
