@@ -287,7 +287,7 @@ return function(Shared)
         Shared.Flags["BB_CurveCorrection"] = state
     end)
 
-    MkSlider(leftCol, "Parry Distance (Studs)", "BB_ParryDist", 10, 70, 28, 6, function(val)
+    MkSlider(leftCol, "Parry Distance (Studs)", "BB_ParryDist", 5, 100, 28, 6, function(val)
         Shared.Flags["BB_ParryDist"] = val
     end)
 
@@ -444,7 +444,7 @@ return function(Shared)
 
         -- Dynamic hit-zone radius calculation based on velocity, distance slider & ping
         local baseDist = Shared.Flags["BB_ParryDist"] or 28
-        local dynamicParryDistance = math.clamp(baseDist + math.max(approachSpeed, speed) * (0.28 + pingOffsetSec), 12, 85)
+        local dynamicParryDistance = math.clamp(baseDist + math.max(approachSpeed, speed) * (0.28 + pingOffsetSec), 5, 125)
 
         -- 1. Ball Visualizer ESP & Highlight
         if Shared.Flags["BB_BallESP"] then
