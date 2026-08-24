@@ -139,6 +139,7 @@ return function(Shared)
                 cibc.TextColor3             = Color3.fromRGB(255, 255, 255)
                 cibc.PlaceholderColor3      = Color3.fromRGB(178, 178, 178)
             end
+        end)
     end
 
     local function styleRobloxCoreUI(targetTheme, isDarkMode)
