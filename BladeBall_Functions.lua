@@ -79,79 +79,72 @@ return function(Shared)
 
     local function findActiveBall()
         local myHRP = getHRP()
-        local candidateBalls = {}
+        local myPos = myHRP and myHRP.Position or Vector3.zero
 
-        -- 1. Check workspace.Balls folder
-        local folder = Workspace:FindFirstChild("Balls")
-        if folder then
-            for _, b in ipairs(folder:GetChildren()) do
-                if b:IsA("BasePart") then
-                    table.insert(candidateBalls, b)
-                end
-            end
-        end
-
-        -- 2. Check TrainingBalls or LobbyTraining folders
+        -- 1. Priority 1: Check Workspace.TrainingBalls (if player is in training area)
         local tBalls = Workspace:FindFirstChild("TrainingBalls") or Workspace:FindFirstChild("Training")
         if tBalls then
             for _, b in ipairs(tBalls:GetChildren()) do
-                if b:IsA("BasePart") then table.insert(candidateBalls, b) end
+                if b:IsA("BasePart") and b:GetAttribute("realBall") ~= false then
+                    local d = (b.Position - myPos).Magnitude
+                    if d < 120 then return b end
+                end
             end
         end
 
+        -- 2. Priority 2: Check active match balls in workspace.Balls
+        local folder = Workspace:FindFirstChild("Balls")
+        if folder then
+            local bestMatchBall = nil
+            local bestMatchDist = math.huge
+            for _, b in ipairs(folder:GetChildren()) do
+                if b:IsA("BasePart") then
+                    local isReal = b:GetAttribute("realBall") == true
+                    local isTarget = isTargetingMe(b)
+                    if isReal and isTarget then return b end
+                    local d = (b.Position - myPos).Magnitude
+                    if isReal and d < bestMatchDist then
+                        bestMatchDist = d
+                        bestMatchBall = b
+                    end
+                end
+            end
+            if bestMatchBall then return bestMatchBall end
+        end
+
+        -- 3. Priority 3: Check LobbyTraining descendants
         local lTraining = Workspace:FindFirstChild("Spawn") and Workspace.Spawn:FindFirstChild("LobbyTraining")
         if lTraining then
             for _, d in ipairs(lTraining:GetDescendants()) do
-                if d:IsA("BasePart") and (d.Name:lower():find("ball") or d:GetAttribute("realBall") ~= nil or d:GetAttribute("Training") ~= nil or d.Shape == Enum.PartType.Ball) then
-                    table.insert(candidateBalls, d)
+                if d:IsA("BasePart") and (d.Name:lower():find("ball") or d:GetAttribute("Training") ~= nil) then
+                    local dist = (d.Position - myPos).Magnitude
+                    if dist < 90 then return d end
                 end
             end
         end
 
-        -- 3. Check Workspace direct children
+        -- 4. Fallback: Any ball in Workspace
         for _, b in ipairs(Workspace:GetChildren()) do
             if (b.Name == "Ball" or b.Name:find("Ball") or b.Name:find("Training")) and b:IsA("BasePart") then
-                table.insert(candidateBalls, b)
-            end
-        end
-
-        if #candidateBalls == 0 then return nil end
-
-        -- If only 1 ball, return it
-        if #candidateBalls == 1 then return candidateBalls[1] end
-
-        -- Prioritize realBall == true, or closest active ball to player
-        local bestBall = nil
-        local bestDist = math.huge
-
-        for _, b in ipairs(candidateBalls) do
-            if b:GetAttribute("realBall") == true and isTargetingMe(b) then
                 return b
             end
-            if myHRP then
-                local d = (b.Position - myHRP.Position).Magnitude
-                if d < bestDist then
-                    bestDist = d
-                    bestBall = b
-                end
-            end
         end
 
-        return bestBall or candidateBalls[1]
+        return nil
     end
 
     local function isTargetingMe(ball)
         if not ball then return false end
 
-        -- 1. Check exact match target attributes
+        -- 1. Check exact match target attributes (Arena Match Balls)
         local t = ball:GetAttribute("target") or ball:GetAttribute("Target")
         if t then
             local tStr = tostring(t)
             if tStr == Player.Name or tStr == Player.DisplayName or tStr == tostring(Player.UserId) or tStr == "all" then
                 return true
             end
-            -- If target is set to another specific player, it is definitely NOT targeting us
-            if tStr ~= "" and tStr ~= "None" and tStr ~= "nil" and not tStr:lower():find("train") then
+            -- If target is another player in the arena, definitely not targeting us
+            if tStr ~= "" and tStr ~= "None" and tStr ~= "nil" and not tStr:lower():find("target<") and not tStr:lower():find("train") then
                 return false
             end
         end
@@ -166,19 +159,29 @@ return function(Shared)
             end
         end
 
-        -- 3. Check Training Ball specifics (only when training ball is moving toward player)
-        local pName = ball.Parent and ball.Parent.Name:lower() or ""
-        local bName = ball.Name:lower()
-        local isTraining = pName:find("train") or bName:find("train") or ball:GetAttribute("Training") or ball:GetAttribute("practice")
+        -- 3. Check Practice / Training Ball (Workspace.TrainingBalls or LobbyTraining)
+        local isTraining = (ball.Parent and (ball.Parent.Name == "TrainingBalls" or ball.Parent.Name == "Training"))
+                        or ball.Name:lower():find("train")
+                        or ball:GetAttribute("Training") ~= nil
+                        or (t and tostring(t):lower():find("target<"))
+
         if isTraining then
             local hrp = getHRP()
-            if hrp and ball.AssemblyLinearVelocity then
+            if hrp then
                 local toMe = (hrp.Position - ball.Position)
                 local dist = toMe.Magnitude
-                if dist < 65 and toMe.Unit:Dot(ball.AssemblyLinearVelocity.Unit) > 0.65 then
-                    return true
+                if dist < 85 then
+                    local vel = ball.AssemblyLinearVelocity or Vector3.zero
+                    if vel.Magnitude < 2 then
+                        return true
+                    end
+                    local dot = toMe.Unit:Dot(vel.Unit)
+                    if dot > 0.35 or dist < 24 then
+                        return true
+                    end
                 end
             end
+            return false
         end
 
         return false
@@ -461,38 +464,43 @@ return function(Shared)
             if ballHighlight then pcall(function() ballHighlight:Destroy() end); ballHighlight = nil end
         end
 
-        -- 2. Dynamic Parry Hit-Zone Area 3D Visualizer
+        -- 2. Dynamic Parry Hit-Zone Area 3D Visualizer (Ground Disc + 3D Hitbox Box)
         if Shared.Flags["BB_ParryZone"] and hrp then
             local alphaPercent = Shared.Flags["BB_ZoneAlpha"] or 55
             local transparency = alphaPercent / 100
-            local themeColor = isTarget and Color3.fromRGB(255, 45, 45) or Color3.fromRGB(0, 190, 255)
+            local themeColor = isTarget and Color3.fromRGB(255, 45, 45) or Color3.fromRGB(0, 200, 255)
+            local terrain = workspace.Terrain or workspace
 
             -- Ground Disc / Ring
-            if not zoneRingAdorn or zoneRingAdorn.Adornee ~= hrp then
+            if not zoneRingAdorn or zoneRingAdorn.Adornee ~= hrp or not zoneRingAdorn.Parent then
                 if zoneRingAdorn then pcall(function() zoneRingAdorn:Destroy() end) end
                 zoneRingAdorn = Instance.new("CylinderHandleAdornment")
                 zoneRingAdorn.Name = "BB_HitZoneRing"
                 zoneRingAdorn.Adornee = hrp
                 zoneRingAdorn.AlwaysOnTop = true
-                zoneRingAdorn.ZIndex = 5
-                zoneRingAdorn.Parent = Shared.GUI or hrp
+                zoneRingAdorn.ZIndex = 10
+                zoneRingAdorn.Parent = terrain
             end
             zoneRingAdorn.Radius = dynamicParryDistance
-            zoneRingAdorn.Height = 0.4
+            zoneRingAdorn.Height = 0.5
             zoneRingAdorn.CFrame = CFrame.new(0, -2.8, 0) * CFrame.Angles(math.rad(90), 0, 0)
             zoneRingAdorn.Color3 = themeColor
-            zoneRingAdorn.Transparency = math.clamp(transparency * 0.8, 0.1, 0.95)
+            zoneRingAdorn.Transparency = math.clamp(transparency * 0.7, 0.1, 0.9)
 
-            -- Spherical Hitbox Aura
-            if not zoneSphereAdorn or zoneSphereAdorn.Adornee ~= hrp then
+            -- 3D Volumetric Hitbox Box
+            if not zoneSphereAdorn or zoneSphereAdorn.Adornee ~= hrp or not zoneSphereAdorn.Parent then
                 if zoneSphereAdorn then pcall(function() zoneSphereAdorn:Destroy() end) end
-                zoneSphereAdorn = Instance.new("SelectionSphere")
-                zoneSphereAdorn.Name = "BB_HitZoneSphere"
+                zoneSphereAdorn = Instance.new("BoxHandleAdornment")
+                zoneSphereAdorn.Name = "BB_HitZoneBox"
                 zoneSphereAdorn.Adornee = hrp
-                zoneSphereAdorn.Parent = Shared.GUI or hrp
+                zoneSphereAdorn.AlwaysOnTop = true
+                zoneSphereAdorn.ZIndex = 8
+                zoneSphereAdorn.Parent = terrain
             end
+            local boxDim = dynamicParryDistance * 2
+            zoneSphereAdorn.Size = Vector3.new(boxDim, boxDim, boxDim)
             zoneSphereAdorn.Color3 = themeColor
-            zoneSphereAdorn.Transparency = math.clamp(transparency, 0.3, 0.98)
+            zoneSphereAdorn.Transparency = math.clamp(transparency * 0.9, 0.4, 0.95)
         else
             if zoneRingAdorn then pcall(function() zoneRingAdorn:Destroy() end); zoneRingAdorn = nil end
             if zoneSphereAdorn then pcall(function() zoneSphereAdorn:Destroy() end); zoneSphereAdorn = nil end
