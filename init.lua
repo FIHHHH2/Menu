@@ -99,6 +99,82 @@ local function httpRequest(opt)
     return nil
 end
 
+-- Comprehensive Cleanup & Residual Purge Engine (reduces duplicates on reload)
+local function purgeAllResiduals()
+    pcall(function()
+        local prevCleanup = (getgenv and getgenv().FihUI_Cleanup) or (rawget(_G, "FihUI_Cleanup"))
+        if type(prevCleanup) == "function" then
+            prevCleanup()
+        end
+    end)
+
+    local containers = {}
+    pcall(function() table.insert(containers, game:GetService("CoreGui")) end)
+    pcall(function()
+        local gethui = rawget(getfenv and getfenv(0) or _G, "gethui") or (getgenv and getgenv().gethui)
+        if type(gethui) == "function" then
+            local hui = gethui()
+            if hui and not table.find(containers, hui) then table.insert(containers, hui) end
+        end
+    end)
+    pcall(function()
+        local lp = game:GetService("Players").LocalPlayer
+        if lp then
+            local pg = lp:FindFirstChildOfClass("PlayerGui")
+            if pg and not table.find(containers, pg) then table.insert(containers, pg) end
+        end
+    end)
+    pcall(function() table.insert(containers, game:GetService("Workspace")) end)
+    pcall(function()
+        if workspace.CurrentCamera and not table.find(containers, workspace.CurrentCamera) then
+            table.insert(containers, workspace.CurrentCamera)
+        end
+    end)
+
+    for _, container in ipairs(containers) do
+        pcall(function()
+            for _, child in ipairs(container:GetChildren()) do
+                local n = child.Name
+                local isOurs = (n == "IE7_Menu" or n == "FihUi" or n == "Fih_CustomLeaderboard" or n == "Fih_CustomChat"
+                    or n == "Fih_BottomHUD" or n == "Fih_ArtworkBillboard" or n == "Fih_NotifHub" or n == "Fih_SpyWindow"
+                    or n == "Fih_TrollPanel" or n == "FihUI_ScreenGui" or n == "Fih_SongTitlePopup" or n == "Fih_GodPlatform"
+                    or n:find("^Fih_") or n:find("^ESP_") or n:find("^Chams_") or n:find("^AeroChams")
+                    or n:find("^UniversalESP") or n:find("^RoleESP") or n:find("^CoinESP") or n:find("^GunESP")
+                    or n:find("^KillAuraBox") or n:find("^BB_BallESP") or n:find("^BB_ParryZone")
+                    or n:find("^NDS_GodPlat") or n:find("^NDS_ShieldPart") or n:find("^PeerRadar"))
+
+                if not isOurs and child:IsA("ScreenGui") then
+                    if child:FindFirstChild("MainFrame") or child:FindFirstChild("QuadGrid") or child:FindFirstChild("TitleBar") or child:FindFirstChild("Fih_CustomLeaderboard") or child:FindFirstChild("Fih_BottomHUD") then
+                        isOurs = true
+                    end
+                end
+
+                if isOurs then
+                    pcall(function() child:Destroy() end)
+                end
+            end
+        end)
+    end
+
+    pcall(function()
+        local lp = game:GetService("Players").LocalPlayer
+        if lp and lp.Character then
+            for _, d in ipairs(lp.Character:GetDescendants()) do
+                if d:IsA("BodyVelocity") or d:IsA("BodyGyro") or d:IsA("BodyPosition") then
+                    if d.Name == "flightBV" or d.Name == "balloonBV" or d.Name:find("Fih") then
+                        pcall(function() d:Destroy() end)
+                    end
+                end
+                if d.Name == "Fih_ArtworkBillboard" or d.Name == "AeroChams" or d.Name:find("^Fih_") then
+                    pcall(function() d:Destroy() end)
+                end
+            end
+        end
+    end)
+end
+
+purgeAllResiduals()
+
 -- Shared state table
 local Shared = {
     Player      = game:GetService("Players").LocalPlayer,
@@ -119,6 +195,7 @@ local Shared = {
     Keybinds    = {},
     Toggles     = {},
     Sliders     = {},
+    Cleanups    = {},
     Config      = {
         SpotifyToken        = "",
         LastFMUser          = "",
@@ -128,6 +205,32 @@ local Shared = {
     GUI         = nil,
     Version     = "3.5.0",
 }
+
+local function addCleanup(item)
+    if not item then return end
+    table.insert(Shared.Cleanups, item)
+end
+
+local function cleanupAll()
+    for _, item in ipairs(Shared.Cleanups) do
+        pcall(function()
+            if typeof(item) == "RBXScriptConnection" then
+                item:Disconnect()
+            elseif type(item) == "function" then
+                item()
+            elseif typeof(item) == "Instance" then
+                item:Destroy()
+            end
+        end)
+    end
+    Shared.Cleanups = {}
+    purgeAllResiduals()
+end
+
+Shared.AddCleanup = addCleanup
+Shared.CleanupAll = cleanupAll
+if getgenv then getgenv().FihUI_Cleanup = cleanupAll end
+_G.FihUI_Cleanup = cleanupAll
 
 -- Config persistence (writefile / readfile if executor supports it)
 local CONFIG_FILE = "FihUi_Config.json"

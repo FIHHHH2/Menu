@@ -27,8 +27,10 @@ return function(Shared)
     local Players      = Shared.Services.Players or game:GetService("Players")
     local StarterGui   = game:GetService("StarterGui")
 
-    if CoreGui:FindFirstChild("IE7_Menu") then
-        CoreGui:FindFirstChild("IE7_Menu"):Destroy()
+    if Shared.CleanupAll then
+        pcall(Shared.CleanupAll)
+    elseif CoreGui:FindFirstChild("IE7_Menu") then
+        pcall(function() CoreGui:FindFirstChild("IE7_Menu"):Destroy() end)
     end
 
     local ScreenGui = Instance.new("ScreenGui")
@@ -37,6 +39,8 @@ return function(Shared)
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.IgnoreGuiInset = true
     ScreenGui.Parent         = CoreGui
+    Shared.GUI               = ScreenGui
+    if Shared.AddCleanup then Shared.AddCleanup(ScreenGui) end
 
     -- ── THEME PALETTES ───────────────────────────────────────────
     local LightTheme = {
@@ -1779,7 +1783,13 @@ return function(Shared)
         saveConfigDirect(); sendNotification("Config Manager", "Saved to FihUi_Config.json", true)
     end)
     makeButton(DrawerScroll, "Unload / Force Close Menu", 5, function()
-        saveConfigDirect(); if Shared.GUI then Shared.GUI:Destroy() end; for k in pairs(Shared.Flags) do Shared.Flags[k] = false end
+        saveConfigDirect()
+        for k in pairs(Shared.Flags) do Shared.Flags[k] = false end
+        if Shared.CleanupAll then
+            Shared.CleanupAll()
+        else
+            if Shared.GUI then Shared.GUI:Destroy() end
+        end
     end)
 
     -- ── PERFORMANCE & FPS BOOST ENGINE ──────────────────────────
