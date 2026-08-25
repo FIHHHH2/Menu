@@ -304,6 +304,8 @@ Shared.IsBladeBall = isBladeBall
 -- Load order with zero-freeze staggered micro-yields
 loadModule("UI_Handler")(Shared)
 task.wait(0.01)
+loadModule("Core_Functions")(Shared)
+task.wait(0.01)
 loadModule("Main_Functions")(Shared)
 task.wait(0.01)
 loadModule("Spy_Functions")(Shared)
