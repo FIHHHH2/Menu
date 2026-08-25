@@ -162,7 +162,7 @@ Shared.IsMM2 = isMM2
 local isNDS = (game.PlaceId == 189707 or game.GameId == 65241)
 Shared.IsNDS = isNDS
 
-local isBladeBall = (game.PlaceId == 13772394625 or game.PlaceId == 14732610803 or game.PlaceId == 15131065025 or game.PlaceId == 15264892126 or game.PlaceId == 17135832729 or game.PlaceId == 15552588147 or game.GameId == 4777817887 or workspace:FindFirstChild("Balls") ~= nil or workspace:FindFirstChild("Alive") ~= nil)
+local isBladeBall = (game.PlaceId == 13772394625 or game.PlaceId == 14732610803 or game.PlaceId == 15131065025 or game.PlaceId == 15264892126 or game.PlaceId == 17135832729 or game.PlaceId == 15552588147 or game.GameId == 4777817887)
 Shared.IsBladeBall = isBladeBall
 
 -- Load order with zero-freeze staggered micro-yields
@@ -178,7 +178,7 @@ if isNDS then
     loadModule("NDS_Functions")(Shared)
     task.wait(0.01)
 end
-if isBladeBall or (not isMM2 and not isNDS) or (Shared.Tabs and (Shared.Tabs["Blade Ball"] or Shared.Tabs["BladeBall"])) then
+if isBladeBall then
     loadModule("BladeBall_Functions")(Shared)
     task.wait(0.01)
 end
