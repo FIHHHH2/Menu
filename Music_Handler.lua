@@ -740,8 +740,8 @@ return function(Shared)
 
         local frame = Instance.new("Frame")
         frame.Name             = "Fih_BottomHUD"
-        frame.Size             = UDim2.new(0, 320, 0, 130)
-        frame.Position         = UDim2.new(0, 16, 1, -146)
+        frame.Size             = UDim2.new(0, 360, 0, 140)
+        frame.Position         = UDim2.new(0, 16, 1, -156)
         frame.BackgroundColor3 = C.BodyBg
         frame.BorderSizePixel  = 2
         frame.BorderColor3     = C.WinBorder
@@ -799,10 +799,10 @@ return function(Shared)
         content.ZIndex           = 51
         content.Parent           = frame
 
-        -- Album Cover Art Container
+        -- ── PROMINENT LARGE ALBUM COVER ART ─────────────────────────
         local coverContainer = Instance.new("Frame")
         coverContainer.Name             = "CoverContainer"
-        coverContainer.Size             = UDim2.new(0, 52, 0, 52)
+        coverContainer.Size             = UDim2.new(0, 106, 1, -12)
         coverContainer.Position         = UDim2.new(0, 6, 0, 6)
         coverContainer.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
         coverContainer.BorderSizePixel  = 1
@@ -810,12 +810,17 @@ return function(Shared)
         coverContainer.ZIndex           = 52
         coverContainer.Parent           = content
 
+        local aspect = Instance.new("UIAspectRatioConstraint")
+        aspect.AspectRatio = 1.0
+        aspect.DominantAxis = Enum.DominantAxis.Height
+        aspect.Parent = coverContainer
+
         local noteIcon = Instance.new("TextLabel")
         noteIcon.Size                   = UDim2.new(1, 0, 1, 0)
         noteIcon.BackgroundTransparency = 1
         noteIcon.Text                   = "[♪]"
         noteIcon.Font                   = Enum.Font.Code
-        noteIcon.TextSize               = 14
+        noteIcon.TextSize               = 24
         noteIcon.TextColor3             = Color3.fromRGB(110, 130, 170)
         noteIcon.TextTransparency       = 0.35
         noteIcon.ZIndex                 = 52
@@ -831,23 +836,23 @@ return function(Shared)
         cover.Parent              = coverContainer
         hudCoverImg = cover
 
-        -- Right Text & Controls Container
+        -- ── RIGHT TEXT & CONTROLS CONTAINER ─────────────────────────
         local rightBox = Instance.new("Frame")
         rightBox.Name                   = "TextContainer"
-        rightBox.Size                   = UDim2.new(1, -66, 1, -8)
-        rightBox.Position               = UDim2.new(0, 62, 0, 4)
+        rightBox.Size                   = UDim2.new(1, -126, 1, -8)
+        rightBox.Position               = UDim2.new(0, 120, 0, 4)
         rightBox.BackgroundTransparency = 1
         rightBox.ZIndex                 = 52
         rightBox.Parent                 = content
 
         local sLbl = Instance.new("TextLabel")
-        sLbl.Size                  = UDim2.new(1, 0, 0, 18)
-        sLbl.Position              = UDim2.new(0, 0, 0, 4)
+        sLbl.Size                  = UDim2.new(1, 0, 0, 20)
+        sLbl.Position              = UDim2.new(0, 0, 0, 2)
         sLbl.BackgroundTransparency = 1
         sLbl.Text                  = currentTrack.name
         sLbl.TextColor3            = C.TextDark
         sLbl.Font                  = Enum.Font.ArimoBold
-        sLbl.TextSize              = 12
+        sLbl.TextSize              = 13
         sLbl.TextXAlignment        = Enum.TextXAlignment.Left
         sLbl.TextTruncate          = Enum.TextTruncate.AtEnd
         sLbl.ZIndex                = 53
@@ -855,8 +860,8 @@ return function(Shared)
         hudSongLbl = sLbl
 
         local aLbl = Instance.new("TextLabel")
-        aLbl.Size                  = UDim2.new(1, 0, 0, 14)
-        aLbl.Position              = UDim2.new(0, 0, 0, 24)
+        aLbl.Size                  = UDim2.new(1, 0, 0, 16)
+        aLbl.Position              = UDim2.new(0, 0, 0, 22)
         aLbl.BackgroundTransparency = 1
         aLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
         aLbl.TextColor3            = C.Accent
@@ -871,7 +876,7 @@ return function(Shared)
         -- ── HUD PLAYBACK CONTROLS (⏮ ⏯ ⏭) ──
         local hudControls = Instance.new("Frame")
         hudControls.Name                   = "HUD_PlaybackControls"
-        hudControls.Size                   = UDim2.new(0, 96, 0, 20)
+        hudControls.Size                   = UDim2.new(0, 94, 0, 20)
         hudControls.Position               = UDim2.new(0, 0, 0, 42)
         hudControls.BackgroundTransparency = 1
         hudControls.BorderSizePixel        = 0
@@ -903,8 +908,8 @@ return function(Shared)
         -- ── HUD 12-BAR AUDIO EQUALIZER (MULTI-FREQUENCY) ──
         local hudVisualizer = Instance.new("Frame")
         hudVisualizer.Name                   = "HUD_Visualizer"
-        hudVisualizer.Size                   = UDim2.new(0, 130, 0, 24)
-        hudVisualizer.Position               = UDim2.new(1, -136, 0, 38)
+        hudVisualizer.Size                   = UDim2.new(1, -100, 0, 24)
+        hudVisualizer.Position               = UDim2.new(0, 98, 0, 38)
         hudVisualizer.BackgroundTransparency = 1
         hudVisualizer.BorderSizePixel        = 0
         hudVisualizer.ZIndex                 = 54
@@ -913,8 +918,8 @@ return function(Shared)
         hudVisBars = {}
         for i = 1, 12 do
             local bar = Instance.new("Frame")
-            bar.Size = UDim2.new(0, 7, 0, 4)
-            bar.Position = UDim2.new(0, (i - 1) * 10, 1, 0)
+            bar.Size = UDim2.new(0, 6, 0, 4)
+            bar.Position = UDim2.new(0, (i - 1) * 8, 1, 0)
             bar.AnchorPoint = Vector2.new(0, 1)
             bar.BackgroundColor3 = C.Accent
             bar.BorderSizePixel = 0
@@ -958,6 +963,48 @@ return function(Shared)
         uLbl.ZIndex                = 53
         uLbl.Parent                = rightBox
         hudUserLbl = uLbl
+
+        -- ── RESIZABLE CORNER GRIP ───────────────────────────────────
+        local resizeGrip = Instance.new("TextButton")
+        resizeGrip.Name                   = "HUD_ResizeGrip"
+        resizeGrip.Size                   = UDim2.new(0, 14, 0, 14)
+        resizeGrip.Position               = UDim2.new(1, -14, 1, -14)
+        resizeGrip.BackgroundTransparency = 1
+        resizeGrip.Text                   = "◢"
+        resizeGrip.TextColor3             = C.BorderCol
+        resizeGrip.Font                   = Enum.Font.GothamBold
+        resizeGrip.TextSize               = 11
+        resizeGrip.ZIndex                 = 60
+        resizeGrip.Parent                 = frame
+
+        do
+            local resizing = false
+            local startMouse = Vector2.zero
+            local startSize = Vector2.zero
+
+            resizeGrip.InputBegan:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                    resizing = true
+                    startMouse = UserInput:GetMouseLocation()
+                    startSize = Vector2.new(frame.AbsoluteSize.X, frame.AbsoluteSize.Y)
+                end
+            end)
+
+            resizeGrip.InputEnded:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                    resizing = false
+                end
+            end)
+
+            UserInput.InputChanged:Connect(function(i)
+                if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+                    local delta = UserInput:GetMouseLocation() - startMouse
+                    local newW = math.clamp(startSize.X + delta.X, 300, 750)
+                    local newH = math.clamp(startSize.Y + delta.Y, 115, 360)
+                    frame.Size = UDim2.new(0, newW, 0, newH)
+                end
+            end)
+        end
 
         applyImage(hudCoverImg, currentTrack)
     end
@@ -1320,7 +1367,7 @@ return function(Shared)
                     hudBarLevels[i] = cur
 
                     local barH = isPlaying and math.clamp(math.floor(cur * 24) + 2, 2, 24) or 3
-                    bar.Size = UDim2.new(0, 7, 0, barH)
+                    bar.Size = UDim2.new(0, 6, 0, barH)
                     bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.55 + i * 0.025) % 1, 0.85, 1) or Color3.fromRGB(60, 75, 100)
                 end
             end
@@ -1347,5 +1394,5 @@ return function(Shared)
         end
     end)
 
-    print("[Music_Handler] Loaded -- Clean Last.fm & Spotify Engine with 12-Bar Visualizer")
+    print("[Music_Handler] Loaded -- Resizable HUD & Large Cover Engine")
 end
