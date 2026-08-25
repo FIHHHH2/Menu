@@ -16,6 +16,7 @@ return function(Shared)
     Shared.LoadConfig   = function() end
 
     local TweenService = Shared.Services.TweenService
+    local TweenSvc     = TweenService
     local UserInput    = Shared.Services.UserInput
     local CoreGui      = Shared.Services.CoreGui
     local Http         = Shared.Services.Http
@@ -1603,10 +1604,6 @@ return function(Shared)
     local lbScroll = nil
     local lbResizeGrip = nil
 
-    local isLbCollapsed = false
-    local isLbOpen = true
-    local isLbAnimating = false
-
     local function getLbTargetHeight(count, customPosY)
         local c = count or #Players:GetPlayers()
         local cam = workspace.CurrentCamera
@@ -1691,13 +1688,22 @@ return function(Shared)
 
     local ContextActionService = game:GetService("ContextActionService")
 
+    local isLbCollapsed = false
+    local isLbOpen = true
+    local currentLbOpenTween = nil
+    local currentLbCollapseTween = nil
+    local lastTabToggleTime = 0
+
     -- ── OPEN / DISAPPEAR ANIMATION (FOR TAB KEY & CLOSE [X] BUTTON) ──
     local function toggleLeaderboardOpen(explicitState)
-        if isLbAnimating then return end
         local nextState = (explicitState ~= nil) and explicitState or (not isLbOpen)
         if nextState == isLbOpen and lbWindow.Visible == isLbOpen then return end
         isLbOpen = nextState
-        isLbAnimating = true
+
+        if currentLbOpenTween then
+            currentLbOpenTween:Cancel()
+            currentLbOpenTween = nil
+        end
 
         local curW = math.max(lbWindow.AbsoluteSize.X, 230)
         local curY = lbWindow.Position.Y.Offset
@@ -1712,29 +1718,31 @@ return function(Shared)
             local targetH = isLbCollapsed and 24 or getLbTargetHeight(#Players:GetPlayers())
             lbWindow.Size = UDim2.new(0, curW, 0, targetH)
 
-            local tweenIn = TweenSvc:Create(lbWindow, TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+            local tweenIn = TweenService:Create(lbWindow, TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                 Position = UDim2.new(1, -(curW + 12), 0, curY),
                 BackgroundTransparency = 0.50
             })
+            currentLbOpenTween = tweenIn
             tweenIn:Play()
             tweenIn.Completed:Connect(function()
-                isLbAnimating = false
-                if not isLbCollapsed and lbResizeGrip then lbResizeGrip.Visible = true end
+                if isLbOpen then
+                    if not isLbCollapsed and lbResizeGrip then lbResizeGrip.Visible = true end
+                end
             end)
         else
             -- DISAPPEARING ANIMATION: Slide out off-screen to the right & fade
             if lbResizeGrip then lbResizeGrip.Visible = false end
 
-            local tweenOut = TweenSvc:Create(lbWindow, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+            local tweenOut = TweenService:Create(lbWindow, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
                 Position = UDim2.new(1, 20, 0, curY),
                 BackgroundTransparency = 1
             })
+            currentLbOpenTween = tweenOut
             tweenOut:Play()
             tweenOut.Completed:Connect(function()
                 if not isLbOpen then
                     lbWindow.Visible = false
                 end
-                isLbAnimating = false
             end)
         end
     end
@@ -1749,6 +1757,11 @@ return function(Shared)
         local nextState = (explicitState ~= nil) and explicitState or (not isLbCollapsed)
         isLbCollapsed = nextState
 
+        if currentLbCollapseTween then
+            currentLbCollapseTween:Cancel()
+            currentLbCollapseTween = nil
+        end
+
         local curW = math.max(lbWindow.AbsoluteSize.X, 230)
         local targetH = getLbTargetHeight(#Players:GetPlayers())
 
@@ -1756,31 +1769,29 @@ return function(Shared)
             -- MINIMIZE: Collapse vertically to titlebar height (24px)
             lbMinBtn.Text = "+"
             if lbResizeGrip then lbResizeGrip.Visible = false end
-            pcall(function()
-                local t = TweenSvc:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(0, curW, 0, 24)
-                })
-                t:Play()
-                t.Completed:Connect(function()
-                    if isLbCollapsed and lbScroll then
-                        lbScroll.Visible = false
-                    end
-                end)
+            local t = TweenService:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, curW, 0, 24)
+            })
+            currentLbCollapseTween = t
+            t:Play()
+            t.Completed:Connect(function()
+                if isLbCollapsed and lbScroll then
+                    lbScroll.Visible = false
+                end
             end)
         else
             -- EXPAND: Unminimize back down to full dynamic height
             lbMinBtn.Text = "-"
             if lbScroll then lbScroll.Visible = true end
-            pcall(function()
-                local t = TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(0, curW, 0, targetH)
-                })
-                t:Play()
-                t.Completed:Connect(function()
-                    if not isLbCollapsed and lbResizeGrip then
-                        lbResizeGrip.Visible = true
-                    end
-                end)
+            local t = TweenService:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, curW, 0, targetH)
+            })
+            currentLbCollapseTween = t
+            t:Play()
+            t.Completed:Connect(function()
+                if not isLbCollapsed and lbResizeGrip then
+                    lbResizeGrip.Visible = true
+                end
             end)
         end
     end
@@ -1793,12 +1804,21 @@ return function(Shared)
         toggleLeaderboardOpen(false)
     end)
 
+    local function triggerTabToggle()
+        local now = tick()
+        if now - lastTabToggleTime < 0.15 then return end
+        local isTyping = UserInput:GetFocusedTextBox() ~= nil
+        if isTyping then return end
+        lastTabToggleTime = now
+        toggleLeaderboardOpen()
+    end
+
     -- ContextActionService ensures Tab key is captured before Roblox CoreGui can swallow it
     local function handleTabKey(actionName, inputState, inputObject)
         if inputState == Enum.UserInputState.Begin then
             local isTyping = UserInput:GetFocusedTextBox() ~= nil
             if not isTyping then
-                toggleLeaderboardOpen()
+                triggerTabToggle()
                 return Enum.ContextActionResult.Sink
             end
         end
@@ -1817,10 +1837,7 @@ return function(Shared)
 
     UserInput.InputBegan:Connect(function(input, gpe)
         if input.KeyCode == Enum.KeyCode.Tab then
-            local isTyping = UserInput:GetFocusedTextBox() ~= nil
-            if not isTyping then
-                toggleLeaderboardOpen()
-            end
+            triggerTabToggle()
         end
     end)
 
@@ -2219,13 +2236,6 @@ return function(Shared)
     -- Auto-refresh leaderboard rows on theme change
     Shared.RegisterThemeCallback(function(targetTheme, isDarkMode)
         renderLeaderboardPlayers()
-    end)
-
-    -- Tab Key Toggle for Leaderboard with smooth animation
-    UserInput.InputBegan:Connect(function(input, gpe)
-        if input.KeyCode == Enum.KeyCode.Tab and not gpe then
-            toggleLeaderboardOpen()
-        end
     end)
 
     Shared.ToggleLeaderboard = toggleLeaderboardOpen
