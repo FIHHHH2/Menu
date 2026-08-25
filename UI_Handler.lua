@@ -1675,27 +1675,86 @@ return function(Shared)
 
     local isLbCollapsed = false
     local isLbOpen = true
+    local isLbAnimating = false
+
     local function getLbTargetHeight(count)
         local c = count or #Players:GetPlayers()
-        return math.clamp(32 + c * 31 + 6, 70, 520)
+        local cam = workspace.CurrentCamera
+        local viewportH = (cam and cam.ViewportSize.Y) or 800
+        local calculatedH = 24 + 4 + (c * 31) + 4
+        -- No arbitrary size cap: expands dynamically for every new player, bounded only by viewport bottom
+        return math.clamp(calculatedH, 56, viewportH - 60)
     end
 
     local ContextActionService = game:GetService("ContextActionService")
 
-    local function toggleLeaderboardCollapse(explicitState)
-        if explicitState ~= nil then
-            isLbCollapsed = explicitState
+    -- ── OPEN / DISAPPEAR ANIMATION (FOR TAB KEY & CLOSE [X] BUTTON) ──
+    local function toggleLeaderboardOpen(explicitState)
+        if isLbAnimating then return end
+        local nextState = (explicitState ~= nil) and explicitState or (not isLbOpen)
+        if nextState == isLbOpen and lbWindow.Visible == isLbOpen then return end
+        isLbOpen = nextState
+        isLbAnimating = true
+
+        local curW = math.max(lbWindow.AbsoluteSize.X, 230)
+        local curY = lbWindow.Position.Y.Offset
+
+        if isLbOpen then
+            -- OPENING ANIMATION: Slide in smoothly from off-screen right
+            lbWindow.Position = UDim2.new(1, 20, 0, curY)
+            lbWindow.BackgroundTransparency = 1
+            lbWindow.Visible = true
+            if not isLbCollapsed and lbScroll then lbScroll.Visible = true end
+
+            local targetH = isLbCollapsed and 24 or getLbTargetHeight(#Players:GetPlayers())
+            lbWindow.Size = UDim2.new(0, curW, 0, targetH)
+
+            local tweenIn = TweenSvc:Create(lbWindow, TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Position = UDim2.new(1, -(curW + 12), 0, curY),
+                BackgroundTransparency = 0.50
+            })
+            tweenIn:Play()
+            tweenIn.Completed:Connect(function()
+                isLbAnimating = false
+                if not isLbCollapsed and lbResizeGrip then lbResizeGrip.Visible = true end
+            end)
         else
-            isLbCollapsed = not isLbCollapsed
+            -- DISAPPEARING ANIMATION: Slide out off-screen to the right & fade
+            if lbResizeGrip then lbResizeGrip.Visible = false end
+
+            local tweenOut = TweenSvc:Create(lbWindow, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                Position = UDim2.new(1, 20, 0, curY),
+                BackgroundTransparency = 1
+            })
+            tweenOut:Play()
+            tweenOut.Completed:Connect(function()
+                if not isLbOpen then
+                    lbWindow.Visible = false
+                end
+                isLbAnimating = false
+            end)
         end
+    end
+
+    -- ── MINIMIZE / EXPAND ANIMATION (CHAT UI MINIMIZE STYLE) ───────
+    local function toggleLeaderboardCollapse(explicitState)
+        if not isLbOpen or not lbWindow.Visible then
+            toggleLeaderboardOpen(true)
+            return
+        end
+
+        local nextState = (explicitState ~= nil) and explicitState or (not isLbCollapsed)
+        isLbCollapsed = nextState
 
         local curW = math.max(lbWindow.AbsoluteSize.X, 230)
         local targetH = getLbTargetHeight(#Players:GetPlayers())
+
         if isLbCollapsed then
+            -- MINIMIZE: Collapse vertically to titlebar height (24px)
             lbMinBtn.Text = "+"
             if lbResizeGrip then lbResizeGrip.Visible = false end
             pcall(function()
-                local t = TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                local t = TweenSvc:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, curW, 0, 24)
                 })
                 t:Play()
@@ -1706,11 +1765,11 @@ return function(Shared)
                 end)
             end)
         else
+            -- EXPAND: Unminimize back down to full dynamic height
             lbMinBtn.Text = "-"
-            lbWindow.Visible = true
             if lbScroll then lbScroll.Visible = true end
             pcall(function()
-                local t = TweenSvc:Create(lbWindow, TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                local t = TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, curW, 0, targetH)
                 })
                 t:Play()
@@ -1727,12 +1786,8 @@ return function(Shared)
         toggleLeaderboardCollapse()
     end)
 
-    local function toggleLeaderboard(explicitState)
-        toggleLeaderboardCollapse(explicitState)
-    end
-
     lbCloseBtn.MouseButton1Click:Connect(function()
-        toggleLeaderboardCollapse(true)
+        toggleLeaderboardOpen(false)
     end)
 
     -- ContextActionService ensures Tab key is captured before Roblox CoreGui can swallow it
@@ -1740,7 +1795,7 @@ return function(Shared)
         if inputState == Enum.UserInputState.Begin then
             local isTyping = UserInput:GetFocusedTextBox() ~= nil
             if not isTyping then
-                toggleLeaderboardCollapse()
+                toggleLeaderboardOpen()
                 return Enum.ContextActionResult.Sink
             end
         end
@@ -1761,7 +1816,7 @@ return function(Shared)
         if input.KeyCode == Enum.KeyCode.Tab then
             local isTyping = UserInput:GetFocusedTextBox() ~= nil
             if not isTyping then
-                toggleLeaderboardCollapse()
+                toggleLeaderboardOpen()
             end
         end
     end)
@@ -2063,12 +2118,13 @@ return function(Shared)
         local allPlrs = Players:GetPlayers()
         lbTitleText.Text = "Players (" .. tostring(#allPlrs) .. ")"
 
-        -- Dynamically scale window height to fit player count smoothly
+        -- Dynamically scale window height to fit player count smoothly without size cap
         local targetH = getLbTargetHeight(#allPlrs)
+        local curW = math.max(lbWindow.AbsoluteSize.X, 230)
         if isLbOpen and lbWindow.Visible and not isLbCollapsed then
             pcall(function()
-                TweenSvc:Create(lbWindow, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(0, 230, 0, targetH)
+                TweenSvc:Create(lbWindow, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Size = UDim2.new(0, curW, 0, targetH)
                 }):Play()
             end)
         end
