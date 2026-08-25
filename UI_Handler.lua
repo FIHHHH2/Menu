@@ -524,7 +524,6 @@ return function(Shared)
                 local data = {
                     Flags               = Shared.Flags,
                     SpotifyToken        = Shared.Config.SpotifyToken or "",
-                    SpotifyRefreshToken = Shared.Config.SpotifyRefreshToken or "",
                     LastFMUser          = Shared.Config.LastFMUser or "",
                     DarkMode            = isDark,
                     ThemeMode           = themeMode,
@@ -554,7 +553,6 @@ return function(Shared)
                 local data = Http:JSONDecode(readfile(CONFIG_FILE))
                 if data then
                     Shared.Config.SpotifyToken        = data.SpotifyToken or ""
-                    Shared.Config.SpotifyRefreshToken = data.SpotifyRefreshToken or ""
                     Shared.Config.LastFMUser          = data.LastFMUser or ""
                     if data.ThemeMode == "Adaptive" then
                         themeMode = "Adaptive"
