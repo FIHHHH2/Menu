@@ -1367,70 +1367,100 @@ return function(Shared)
     Shared.CurrentTrack = function() return currentTrack end
 
     -- Persistent Polling Engine
-    local pollActive = false
+    local pollActive   = false
+    local pollStarted  = 0
+    local POLL_TIMEOUT = 6  -- force-unlock if request hangs > 6s
+
     local function startPolling()
         if pollConn then pollConn:Disconnect() end
         local elapsed = 0
         pollConn = RunSvc.Heartbeat:Connect(function(dt)
             elapsed = elapsed + dt
+
+            -- Timeout guard: unstick a hung poll after 6 seconds
+            if pollActive and (os.clock() - pollStarted) > POLL_TIMEOUT then
+                pollActive = false
+            end
+
             if elapsed >= 1.5 and not pollActive then
-                elapsed = 0
-                pollActive = true
+                elapsed   = 0
+                pollActive  = true
+                pollStarted = os.clock()
+
                 task.spawn(function()
                     local ok, track = pcall(function()
-                        -- Fast poll: currently-playing only (no recently-played fallback delay)
                         local token = cleanToken(Shared.Config.SpotifyToken or "")
-                        if token == "" then
-                            if Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "" then
-                                refreshSpotifyToken()
+
+                        -- Auto-refresh expired token
+                        if token == "" and Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "" then
+                            refreshSpotifyToken()
+                            token = cleanToken(Shared.Config.SpotifyToken or "")
+                        end
+
+                        if token == "" then return nil end
+
+                        local resp = Shared.SpotifyHTTP({
+                            Url     = "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track",
+                            Method  = "GET",
+                            Headers = {
+                                ["Authorization"] = "Bearer " .. token,
+                                ["Accept"]        = "application/json",
+                            },
+                        })
+
+                        -- 401: token expired mid-session
+                        if resp and resp.StatusCode == 401 then
+                            local ok2 = refreshSpotifyToken()
+                            if ok2 then
                                 token = cleanToken(Shared.Config.SpotifyToken or "")
+                                resp = Shared.SpotifyHTTP({
+                                    Url     = "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track",
+                                    Method  = "GET",
+                                    Headers = {
+                                        ["Authorization"] = "Bearer " .. token,
+                                        ["Accept"]        = "application/json",
+                                    },
+                                })
                             end
                         end
-                        if token ~= "" then
-                            local resp = Shared.SpotifyHTTP({
-                                Url     = "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track",
-                                Method  = "GET",
-                                Headers = {
-                                    ["Authorization"] = "Bearer " .. token,
-                                    ["Accept"]        = "application/json",
-                                },
-                            })
-                            if resp and resp.StatusCode == 401 then
-                                refreshSpotifyToken()
-                                return nil
-                            end
-                            if resp and resp.Body and #resp.Body > 5 then
-                                local ok2, data = pcall(function() return Http:JSONDecode(resp.Body) end)
-                                if ok2 and data and data.item then
-                                    local item = data.item
-                                    local coverUrl = ""
-                                    if item.album and item.album.images and #item.album.images > 0 then
-                                        coverUrl = item.album.images[1].url or ""
-                                    end
-                                    return {
-                                        id          = item.id,
-                                        name        = item.name or "Unknown",
-                                        artist      = item.artists and item.artists[1] and item.artists[1].name or "Unknown",
-                                        cover       = coverUrl,
-                                        isPlaying   = (data.is_playing == true),
-                                        progress_ms = data.progress_ms or 0,
-                                        duration_ms = item.duration_ms or 0,
-                                        pollTime    = os.clock(),
-                                        source      = "Spotify"
-                                    }
-                                end
-                            end
+
+                        -- 204 = Spotify knows no currently-playing (paused/no device)
+                        if not resp or not resp.Body or #resp.Body < 5 then
+                            return nil
                         end
-                        -- Last.fm fallback only when Spotify returns nothing
-                        return getLastFMTrack()
+
+                        local ok2, data = pcall(function() return Http:JSONDecode(resp.Body) end)
+                        if not ok2 or not data or not data.item then return nil end
+
+                        local item     = data.item
+                        local coverUrl = ""
+                        if item.album and item.album.images and #item.album.images > 0 then
+                            coverUrl = item.album.images[1].url or ""
+                        end
+
+                        return {
+                            id          = item.id or "",
+                            name        = item.name or "Unknown",
+                            artist      = item.artists and item.artists[1] and item.artists[1].name or "Unknown",
+                            cover       = coverUrl,
+                            isPlaying   = (data.is_playing == true),
+                            progress_ms = data.progress_ms or 0,
+                            duration_ms = item.duration_ms or 0,
+                            pollTime    = os.clock(),
+                            source      = "Spotify"
+                        }
                     end)
+
                     if ok and track then
-                        if track.name ~= currentTrack.name
-                            or track.artist ~= currentTrack.artist
-                            or track.isPlaying ~= currentTrack.isPlaying then
+                        -- Use track ID for precise change detection (not just name)
+                        local idChanged     = (track.id ~= "" and track.id ~= currentTrack.id)
+                        local nameChanged   = (track.name ~= currentTrack.name)
+                        local stateChanged  = (track.isPlaying ~= currentTrack.isPlaying)
+                        if idChanged or nameChanged or stateChanged then
                             updateVisuals(track)
                         end
                     end
+
                     pollActive = false
                 end)
             end
