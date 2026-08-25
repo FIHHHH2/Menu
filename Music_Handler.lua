@@ -1477,34 +1477,34 @@ return function(Shared)
             if not isPlaying then return 0 end
 
             local frac = (barIdx - 1) / math.max(1, totalBars - 1)
-            -- Multi-band frequency separation: heavy sub-bass on left, punchy mids, crisp treble on right
-            local freqMult = 1.8 + frac * 9.5
-            local beatImpulse = math.abs(math.sin(songSec * 3.6)) ^ 3 * (1.0 - frac * 0.5)
+            -- Balanced frequency movement: smooth rolling sub-bass to gentle treble waves
+            local freqMult = 0.75 + frac * 3.6
+            local beatImpulse = (math.sin(songSec * 2.4) ^ 2) * (0.7 - frac * 0.35)
 
-            local n1 = (math.noise(barIdx * 0.32, songSec * freqMult, trackSeed) + 1) * 0.55
-            local n2 = (math.noise(barIdx * 0.75, songSec * (freqMult * 1.8), trackSeed + 80) + 1) * 0.30
-            local n3 = (math.noise(barIdx * 1.5, songSec * (freqMult * 3.2), trackSeed + 160) + 1) * 0.15
+            local n1 = (math.noise(barIdx * 0.16, songSec * freqMult, trackSeed) + 1) * 0.50
+            local n2 = (math.noise(barIdx * 0.35, songSec * (freqMult * 1.4) + 10, trackSeed + 60) + 1) * 0.28
+            local n3 = (math.noise(barIdx * 0.70, songSec * (freqMult * 2.2) + 20, trackSeed + 120) + 1) * 0.12
 
-            local raw = math.clamp((n1 * 0.65 + n2 + n3) * (0.8 + beatImpulse * 0.4), 0, 1.25)
-            -- High-threshold dynamic curve: deep troughs for low signals, dramatic explosive spikes for beats
-            local shaped = math.clamp((raw ^ 1.85) * 1.2, 0.04, 1.0)
+            local raw = math.clamp((n1 + n2 + n3) * (0.65 + beatImpulse * 0.25), 0, 1.0)
+            -- Calibrated, fluid musical curve (less aggressive spikes, pleasant wave flow)
+            local shaped = math.clamp((raw ^ 1.35) * 0.88, 0.05, 0.95)
             return shaped
         end
 
-        -- Update HUD 28-Bar Equalizer with snappy attack & physics gravity decay
+        -- Update HUD 28-Bar Equalizer with smooth fluid response & organic falloff
         if hudVisBars then
             for i, bar in ipairs(hudVisBars) do
                 if bar and bar.Parent then
                     local target = calculateTargetLevel(i, #hudVisBars)
                     local cur = hudBarLevels[i] or 0
                     if target > cur then
-                        cur = cur + (target - cur) * math.clamp(dt * 18, 0.25, 0.95)
+                        cur = cur + (target - cur) * math.clamp(dt * 7.5, 0.15, 0.65)
                     else
-                        cur = math.max(target, cur - dt * 2.2)
+                        cur = math.max(target, cur - dt * 1.35)
                     end
                     hudBarLevels[i] = cur
 
-                    local barH = isPlaying and math.clamp(math.floor(cur * 24) + 2, 2, 24) or 3
+                    local barH = isPlaying and math.clamp(math.floor(cur * 22) + 2, 2, 24) or 3
                     bar.Size = UDim2.new(0, 5, 0, barH)
                     bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.55 + i * 0.012) % 1, 0.85, 1) or Color3.fromRGB(60, 75, 100)
                 end
@@ -1518,13 +1518,13 @@ return function(Shared)
                     local target = calculateTargetLevel(i, #bbVisBars)
                     local cur = bbBarLevels[i] or 0
                     if target > cur then
-                        cur = cur + (target - cur) * math.clamp(dt * 18, 0.25, 0.95)
+                        cur = cur + (target - cur) * math.clamp(dt * 7.5, 0.15, 0.65)
                     else
-                        cur = math.max(target, cur - dt * 2.2)
+                        cur = math.max(target, cur - dt * 1.35)
                     end
                     bbBarLevels[i] = cur
 
-                    local barH = isPlaying and math.clamp(math.floor(cur * 16) + 2, 2, 16) or 2
+                    local barH = isPlaying and math.clamp(math.floor(cur * 15) + 2, 2, 16) or 2
                     bar.Size = UDim2.new(0, 5, 0, barH)
                     bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.36 + i * 0.03) % 1, 0.9, 0.95) or Color3.fromRGB(70, 85, 110)
                 end
