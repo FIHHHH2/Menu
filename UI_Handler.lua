@@ -961,8 +961,11 @@ return function(Shared)
     SBorder.ZIndex = 5; SBorder.Parent = Sidebar
     registerThemed(SBorder, { BackgroundColor3 = "SidebarBorder" })
 
-    local TabContainer = Instance.new("Frame")
+    local TabContainer = Instance.new("ScrollingFrame")
     TabContainer.Size = UDim2.new(1,-4,1,0); TabContainer.BackgroundTransparency = 1
+    TabContainer.BorderSizePixel = 0; TabContainer.ScrollBarThickness = 0
+    TabContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    TabContainer.CanvasSize = UDim2.new(0,0,0,0)
     TabContainer.ZIndex = 6; TabContainer.Parent = Sidebar
     local TabLayout = Instance.new("UIListLayout")
     TabLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -1688,22 +1691,32 @@ return function(Shared)
         local targetH = getLbTargetHeight(#Players:GetPlayers())
         if isLbCollapsed then
             lbMinBtn.Text = "+"
-            if lbScroll then lbScroll.Visible = false end
             if lbResizeGrip then lbResizeGrip.Visible = false end
             pcall(function()
-                TweenSvc:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                local t = TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, curW, 0, 24)
-                }):Play()
+                })
+                t:Play()
+                t.Completed:Connect(function()
+                    if isLbCollapsed and lbScroll then
+                        lbScroll.Visible = false
+                    end
+                end)
             end)
         else
             lbMinBtn.Text = "-"
             lbWindow.Visible = true
             if lbScroll then lbScroll.Visible = true end
-            if lbResizeGrip then lbResizeGrip.Visible = true end
             pcall(function()
-                TweenSvc:Create(lbWindow, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                local t = TweenSvc:Create(lbWindow, TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, curW, 0, targetH)
-                }):Play()
+                })
+                t:Play()
+                t.Completed:Connect(function()
+                    if not isLbCollapsed and lbResizeGrip then
+                        lbResizeGrip.Visible = true
+                    end
+                end)
             end)
         end
     end
@@ -1717,15 +1730,7 @@ return function(Shared)
     end
 
     lbCloseBtn.MouseButton1Click:Connect(function()
-        isLbCollapsed = true
-        lbMinBtn.Text = "+"
-        if lbScroll then lbScroll.Visible = false end
-        if lbResizeGrip then lbResizeGrip.Visible = false end
-        pcall(function()
-            TweenSvc:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                Size = UDim2.new(0, math.max(lbWindow.AbsoluteSize.X, 230), 0, 24)
-            }):Play()
-        end)
+        toggleLeaderboardCollapse(true)
     end)
 
     -- ContextActionService ensures Tab key is captured before Roblox CoreGui can swallow it

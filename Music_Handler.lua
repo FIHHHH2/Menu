@@ -18,7 +18,10 @@ return function(Shared)
 
     local tab = Tabs["Music"]
     local cols = QuadCols["Music"]
-    if not tab or not cols then return end
+    if not tab or not cols then
+        warn("[Music_Handler] Tabs['Music'] or QuadCols['Music'] not found!")
+        return
+    end
 
     local leftCol  = cols.Left
     local rightCol = cols.Right
@@ -1524,5 +1527,5 @@ return function(Shared)
         end
     end)
 
-    print("[Music_Handler] Loaded -- High-Threshold Dynamic 28-Bar Visualizer")
+    print("[Music_Handler] Loaded -- High-Threshold Dynamic 28-Bar Visualizer & Synced Lyrics")
 end
