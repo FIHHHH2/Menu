@@ -1367,19 +1367,72 @@ return function(Shared)
     Shared.CurrentTrack = function() return currentTrack end
 
     -- Persistent Polling Engine
+    local pollActive = false
     local function startPolling()
         if pollConn then pollConn:Disconnect() end
         local elapsed = 0
         pollConn = RunSvc.Heartbeat:Connect(function(dt)
             elapsed = elapsed + dt
-            if elapsed >= 3 then
+            if elapsed >= 1.5 and not pollActive then
                 elapsed = 0
-                local track = getSpotifyTrack() or getLastFMTrack()
-                if track then
-                    if track.name ~= currentTrack.name or track.cover ~= currentTrack.cover or track.isPlaying ~= currentTrack.isPlaying then
-                        updateVisuals(track)
+                pollActive = true
+                task.spawn(function()
+                    local ok, track = pcall(function()
+                        -- Fast poll: currently-playing only (no recently-played fallback delay)
+                        local token = cleanToken(Shared.Config.SpotifyToken or "")
+                        if token == "" then
+                            if Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "" then
+                                refreshSpotifyToken()
+                                token = cleanToken(Shared.Config.SpotifyToken or "")
+                            end
+                        end
+                        if token ~= "" then
+                            local resp = Shared.SpotifyHTTP({
+                                Url     = "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track",
+                                Method  = "GET",
+                                Headers = {
+                                    ["Authorization"] = "Bearer " .. token,
+                                    ["Accept"]        = "application/json",
+                                },
+                            })
+                            if resp and resp.StatusCode == 401 then
+                                refreshSpotifyToken()
+                                return nil
+                            end
+                            if resp and resp.Body and #resp.Body > 5 then
+                                local ok2, data = pcall(function() return Http:JSONDecode(resp.Body) end)
+                                if ok2 and data and data.item then
+                                    local item = data.item
+                                    local coverUrl = ""
+                                    if item.album and item.album.images and #item.album.images > 0 then
+                                        coverUrl = item.album.images[1].url or ""
+                                    end
+                                    return {
+                                        id          = item.id,
+                                        name        = item.name or "Unknown",
+                                        artist      = item.artists and item.artists[1] and item.artists[1].name or "Unknown",
+                                        cover       = coverUrl,
+                                        isPlaying   = (data.is_playing == true),
+                                        progress_ms = data.progress_ms or 0,
+                                        duration_ms = item.duration_ms or 0,
+                                        pollTime    = os.clock(),
+                                        source      = "Spotify"
+                                    }
+                                end
+                            end
+                        end
+                        -- Last.fm fallback only when Spotify returns nothing
+                        return getLastFMTrack()
+                    end)
+                    if ok and track then
+                        if track.name ~= currentTrack.name
+                            or track.artist ~= currentTrack.artist
+                            or track.isPlaying ~= currentTrack.isPlaying then
+                            updateVisuals(track)
+                        end
                     end
-                end
+                    pollActive = false
+                end)
             end
         end)
     end
