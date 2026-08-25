@@ -10,7 +10,14 @@ return function(Shared)
     local GuiService   = game:GetService("GuiService")
     local VirtualInput = game:GetService("VirtualInputManager")
     local RunService   = Shared.Services.RunService or game:GetService("RunService")
-    local ScreenGui    = Shared.GUI
+    local ScreenGui = Shared.GUI
+    if not ScreenGui then
+        local gethui = rawget(getfenv and getfenv(0) or _G, "gethui") or (getgenv and getgenv().gethui)
+        local h = (type(gethui) == "function" and gethui())
+               or Shared.Services.CoreGui
+               or (Shared.Player and Shared.Player:FindFirstChildOfClass("PlayerGui"))
+        if h then ScreenGui = h:FindFirstChild("IE7_Menu") end
+    end
 
     if not ScreenGui then
         warn("[Core_Functions] Shared.GUI not initialized!")

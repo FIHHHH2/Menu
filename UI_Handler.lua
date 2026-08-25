@@ -38,8 +38,24 @@ return function(Shared)
     ScreenGui.ResetOnSpawn   = false
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.IgnoreGuiInset = true
-    ScreenGui.Parent         = CoreGui
-    Shared.GUI               = ScreenGui
+
+    local gethui = rawget(getfenv and getfenv(0) or _G, "gethui") or (getgenv and getgenv().gethui)
+    local targetParent = nil
+    if type(gethui) == "function" then
+        local ok, h = pcall(gethui)
+        if ok and h then targetParent = h end
+    end
+    if not targetParent then
+        local ok, _ = pcall(function() ScreenGui.Parent = CoreGui end)
+        if ok and ScreenGui.Parent == CoreGui then
+            targetParent = CoreGui
+        else
+            targetParent = (Shared.Player and Shared.Player:FindFirstChildOfClass("PlayerGui"))
+                        or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+        end
+    end
+    ScreenGui.Parent = targetParent
+    Shared.GUI       = ScreenGui
     if Shared.AddCleanup then Shared.AddCleanup(ScreenGui) end
 
     -- ── THEME PALETTES ───────────────────────────────────────────
@@ -332,6 +348,10 @@ return function(Shared)
     Shared.GetThemeMode = function() return themeMode end
 
     local applyThemeTransition = nil -- forward declaration
+    local themeCallbacks = {}
+    Shared.ThemeCallbacks = themeCallbacks
+
+    local applyThemeTransition = nil
 
     Shared.SetAdaptiveThemeTrack = function(track)
         currentAdaptiveTrack = track
@@ -343,7 +363,6 @@ return function(Shared)
         end
     end
 
-        -- ── ROBLOX CORE UI (TOGGLEABLE RETRO AERO & CHAT ENGINE) ──────
     -- ── ROBLOX CORE UI (TOGGLEABLE RETRO AERO & CHAT ENGINE) ──────
     local StarterGui = game:GetService("StarterGui")
     local customCoreEnabled = true
@@ -357,7 +376,7 @@ return function(Shared)
     local function isOurGui(gui)
         if not gui then return false end
         local n = gui.Name
-        if n == "IE7_Menu" or n == "FihUi" or n == "Fih_CustomLeaderboard" or n == "Fih_CustomChat" or n == "Fih_BottomHUD" or n == "Fih_ArtworkBillboard" then
+        if n == "IE7_Menu" or n == "FihUi" or n == "Fih_CustomLeaderboard" or n == "Fih_CustomChat" or n == "Fih_BottomHUD" or n == "Fih_ArtworkBillboard" or n:find("^Fih_") then
             return true
         end
         if ScreenGui and (gui == ScreenGui or gui:IsDescendantOf(ScreenGui)) then return true end
@@ -372,18 +391,31 @@ return function(Shared)
         local n = gui.Name:lower()
         local isConflict = false
 
-        -- Check if it matches custom playerlist / leaderboard / tablist replacement
+        -- Custom playerlist / leaderboard / tablist / tabbar replacement
         if n:find("playerlist") or n:find("player_list") or n:find("leaderboard") or n:find("leader_board")
             or n:find("scoreboard") or n:find("score_board") or n:find("tablist") or n:find("tab_list")
-            or n:find("tabmenu") or n:find("tab_menu") or n:find("customplayer") or n:find("customlb")
-            or n:find("playersgui") or n:find("playerslist") or n:find("customtab") or n:find("scoreboardscreengui") then
+            or n:find("tabbar") or n:find("tab_bar") or n:find("tabmenu") or n:find("tab_menu")
+            or n:find("customplayer") or n:find("customlb") or n:find("playersgui") or n:find("playerslist")
+            or n:find("customtab") or n:find("scoreboardscreengui") then
             isConflict = true
         end
 
-        -- Check if it matches custom topbar replacement in PlayerGui
-        if n:find("topbargui") or n:find("customtopbar") or n:find("game_topbar") or n:find("gametopbar")
-            or n:find("topbarcontainer") or n:find("topbarframe") or (n:find("topbar") and gui.Parent ~= CoreGui and not n:find("topbarapp")) then
-            isConflict = true
+        -- Custom topbar replacement in PlayerGui
+        if n:find("topbar") or n:find("top_bar") or n:find("topbargui") or n:find("customtopbar")
+            or n:find("game_topbar") or n:find("gametopbar") or n:find("topbarcontainer")
+            or n:find("topbarframe") then
+            if gui.Parent ~= CoreGui and not n:find("topbarapp") then
+                isConflict = true
+            end
+        end
+
+        -- Explicit MM2 MainGUI components (TabBar, TopBar, Scoreboard, Leaderboard)
+        local pName = (gui.Parent and gui.Parent.Name:lower()) or ""
+        local ppName = (gui.Parent and gui.Parent.Parent and gui.Parent.Parent.Name:lower()) or ""
+        if pName:find("maingui") or ppName:find("maingui") or pName:find("game") or pName:find("lobby") then
+            if n == "topbar" or n == "tabbar" or n == "tab" or n == "scoreboard" or n == "leaderboard" or n == "playerlist" or n == "roleselector" then
+                isConflict = true
+            end
         end
 
         if isConflict then
@@ -410,10 +442,15 @@ return function(Shared)
     local function scanAndSuppressAllConflictingGUIs()
         if not disableConflictingGUIs then return end
         pcall(function()
-            local pGui = Shared.Player:FindFirstChildOfClass("PlayerGui")
+            StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
+            local pGui = (Shared.Player and Shared.Player:FindFirstChildOfClass("PlayerGui"))
+                      or game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
             if pGui then
                 for _, child in ipairs(pGui:GetChildren()) do
                     checkAndSuppressConflictingGui(child)
+                end
+                for _, desc in ipairs(pGui:GetDescendants()) do
+                    checkAndSuppressConflictingGui(desc)
                 end
             end
         end)
@@ -435,7 +472,6 @@ return function(Shared)
     end
 
     local function restoreDefaultRobloxCoreUI()
-        -- Re-enable native TopBar ScreenGuis
         pcall(function()
             local topbarFolder = CoreGui:FindFirstChild("TopBarApp")
             if topbarFolder then
@@ -479,15 +515,6 @@ return function(Shared)
         local theme = targetTheme or C
         local dark  = (isDarkMode ~= nil) and isDarkMode or isDark
 
-        local bgCol     = dark and Color3.fromRGB(16, 20, 30) or Color3.fromRGB(242, 246, 252)
-        local cardBg    = dark and Color3.fromRGB(22, 28, 42) or Color3.fromRGB(230, 236, 248)
-        local borderCol = dark and Color3.fromRGB(40, 85, 145) or Color3.fromRGB(140, 170, 210)
-        local textCol   = dark and Color3.fromRGB(245, 250, 255) or Color3.fromRGB(15, 25, 55)
-        local iconCol   = dark and Color3.fromRGB(245, 250, 255) or Color3.fromRGB(20, 25, 40)
-        local inputBg   = dark and Color3.fromRGB(24, 30, 44) or Color3.fromRGB(255, 255, 255)
-        local placeCol  = dark and Color3.fromRGB(120, 150, 190) or Color3.fromRGB(100, 120, 150)
-
-        -- Universal Squircles Killer: scoped only to TopBarApp (never touches ExperienceChat)
         pcall(function()
             local topbar = CoreGui:FindFirstChild("TopBarApp")
             if topbar then
@@ -497,7 +524,6 @@ return function(Shared)
             end
         end)
 
-        -- 1. TopBarApp (Disable both ScreenGuis so chat bar replaces it completely)
         pcall(function()
             local topbarFolder = CoreGui:FindFirstChild("TopBarApp")
             if topbarFolder then
@@ -509,7 +535,6 @@ return function(Shared)
             end
         end)
 
-        -- 2. TextChatService Configurations (Hide native chat widgets when custom chat is active)
         pcall(function()
             local TextChatService = game:GetService("TextChatService")
             local cwc = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
@@ -530,29 +555,30 @@ return function(Shared)
 
     -- Persistent Watcher: Re-enforces styling and suppresses overlapping game GUIs
     task.spawn(function()
-        task.wait(0.3)
+        task.wait(0.2)
         styleRobloxCoreUI(C, isDark)
         scanAndSuppressAllConflictingGUIs()
 
-        local pGui = Shared.Player:FindFirstChildOfClass("PlayerGui")
+        local pGui = (Shared.Player and Shared.Player:FindFirstChildOfClass("PlayerGui"))
+                  or game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
         if pGui then
-            pGui.ChildAdded:Connect(function(child)
+            pGui.DescendantAdded:Connect(function(child)
                 if disableConflictingGUIs then
-                    task.wait(0.05)
+                    task.wait(0.02)
                     checkAndSuppressConflictingGui(child)
                 end
             end)
         end
 
         Shared.Player.CharacterAdded:Connect(function()
-            task.wait(0.5)
+            task.wait(0.3)
             scanAndSuppressAllConflictingGUIs()
             local newPGui = Shared.Player:FindFirstChildOfClass("PlayerGui")
             if newPGui and newPGui ~= pGui then
                 pGui = newPGui
-                newPGui.ChildAdded:Connect(function(child)
+                newPGui.DescendantAdded:Connect(function(child)
                     if disableConflictingGUIs then
-                        task.wait(0.05)
+                        task.wait(0.02)
                         checkAndSuppressConflictingGui(child)
                     end
                 end)
@@ -562,7 +588,7 @@ return function(Shared)
         local elapsed = 0
         RunService.Heartbeat:Connect(function(dt)
             elapsed = elapsed + dt
-            if elapsed >= 0.8 then
+            if elapsed >= 0.5 then
                 elapsed = 0
                 if customCoreEnabled then
                     styleRobloxCoreUI(C, isDark)
