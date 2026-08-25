@@ -641,6 +641,13 @@ return function(Shared)
                     if not entry or entry.lastChar ~= char or not (entry.hl and entry.hl.Parent) or not (entry.gui and entry.gui.Parent) then
                         cleanupPlayerESP(plr)
 
+                        -- Strip any residual/duplicate highlights on this character to prevent VHS scanline buffer bug
+                        for _, oldHl in ipairs(char:GetChildren()) do
+                            if oldHl:IsA("Highlight") and oldHl.Name:find("Fih_") then
+                                pcall(function() oldHl:Destroy() end)
+                            end
+                        end
+
                         -- 1. Highlight Chams (AlwaysOnTop, bound directly to character)
                         local hl = Instance.new("Highlight")
                         hl.Name                = "Fih_Chams"

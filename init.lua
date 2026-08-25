@@ -157,17 +157,28 @@ local function purgeAllResiduals()
     end
 
     pcall(function()
-        local lp = game:GetService("Players").LocalPlayer
-        if lp and lp.Character then
-            for _, d in ipairs(lp.Character:GetDescendants()) do
-                if d:IsA("BodyVelocity") or d:IsA("BodyGyro") or d:IsA("BodyPosition") then
-                    if d.Name == "flightBV" or d.Name == "balloonBV" or d.Name:find("Fih") then
-                        pcall(function() d:Destroy() end)
+        local Players = game:GetService("Players")
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Character then
+                for _, d in ipairs(p.Character:GetDescendants()) do
+                    if d:IsA("Highlight") or d:IsA("BillboardGui") or d:IsA("SurfaceGui") or d:IsA("SelectionBox") or d:IsA("BoxHandleAdornment") or d:IsA("CylinderHandleAdornment") then
+                        if d.Name:find("^Fih_") or d.Name:find("^ESP_") or d.Name:find("^Chams_") or d.Name:find("^AeroChams") or d.Name:find("^BB_") or d.Name:find("^NDS_") then
+                            pcall(function() d:Destroy() end)
+                        end
+                    elseif d:IsA("BodyVelocity") or d:IsA("BodyGyro") or d:IsA("BodyPosition") then
+                        if d.Name == "flightBV" or d.Name == "balloonBV" or d.Name:find("Fih") then
+                            pcall(function() d:Destroy() end)
+                        end
                     end
                 end
-                if d.Name == "Fih_ArtworkBillboard" or d.Name == "AeroChams" or d.Name:find("^Fih_") then
-                    pcall(function() d:Destroy() end)
-                end
+            end
+        end
+    end)
+
+    pcall(function()
+        for _, d in ipairs(workspace:GetDescendants()) do
+            if (d:IsA("Highlight") or d:IsA("BillboardGui") or d:IsA("SelectionBox") or d:IsA("BoxHandleAdornment")) and (d.Name:find("^Fih_") or d.Name:find("^ESP_") or d.Name:find("^Chams_") or d.Name:find("^AeroChams") or d.Name:find("^BB_") or d.Name:find("^NDS_")) then
+                pcall(function() d:Destroy() end)
             end
         end
     end)

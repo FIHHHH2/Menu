@@ -774,6 +774,13 @@ return function(Shared)
                         if not entry or not (entry.hl and entry.hl.Parent) or not (entry.gui and entry.gui.Parent) or entry.gui.Adornee ~= hrp then
                             cleanupUniversalESP(plr)
 
+                            -- Strip any residual/duplicate highlights on this character to prevent VHS scanline buffer bug
+                            for _, oldHl in ipairs(char:GetChildren()) do
+                                if oldHl:IsA("Highlight") and oldHl.Name:find("Fih_") then
+                                    pcall(function() oldHl:Destroy() end)
+                                end
+                            end
+
                             local hl = Instance.new("Highlight")
                             hl.Name                = "Fih_UnivChams"
                             hl.Adornee             = char
