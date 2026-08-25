@@ -1,6 +1,6 @@
 -- Music_Handler.lua
 -- Robust Music Engine: Last.fm (Public Scrobbler) + Spotify (OAuth / Refresh / Permanent)
--- Full-Width 28-Bar Equalizer, Overhead Billboard Controls, Dynamic Album Artwork, and Resizable Drag HUD
+-- Real-Time Synced Lyrics (LRCLIB), Full-Width 28-Bar Equalizer, Overhead Billboard, & Resizable Drag HUD
 
 return function(Shared)
     local Http        = Shared.Services.Http
@@ -46,6 +46,58 @@ return function(Shared)
     local previousCoverFile  = ""
     local hudVisBars  = {}
     local bbVisBars   = {}
+
+    -- ── REAL-TIME SYNCED LYRICS ENGINE (LRCLIB) ────────────────────
+    local currentLyrics = nil
+    local lastLyricsQuery = ""
+    local hudLyricsLbl, bbLyricsLbl
+
+    local function parseLRC(lrcText)
+        if not lrcText or type(lrcText) ~= "string" or #lrcText == 0 then return nil end
+        local parsed = {}
+        for line in lrcText:gmatch("[^\r\n]+") do
+            local min, sec, text = line:match("%[(%d+):(%d+%.?%d*)%](.*)")
+            if min and sec then
+                local totalSec = (tonumber(min) or 0) * 60 + (tonumber(sec) or 0)
+                local cleanText = text:gsub("^%s+", ""):gsub("%s+$", "")
+                if #cleanText > 0 then
+                    table.insert(parsed, { time = totalSec, text = cleanText })
+                end
+            end
+        end
+        table.sort(parsed, function(a, b) return a.time < b.time end)
+        return #parsed > 0 and parsed or nil
+    end
+
+    local function fetchSyncedLyrics(artist, trackName)
+        if not artist or artist == "" or not trackName or trackName == "" then return end
+        local queryKey = artist:lower() .. "::" .. trackName:lower()
+        if queryKey == lastLyricsQuery then return end
+        lastLyricsQuery = queryKey
+        currentLyrics = nil
+
+        task.spawn(function()
+            local url = "https://lrclib.net/api/get?artist_name=" .. Http:UrlEncode(artist) .. "&track_name=" .. Http:UrlEncode(trackName)
+            local resp = Shared.HttpRequest({
+                Url = url,
+                Method = "GET",
+                Headers = {
+                    ["User-Agent"] = "FihUI/2.0 (Roblox Client)"
+                }
+            })
+            if resp and resp.Body and #resp.Body > 5 then
+                local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
+                if ok and data then
+                    if data.syncedLyrics and #data.syncedLyrics > 0 then
+                        currentLyrics = parseLRC(data.syncedLyrics)
+                    elseif data.plainLyrics and #data.plainLyrics > 0 then
+                        currentLyrics = { { time = 0, text = data.plainLyrics:match("^[^
+]+") or data.plainLyrics } }
+                    end
+                end
+            end
+        end)
+    end
 
     -- Fetch place name asynchronously
     task.spawn(function()
@@ -563,7 +615,7 @@ return function(Shared)
         end)
     end
 
-    -- ── OVERHEAD BILLBOARD (305x66px) ──────────────────────────────
+    -- ── OVERHEAD BILLBOARD (305x70px) ──────────────────────────────
     local bbSongLbl, bbArtistLbl, bbCoverImg
 
     local function buildBillboard()
@@ -576,7 +628,7 @@ return function(Shared)
 
         billboard = Instance.new("BillboardGui")
         billboard.Name                   = "MusicBillboard"
-        billboard.Size                   = UDim2.new(0, 305, 0, 66)
+        billboard.Size                   = UDim2.new(0, 305, 0, 72)
         billboard.StudsOffsetWorldSpace  = Vector3.new(0, 4.2, 0)
         billboard.AlwaysOnTop            = (Shared.Flags and Shared.Flags["UniversalESP"]) or false
         billboard.Active                 = true
@@ -595,7 +647,7 @@ return function(Shared)
         bg.Parent               = billboard
 
         local bbCoverContainer = Instance.new("Frame")
-        bbCoverContainer.Size             = UDim2.new(0, 52, 0, 52)
+        bbCoverContainer.Size             = UDim2.new(0, 56, 0, 56)
         bbCoverContainer.Position         = UDim2.new(0, 7, 0, 7)
         bbCoverContainer.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
         bbCoverContainer.BorderSizePixel  = 1
@@ -623,7 +675,7 @@ return function(Shared)
 
         local songLbl = Instance.new("TextLabel")
         songLbl.Size                  = UDim2.new(1, -165, 0, 16)
-        songLbl.Position              = UDim2.new(0, 66, 0, 8)
+        songLbl.Position              = UDim2.new(0, 68, 0, 6)
         songLbl.BackgroundTransparency = 1
         songLbl.Text                  = currentTrack.name
         songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
@@ -636,7 +688,7 @@ return function(Shared)
 
         local artistLbl = Instance.new("TextLabel")
         artistLbl.Size                  = UDim2.new(1, -165, 0, 14)
-        artistLbl.Position              = UDim2.new(0, 66, 0, 26)
+        artistLbl.Position              = UDim2.new(0, 68, 0, 22)
         artistLbl.BackgroundTransparency = 1
         artistLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
         artistLbl.TextColor3            = Color3.fromRGB(0, 220, 140)
@@ -647,11 +699,25 @@ return function(Shared)
         artistLbl.Parent                = bg
         bbArtistLbl = artistLbl
 
+        -- Synced Live Lyrics on Billboard
+        local lyLbl = Instance.new("TextLabel")
+        lyLbl.Size                  = UDim2.new(1, -165, 0, 14)
+        lyLbl.Position              = UDim2.new(0, 68, 0, 36)
+        lyLbl.BackgroundTransparency = 1
+        lyLbl.Text                  = "♪ Synchronizing..."
+        lyLbl.TextColor3            = Color3.fromRGB(255, 235, 120)
+        lyLbl.Font                  = Enum.Font.Code
+        lyLbl.TextSize              = 9
+        lyLbl.TextXAlignment        = Enum.TextXAlignment.Left
+        lyLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+        lyLbl.Parent                = bg
+        bbLyricsLbl = lyLbl
+
         -- ── BILLBOARD 10-BAR AUDIO EQUALIZER ──
         local bbVisualizer = Instance.new("Frame")
         bbVisualizer.Name                   = "BB_Visualizer"
-        bbVisualizer.Size                   = UDim2.new(0, 75, 0, 16)
-        bbVisualizer.Position               = UDim2.new(0, 66, 0, 44)
+        bbVisualizer.Size                   = UDim2.new(0, 75, 0, 14)
+        bbVisualizer.Position               = UDim2.new(0, 68, 0, 52)
         bbVisualizer.BackgroundTransparency = 1
         bbVisualizer.BorderSizePixel        = 0
         bbVisualizer.Parent                 = bg
@@ -712,7 +778,7 @@ return function(Shared)
     end
 
     -- ── DRAGGABLE & RESIZABLE BOTTOM-LEFT INFO HUD ──────────────────
-    local hudSongLbl, hudArtistLbl, hudCoverImg, hudPlaceLbl, hudUserLbl
+    local hudSongLbl, hudArtistLbl, hudCoverImg, hudPlaceLbl, hudUserLbl, coverContainerRef, rightBoxRef
 
     local function buildHUD()
         if hudWidget then hudWidget:Destroy(); hudWidget = nil end
@@ -740,8 +806,8 @@ return function(Shared)
 
         local frame = Instance.new("Frame")
         frame.Name             = "Fih_BottomHUD"
-        frame.Size             = UDim2.new(0, 380, 0, 145)
-        frame.Position         = UDim2.new(0, 16, 1, -160)
+        frame.Size             = UDim2.new(0, 390, 0, 150)
+        frame.Position         = UDim2.new(0, 16, 1, -165)
         frame.BackgroundColor3 = C.BodyBg
         frame.BorderSizePixel  = 2
         frame.BorderColor3     = C.WinBorder
@@ -762,7 +828,7 @@ return function(Shared)
         tLbl.Size                   = UDim2.new(1, -8, 1, 0)
         tLbl.Position               = UDim2.new(0, 6, 0, 0)
         tLbl.BackgroundTransparency = 1
-        tLbl.Text                   = "Fih HUD  ::  Now Playing & Session"
+        tLbl.Text                   = "Fih HUD  ::  Now Playing & Synced Lyrics"
         tLbl.TextColor3             = C.TitleText
         tLbl.Font                   = Enum.Font.Code
         tLbl.TextSize               = 11
@@ -799,16 +865,17 @@ return function(Shared)
         content.ZIndex           = 51
         content.Parent           = frame
 
-        -- ── PROMINENT LARGE ALBUM COVER ART ─────────────────────────
+        -- ── PROMINENT DYNAMIC RESIZING ALBUM COVER ART ──────────────
         local coverContainer = Instance.new("Frame")
         coverContainer.Name             = "CoverContainer"
-        coverContainer.Size             = UDim2.new(0, 112, 1, -12)
+        coverContainer.Size             = UDim2.new(0, 118, 1, -12)
         coverContainer.Position         = UDim2.new(0, 6, 0, 6)
         coverContainer.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
         coverContainer.BorderSizePixel  = 1
         coverContainer.BorderColor3     = C.BorderCol
         coverContainer.ZIndex           = 52
         coverContainer.Parent           = content
+        coverContainerRef = coverContainer
 
         local aspect = Instance.new("UIAspectRatioConstraint")
         aspect.AspectRatio = 1.0
@@ -839,20 +906,21 @@ return function(Shared)
         -- ── RIGHT TEXT & CONTROLS CONTAINER ─────────────────────────
         local rightBox = Instance.new("Frame")
         rightBox.Name                   = "TextContainer"
-        rightBox.Size                   = UDim2.new(1, -132, 1, -8)
-        rightBox.Position               = UDim2.new(0, 126, 0, 4)
+        rightBox.Size                   = UDim2.new(1, -140, 1, -8)
+        rightBox.Position               = UDim2.new(0, 132, 0, 4)
         rightBox.BackgroundTransparency = 1
         rightBox.ZIndex                 = 52
         rightBox.Parent                 = content
+        rightBoxRef = rightBox
 
         local sLbl = Instance.new("TextLabel")
-        sLbl.Size                  = UDim2.new(1, 0, 0, 20)
+        sLbl.Size                  = UDim2.new(1, 0, 0, 18)
         sLbl.Position              = UDim2.new(0, 0, 0, 2)
         sLbl.BackgroundTransparency = 1
         sLbl.Text                  = currentTrack.name
         sLbl.TextColor3            = C.TextDark
         sLbl.Font                  = Enum.Font.ArimoBold
-        sLbl.TextSize              = 13
+        sLbl.TextSize              = 12
         sLbl.TextXAlignment        = Enum.TextXAlignment.Left
         sLbl.TextTruncate          = Enum.TextTruncate.AtEnd
         sLbl.ZIndex                = 53
@@ -860,8 +928,8 @@ return function(Shared)
         hudSongLbl = sLbl
 
         local aLbl = Instance.new("TextLabel")
-        aLbl.Size                  = UDim2.new(1, 0, 0, 16)
-        aLbl.Position              = UDim2.new(0, 0, 0, 22)
+        aLbl.Size                  = UDim2.new(1, 0, 0, 14)
+        aLbl.Position              = UDim2.new(0, 0, 0, 20)
         aLbl.BackgroundTransparency = 1
         aLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
         aLbl.TextColor3            = C.Accent
@@ -873,11 +941,27 @@ return function(Shared)
         aLbl.Parent                = rightBox
         hudArtistLbl = aLbl
 
+        -- ── REAL-TIME SYNCED LYRICS LINE DISPLAY ───────────────────
+        local lyLbl = Instance.new("TextLabel")
+        lyLbl.Name                  = "SyncedLyricsLine"
+        lyLbl.Size                  = UDim2.new(1, 0, 0, 16)
+        lyLbl.Position              = UDim2.new(0, 0, 0, 36)
+        lyLbl.BackgroundTransparency = 1
+        lyLbl.Text                  = "♪ Synced lyrics ready..."
+        lyLbl.TextColor3            = Color3.fromRGB(255, 230, 110)
+        lyLbl.Font                  = Enum.Font.GothamMedium
+        lyLbl.TextSize              = 10
+        lyLbl.TextXAlignment        = Enum.TextXAlignment.Left
+        lyLbl.TextTruncate          = Enum.TextTruncate.AtEnd
+        lyLbl.ZIndex                = 53
+        lyLbl.Parent                = rightBox
+        hudLyricsLbl = lyLbl
+
         -- ── FULL-WIDTH 28-BAR AUDIO EQUALIZER (SPANS HORIZONTALLY) ──
         local hudVisualizer = Instance.new("Frame")
         hudVisualizer.Name                   = "HUD_Visualizer"
-        hudVisualizer.Size                   = UDim2.new(1, -8, 0, 24)
-        hudVisualizer.Position               = UDim2.new(0, 0, 0, 42)
+        hudVisualizer.Size                   = UDim2.new(1, -8, 0, 22)
+        hudVisualizer.Position               = UDim2.new(0, 0, 0, 54)
         hudVisualizer.BackgroundTransparency = 1
         hudVisualizer.BorderSizePixel        = 0
         hudVisualizer.ZIndex                 = 54
@@ -900,7 +984,7 @@ return function(Shared)
         local hudControls = Instance.new("Frame")
         hudControls.Name                   = "HUD_PlaybackControls"
         hudControls.Size                   = UDim2.new(1, 0, 0, 20)
-        hudControls.Position               = UDim2.new(0, 0, 0, 70)
+        hudControls.Position               = UDim2.new(0, 0, 0, 80)
         hudControls.BackgroundTransparency = 1
         hudControls.BorderSizePixel        = 0
         hudControls.ZIndex                 = 53
@@ -944,7 +1028,7 @@ return function(Shared)
 
         local div = Instance.new("Frame")
         div.Size             = UDim2.new(1, 0, 0, 1)
-        div.Position         = UDim2.new(0, 0, 0, 94)
+        div.Position         = UDim2.new(0, 0, 0, 102)
         div.BackgroundColor3 = C.BorderCol
         div.BorderSizePixel  = 0
         div.ZIndex           = 53
@@ -952,7 +1036,7 @@ return function(Shared)
 
         local uLbl = Instance.new("TextLabel")
         uLbl.Size                  = UDim2.new(1, 0, 0, 14)
-        uLbl.Position              = UDim2.new(0, 0, 0, 98)
+        uLbl.Position              = UDim2.new(0, 0, 0, 106)
         uLbl.BackgroundTransparency = 1
         uLbl.Text                  = "User: @" .. Player.Name .. "  ::  " .. Player.DisplayName
         uLbl.TextColor3            = C.SubText
@@ -999,9 +1083,15 @@ return function(Shared)
             UserInput.InputChanged:Connect(function(i)
                 if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
                     local delta = UserInput:GetMouseLocation() - startMouse
-                    local newW = math.clamp(startSize.X + delta.X, 320, 800)
-                    local newH = math.clamp(startSize.Y + delta.Y, 120, 380)
+                    local newW = math.clamp(startSize.X + delta.X, 320, 850)
+                    local newH = math.clamp(startSize.Y + delta.Y, 130, 420)
                     frame.Size = UDim2.new(0, newW, 0, newH)
+
+                    -- Dynamically adjust cover size and text box offset
+                    local coverSide = math.clamp(newH - 32, 90, 360)
+                    coverContainer.Size = UDim2.new(0, coverSide, 0, coverSide)
+                    rightBox.Position = UDim2.new(0, coverSide + 14, 0, 4)
+                    rightBox.Size = UDim2.new(1, -(coverSide + 20), 1, -8)
                 end
             end)
         end
@@ -1021,6 +1111,11 @@ return function(Shared)
         if bbSongLbl and bbSongLbl.Parent then bbSongLbl.Text = track.name end
         if bbArtistLbl and bbArtistLbl.Parent then bbArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
         if bbCoverImg and bbCoverImg.Parent then applyImage(bbCoverImg, track) end
+
+        -- Fetch and prepare real-time synced lyrics
+        if track.name and track.artist and track.name ~= "Not Playing" and track.name ~= "Error loading" then
+            fetchSyncedLyrics(track.artist, track.name)
+        end
 
         if Shared.SetAdaptiveThemeTrack then
             pcall(Shared.SetAdaptiveThemeTrack, track)
@@ -1315,12 +1410,13 @@ return function(Shared)
         end)
     end
 
-    -- ── HIGH-FIDELITY 28-BAR & 10-BAR AUDIO EQUALIZER ───────────────
+    -- ── HIGH-FIDELITY 28-BAR & 10-BAR AUDIO EQUALIZER WITH SYNCED LYRICS ─
     local hudBarLevels = {}
     for i = 1, 28 do hudBarLevels[i] = 0 end
     local bbBarLevels  = {}
     for i = 1, 10 do bbBarLevels[i] = 0 end
     local lastFrameTime = os.clock()
+    local lastDisplayedLyric = ""
 
     RunSvc.RenderStepped:Connect(function()
         local now = os.clock()
@@ -1340,6 +1436,34 @@ return function(Shared)
         local songSec = now
         if currentTrack.isPlaying and currentTrack.pollTime then
             songSec = ((currentTrack.progress_ms or 0) / 1000) + (now - currentTrack.pollTime)
+        end
+
+        -- Update Real-Time Live Lyrics with accurate timestamp synchronization
+        local activeLyricText = ""
+        if hasTrack and currentLyrics and #currentLyrics > 0 then
+            for i = #currentLyrics, 1, -1 do
+                if songSec >= currentLyrics[i].time then
+                    activeLyricText = currentLyrics[i].text
+                    break
+                end
+            end
+            if activeLyricText == "" and currentLyrics[1] then
+                activeLyricText = currentLyrics[1].text
+            end
+        elseif hasTrack then
+            activeLyricText = "♪ " .. currentTrack.name .. " - " .. currentTrack.artist
+        else
+            activeLyricText = "♪ No active song playback"
+        end
+
+        if activeLyricText ~= lastDisplayedLyric then
+            lastDisplayedLyric = activeLyricText
+            if hudLyricsLbl and hudLyricsLbl.Parent then
+                hudLyricsLbl.Text = activeLyricText
+            end
+            if bbLyricsLbl and bbLyricsLbl.Parent then
+                bbLyricsLbl.Text = activeLyricText
+            end
         end
 
         local function calculateTargetLevel(barIdx, totalBars)
@@ -1368,7 +1492,7 @@ return function(Shared)
                     end
                     hudBarLevels[i] = cur
 
-                    local barH = isPlaying and math.clamp(math.floor(cur * 24) + 2, 2, 24) or 3
+                    local barH = isPlaying and math.clamp(math.floor(cur * 22) + 2, 2, 22) or 3
                     bar.Size = UDim2.new(0, 5, 0, barH)
                     bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.55 + i * 0.012) % 1, 0.85, 1) or Color3.fromRGB(60, 75, 100)
                 end
@@ -1388,7 +1512,7 @@ return function(Shared)
                     end
                     bbBarLevels[i] = cur
 
-                    local barH = isPlaying and math.clamp(math.floor(cur * 18) + 2, 2, 18) or 2
+                    local barH = isPlaying and math.clamp(math.floor(cur * 16) + 2, 2, 16) or 2
                     bar.Size = UDim2.new(0, 5, 0, barH)
                     bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.36 + i * 0.03) % 1, 0.9, 0.95) or Color3.fromRGB(70, 85, 110)
                 end
@@ -1396,5 +1520,5 @@ return function(Shared)
         end
     end)
 
-    print("[Music_Handler] Loaded -- Full-Width 28-Bar Visualizer")
+    print("[Music_Handler] Loaded -- Real-Time Synced Lyrics & Dynamic Scaling Cover")
 end

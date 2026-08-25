@@ -1666,6 +1666,8 @@ return function(Shared)
         return math.clamp(32 + c * 31 + 6, 70, 520)
     end
 
+    local ContextActionService = game:GetService("ContextActionService")
+
     local function toggleLeaderboardCollapse(explicitState)
         if explicitState ~= nil then
             isLbCollapsed = explicitState
@@ -1712,7 +1714,28 @@ return function(Shared)
         toggleLeaderboardCollapse(true)
     end)
 
-    -- Ensure Tab key toggles leaderboard without being blocked by CoreGui
+    -- ContextActionService ensures Tab key is captured before Roblox CoreGui can swallow it
+    local function handleTabKey(actionName, inputState, inputObject)
+        if inputState == Enum.UserInputState.Begin then
+            local isTyping = UserInput:GetFocusedTextBox() ~= nil
+            if not isTyping then
+                toggleLeaderboardCollapse()
+                return Enum.ContextActionResult.Sink
+            end
+        end
+        return Enum.ContextActionResult.Pass
+    end
+
+    pcall(function()
+        ContextActionService:BindActionAtPriority(
+            "Fih_ToggleLeaderboard",
+            handleTabKey,
+            false,
+            Enum.ContextActionPriority.High.Value + 2000,
+            Enum.KeyCode.Tab
+        )
+    end)
+
     UserInput.InputBegan:Connect(function(input, gpe)
         if input.KeyCode == Enum.KeyCode.Tab then
             local isTyping = UserInput:GetFocusedTextBox() ~= nil
