@@ -1673,28 +1673,26 @@ return function(Shared)
             isLbCollapsed = not isLbCollapsed
         end
 
+        local curW = math.max(lbWindow.AbsoluteSize.X, 230)
         local targetH = getLbTargetHeight(#Players:GetPlayers())
         if isLbCollapsed then
             lbMinBtn.Text = "+"
+            if lbResizeGrip then lbResizeGrip.Visible = false end
             pcall(function()
                 TweenSvc:Create(lbWindow, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(0, 230, 0, 24)
+                    Size = UDim2.new(0, curW, 0, 24)
                 }):Play()
-            end)
-            task.delay(0.20, function()
-                if isLbCollapsed then
-                    if lbResizeGrip then lbResizeGrip.Visible = false end
-                end
             end)
         else
             lbMinBtn.Text = "-"
+            lbWindow.Visible = true
             pcall(function()
                 TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(0, 230, 0, targetH)
+                    Size = UDim2.new(0, curW, 0, targetH)
                 }):Play()
             end)
             task.delay(0.12, function()
-                if not isLbCollapsed and isLbOpen then
+                if not isLbCollapsed then
                     if lbScroll then lbScroll.Visible = true end
                     if lbResizeGrip then lbResizeGrip.Visible = true end
                 end
@@ -1707,37 +1705,21 @@ return function(Shared)
     end)
 
     local function toggleLeaderboard(explicitState)
-        if explicitState ~= nil then
-            isLbOpen = explicitState
-        else
-            isLbOpen = not isLbOpen
-        end
-
-        if isLbOpen then
-            lbWindow.Visible = true
-            isLbCollapsed = false
-            lbMinBtn.Text = "-"
-            local targetH = getLbTargetHeight(#Players:GetPlayers())
-            pcall(function()
-                TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Position = UDim2.new(1, -242, 0, 48),
-                    Size     = UDim2.new(0, 230, 0, targetH),
-                    BackgroundTransparency = 0.50
-                }):Play()
-            end)
-            task.delay(0.12, function()
-                if isLbOpen and not isLbCollapsed then
-                    if lbScroll then lbScroll.Visible = true end
-                    if lbResizeGrip then lbResizeGrip.Visible = true end
-                end
-            end)
-        else
-            toggleLeaderboardCollapse(true)
-        end
+        toggleLeaderboardCollapse(explicitState)
     end
 
     lbCloseBtn.MouseButton1Click:Connect(function()
         toggleLeaderboardCollapse(true)
+    end)
+
+    -- Ensure Tab key toggles leaderboard without being blocked by CoreGui
+    UserInput.InputBegan:Connect(function(input, gpe)
+        if input.KeyCode == Enum.KeyCode.Tab then
+            local isTyping = UserInput:GetFocusedTextBox() ~= nil
+            if not isTyping then
+                toggleLeaderboardCollapse()
+            end
+        end
     end)
 
     -- Dragging Logic for Leaderboard

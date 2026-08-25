@@ -1,6 +1,6 @@
 -- Music_Handler.lua
 -- Robust Music Engine: Last.fm (Public Scrobbler) + Spotify (OAuth / Refresh / Permanent)
--- High-Fidelity 12-Bar Equalizer, Overhead Billboard Controls, Dynamic Album Artwork, and Resizable Drag HUD
+-- Full-Width 28-Bar Equalizer, Overhead Billboard Controls, Dynamic Album Artwork, and Resizable Drag HUD
 
 return function(Shared)
     local Http        = Shared.Services.Http
@@ -647,20 +647,20 @@ return function(Shared)
         artistLbl.Parent                = bg
         bbArtistLbl = artistLbl
 
-        -- ── BILLBOARD 8-BAR AUDIO EQUALIZER ──
+        -- ── BILLBOARD 10-BAR AUDIO EQUALIZER ──
         local bbVisualizer = Instance.new("Frame")
         bbVisualizer.Name                   = "BB_Visualizer"
-        bbVisualizer.Size                   = UDim2.new(0, 64, 0, 16)
+        bbVisualizer.Size                   = UDim2.new(0, 75, 0, 16)
         bbVisualizer.Position               = UDim2.new(0, 66, 0, 44)
         bbVisualizer.BackgroundTransparency = 1
         bbVisualizer.BorderSizePixel        = 0
         bbVisualizer.Parent                 = bg
 
         bbVisBars = {}
-        for i = 1, 8 do
+        for i = 1, 10 do
             local bar = Instance.new("Frame")
             bar.Size = UDim2.new(0, 5, 0, 3)
-            bar.Position = UDim2.new(0, (i - 1) * 8, 1, 0)
+            bar.Position = UDim2.new(0, (i - 1) * 7, 1, 0)
             bar.AnchorPoint = Vector2.new(0, 1)
             bar.BackgroundColor3 = Color3.fromRGB(0, 220, 140)
             bar.BorderSizePixel = 0
@@ -740,8 +740,8 @@ return function(Shared)
 
         local frame = Instance.new("Frame")
         frame.Name             = "Fih_BottomHUD"
-        frame.Size             = UDim2.new(0, 360, 0, 140)
-        frame.Position         = UDim2.new(0, 16, 1, -156)
+        frame.Size             = UDim2.new(0, 380, 0, 145)
+        frame.Position         = UDim2.new(0, 16, 1, -160)
         frame.BackgroundColor3 = C.BodyBg
         frame.BorderSizePixel  = 2
         frame.BorderColor3     = C.WinBorder
@@ -802,7 +802,7 @@ return function(Shared)
         -- ── PROMINENT LARGE ALBUM COVER ART ─────────────────────────
         local coverContainer = Instance.new("Frame")
         coverContainer.Name             = "CoverContainer"
-        coverContainer.Size             = UDim2.new(0, 106, 1, -12)
+        coverContainer.Size             = UDim2.new(0, 112, 1, -12)
         coverContainer.Position         = UDim2.new(0, 6, 0, 6)
         coverContainer.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
         coverContainer.BorderSizePixel  = 1
@@ -839,8 +839,8 @@ return function(Shared)
         -- ── RIGHT TEXT & CONTROLS CONTAINER ─────────────────────────
         local rightBox = Instance.new("Frame")
         rightBox.Name                   = "TextContainer"
-        rightBox.Size                   = UDim2.new(1, -126, 1, -8)
-        rightBox.Position               = UDim2.new(0, 120, 0, 4)
+        rightBox.Size                   = UDim2.new(1, -132, 1, -8)
+        rightBox.Position               = UDim2.new(0, 126, 0, 4)
         rightBox.BackgroundTransparency = 1
         rightBox.ZIndex                 = 52
         rightBox.Parent                 = content
@@ -873,11 +873,34 @@ return function(Shared)
         aLbl.Parent                = rightBox
         hudArtistLbl = aLbl
 
+        -- ── FULL-WIDTH 28-BAR AUDIO EQUALIZER (SPANS HORIZONTALLY) ──
+        local hudVisualizer = Instance.new("Frame")
+        hudVisualizer.Name                   = "HUD_Visualizer"
+        hudVisualizer.Size                   = UDim2.new(1, -8, 0, 24)
+        hudVisualizer.Position               = UDim2.new(0, 0, 0, 42)
+        hudVisualizer.BackgroundTransparency = 1
+        hudVisualizer.BorderSizePixel        = 0
+        hudVisualizer.ZIndex                 = 54
+        hudVisualizer.Parent                 = rightBox
+
+        hudVisBars = {}
+        for i = 1, 28 do
+            local bar = Instance.new("Frame")
+            bar.Size = UDim2.new(0, 5, 0, 4)
+            bar.Position = UDim2.new(0, (i - 1) * 7, 1, 0)
+            bar.AnchorPoint = Vector2.new(0, 1)
+            bar.BackgroundColor3 = C.Accent
+            bar.BorderSizePixel = 0
+            bar.ZIndex = 55
+            bar.Parent = hudVisualizer
+            hudVisBars[i] = bar
+        end
+
         -- ── HUD PLAYBACK CONTROLS (⏮ ⏯ ⏭) ──
         local hudControls = Instance.new("Frame")
         hudControls.Name                   = "HUD_PlaybackControls"
-        hudControls.Size                   = UDim2.new(0, 94, 0, 20)
-        hudControls.Position               = UDim2.new(0, 0, 0, 42)
+        hudControls.Size                   = UDim2.new(1, 0, 0, 20)
+        hudControls.Position               = UDim2.new(0, 0, 0, 70)
         hudControls.BackgroundTransparency = 1
         hudControls.BorderSizePixel        = 0
         hudControls.ZIndex                 = 53
@@ -905,54 +928,31 @@ return function(Shared)
         mkHUDCtrlBtn("[||]", 32, 28, handleSpotifyPlayPause)
         mkHUDCtrlBtn("[>|]", 64, 28, handleSpotifyNext)
 
-        -- ── HUD 12-BAR AUDIO EQUALIZER (MULTI-FREQUENCY) ──
-        local hudVisualizer = Instance.new("Frame")
-        hudVisualizer.Name                   = "HUD_Visualizer"
-        hudVisualizer.Size                   = UDim2.new(1, -100, 0, 24)
-        hudVisualizer.Position               = UDim2.new(0, 98, 0, 38)
-        hudVisualizer.BackgroundTransparency = 1
-        hudVisualizer.BorderSizePixel        = 0
-        hudVisualizer.ZIndex                 = 54
-        hudVisualizer.Parent                 = rightBox
-
-        hudVisBars = {}
-        for i = 1, 12 do
-            local bar = Instance.new("Frame")
-            bar.Size = UDim2.new(0, 6, 0, 4)
-            bar.Position = UDim2.new(0, (i - 1) * 8, 1, 0)
-            bar.AnchorPoint = Vector2.new(0, 1)
-            bar.BackgroundColor3 = C.Accent
-            bar.BorderSizePixel = 0
-            bar.ZIndex = 55
-            bar.Parent = hudVisualizer
-            hudVisBars[i] = bar
-        end
-
-        local div = Instance.new("Frame")
-        div.Size             = UDim2.new(1, 0, 0, 1)
-        div.Position         = UDim2.new(0, 0, 0, 68)
-        div.BackgroundColor3 = C.BorderCol
-        div.BorderSizePixel  = 0
-        div.ZIndex           = 53
-        div.Parent           = rightBox
-
         local pLbl = Instance.new("TextLabel")
-        pLbl.Size                  = UDim2.new(1, 0, 0, 14)
-        pLbl.Position              = UDim2.new(0, 0, 0, 72)
+        pLbl.Size                  = UDim2.new(1, -98, 0, 14)
+        pLbl.Position              = UDim2.new(0, 98, 0, 2)
         pLbl.BackgroundTransparency = 1
-        pLbl.Text                  = "Map: " .. placeTitle .. " (ID: " .. tostring(game.PlaceId) .. ")"
+        pLbl.Text                  = placeTitle
         pLbl.TextColor3            = C.SubText
         pLbl.Font                  = Enum.Font.Code
         pLbl.TextSize              = 9
         pLbl.TextXAlignment        = Enum.TextXAlignment.Left
         pLbl.TextTruncate          = Enum.TextTruncate.AtEnd
         pLbl.ZIndex                = 53
-        pLbl.Parent                = rightBox
+        pLbl.Parent                = hudControls
         hudPlaceLbl = pLbl
+
+        local div = Instance.new("Frame")
+        div.Size             = UDim2.new(1, 0, 0, 1)
+        div.Position         = UDim2.new(0, 0, 0, 94)
+        div.BackgroundColor3 = C.BorderCol
+        div.BorderSizePixel  = 0
+        div.ZIndex           = 53
+        div.Parent           = rightBox
 
         local uLbl = Instance.new("TextLabel")
         uLbl.Size                  = UDim2.new(1, 0, 0, 14)
-        uLbl.Position              = UDim2.new(0, 0, 0, 87)
+        uLbl.Position              = UDim2.new(0, 0, 0, 98)
         uLbl.BackgroundTransparency = 1
         uLbl.Text                  = "User: @" .. Player.Name .. "  ::  " .. Player.DisplayName
         uLbl.TextColor3            = C.SubText
@@ -999,8 +999,8 @@ return function(Shared)
             UserInput.InputChanged:Connect(function(i)
                 if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
                     local delta = UserInput:GetMouseLocation() - startMouse
-                    local newW = math.clamp(startSize.X + delta.X, 300, 750)
-                    local newH = math.clamp(startSize.Y + delta.Y, 115, 360)
+                    local newW = math.clamp(startSize.X + delta.X, 320, 800)
+                    local newH = math.clamp(startSize.Y + delta.Y, 120, 380)
                     frame.Size = UDim2.new(0, newW, 0, newH)
                 end
             end)
@@ -1289,18 +1289,18 @@ return function(Shared)
                 local tBar = hudWidget:FindFirstChildOfClass("Frame")
                 if tBar then
                     TweenSvc:Create(tBar, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
-                        BackgroundColor3 = darkMode and Color3.fromRGB(32, 36, 46) or Color3.fromRGB(212, 208, 200)
+                        BackgroundColor3 = darkMode and (theme.TitleBar or Color3.fromRGB(32, 36, 46)) or (theme.TitleBar or Color3.fromRGB(212, 208, 200))
                     }):Play()
                     local tLbl = tBar:FindFirstChildOfClass("TextLabel")
                     if tLbl then
                         TweenSvc:Create(tLbl, TweenInfo.new(0.25), {
-                            TextColor3 = darkMode and Color3.fromRGB(220, 225, 240) or Color3.fromRGB(0, 0, 0)
+                            TextColor3 = darkMode and (theme.TitleText or Color3.fromRGB(220, 225, 240)) or (theme.TitleText or Color3.fromRGB(0, 0, 0))
                         }):Play()
                     end
                 end
                 TweenSvc:Create(hudWidget, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
-                    BackgroundColor3 = darkMode and Color3.fromRGB(16, 18, 24) or Color3.fromRGB(248, 250, 255),
-                    BorderColor3     = darkMode and Color3.fromRGB(30, 75, 130) or Color3.fromRGB(58, 110, 165)
+                    BackgroundColor3 = darkMode and (theme.BodyBg or Color3.fromRGB(16, 18, 24)) or (theme.BodyBg or Color3.fromRGB(248, 250, 255)),
+                    BorderColor3     = darkMode and (theme.WinBorder or Color3.fromRGB(30, 75, 130)) or (theme.WinBorder or Color3.fromRGB(58, 110, 165))
                 }):Play()
             end
             if billboard and billboard.Parent then
@@ -1308,16 +1308,18 @@ return function(Shared)
                 if bg then
                     TweenSvc:Create(bg, TweenInfo.new(0.25), {
                         BackgroundColor3 = darkMode and Color3.fromRGB(10, 12, 18) or Color3.fromRGB(15, 18, 24),
-                        BorderColor3     = darkMode and Color3.fromRGB(0, 120, 220) or Color3.fromRGB(0, 160, 255)
+                        BorderColor3     = theme.Accent or (darkMode and Color3.fromRGB(0, 120, 220) or Color3.fromRGB(0, 160, 255))
                     }):Play()
                 end
             end
         end)
     end
 
-    -- ── HIGH-FIDELITY 12-BAR & 8-BAR AUDIO EQUALIZER ───────────────
-    local hudBarLevels = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
-    local bbBarLevels  = { 0, 0, 0, 0, 0, 0, 0, 0 }
+    -- ── HIGH-FIDELITY 28-BAR & 10-BAR AUDIO EQUALIZER ───────────────
+    local hudBarLevels = {}
+    for i = 1, 28 do hudBarLevels[i] = 0 end
+    local bbBarLevels  = {}
+    for i = 1, 10 do bbBarLevels[i] = 0 end
     local lastFrameTime = os.clock()
 
     RunSvc.RenderStepped:Connect(function()
@@ -1344,16 +1346,16 @@ return function(Shared)
             if not isPlaying then return 0 end
 
             local frac = barIdx / totalBars
-            local freqMult = 2.5 + frac * 6.5
-            local n1 = (math.noise(barIdx * 0.45, songSec * freqMult, trackSeed) + 1) * 0.5
-            local n2 = (math.noise(barIdx * 0.9, songSec * (freqMult * 1.8), trackSeed + 40) + 1) * 0.25
-            local n3 = math.abs(math.sin(songSec * 3.2 + barIdx * 0.55)) * 0.22
+            local freqMult = 2.2 + frac * 7.5
+            local n1 = (math.noise(barIdx * 0.35, songSec * freqMult, trackSeed) + 1) * 0.5
+            local n2 = (math.noise(barIdx * 0.7, songSec * (freqMult * 1.6), trackSeed + 45) + 1) * 0.25
+            local n3 = math.abs(math.sin(songSec * 3.4 + barIdx * 0.42)) * 0.22
 
             local raw = math.clamp(n1 * 0.58 + n2 + n3, 0, 1)
-            return math.clamp(raw ^ 1.45, 0.06, 1)
+            return math.clamp(raw ^ 1.4, 0.06, 1)
         end
 
-        -- Update HUD 12-Bar Equalizer with snappy attack & physics gravity decay
+        -- Update HUD 28-Bar Equalizer with snappy attack & physics gravity decay
         if hudVisBars then
             for i, bar in ipairs(hudVisBars) do
                 if bar and bar.Parent then
@@ -1367,13 +1369,13 @@ return function(Shared)
                     hudBarLevels[i] = cur
 
                     local barH = isPlaying and math.clamp(math.floor(cur * 24) + 2, 2, 24) or 3
-                    bar.Size = UDim2.new(0, 6, 0, barH)
-                    bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.55 + i * 0.025) % 1, 0.85, 1) or Color3.fromRGB(60, 75, 100)
+                    bar.Size = UDim2.new(0, 5, 0, barH)
+                    bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.55 + i * 0.012) % 1, 0.85, 1) or Color3.fromRGB(60, 75, 100)
                 end
             end
         end
 
-        -- Update Billboard 8-Bar Equalizer
+        -- Update Billboard 10-Bar Equalizer
         if bbVisBars then
             for i, bar in ipairs(bbVisBars) do
                 if bar and bar.Parent then
@@ -1388,11 +1390,11 @@ return function(Shared)
 
                     local barH = isPlaying and math.clamp(math.floor(cur * 18) + 2, 2, 18) or 2
                     bar.Size = UDim2.new(0, 5, 0, barH)
-                    bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.36 + i * 0.035) % 1, 0.9, 0.95) or Color3.fromRGB(70, 85, 110)
+                    bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.36 + i * 0.03) % 1, 0.9, 0.95) or Color3.fromRGB(70, 85, 110)
                 end
             end
         end
     end)
 
-    print("[Music_Handler] Loaded -- Resizable HUD & Large Cover Engine")
+    print("[Music_Handler] Loaded -- Full-Width 28-Bar Visualizer")
 end
