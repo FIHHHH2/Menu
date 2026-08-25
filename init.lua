@@ -89,14 +89,63 @@ local Shared = {
     Keybinds    = {},
     Toggles     = {},
     Config      = {
-        SpotifyToken = "",
-        LastFMUser   = "",
-        Keybinds     = {},
-        Flags        = {},
+        SpotifyToken        = "",
+        SpotifyRefreshToken = "",
+        SpotifyClientId     = "",
+        SpotifyClientSecret = "",
+        LastFMUser          = "",
+        Keybinds            = {},
+        Flags               = {},
     },
     GUI         = nil,
     Version     = "3.5.0",
 }
+
+-- Config persistence (writefile / readfile if executor supports it)
+local CONFIG_FILE = "fih_config.json"
+local function saveConfig()
+    if not pcall(function() writefile(CONFIG_FILE, game:GetService("HttpService"):JSONEncode(Shared.Config)) end) then end
+end
+local function loadConfig()
+    local ok, src = pcall(function() return readfile(CONFIG_FILE) end)
+    if ok and src and #src > 2 then
+        local ok2, data = pcall(function() return game:GetService("HttpService"):JSONDecode(src) end)
+        if ok2 and type(data) == "table" then
+            for k, v in pairs(data) do
+                Shared.Config[k] = v
+            end
+        end
+    end
+end
+pcall(loadConfig)
+Shared.SaveConfig = saveConfig
+
+-- SpotifyHTTP: guaranteed header-carrying request for Spotify API endpoints
+-- Uses executor's raw request function, never falls back to game:HttpGet (which strips headers)
+local function spotifyHTTP(opt)
+    local req = (getgenv and (getgenv().request or getgenv().http_request))
+             or (typeof(request)      == "function" and request)
+             or (typeof(http_request) == "function" and http_request)
+             or (syn and syn.request)
+             or (http and http.request)
+    if not req then return nil, "No executor request function found" end
+
+    -- Try uppercase keys first (most executors)
+    local ok1, res1 = pcall(req, opt)
+    if ok1 and res1 then return res1 end
+
+    -- Try lowercase keys (some executors like Fluxus)
+    local ok2, res2 = pcall(req, {
+        url     = opt.Url,
+        method  = opt.Method or "GET",
+        headers = opt.Headers or {},
+        body    = opt.Body,
+    })
+    if ok2 and res2 then return res2 end
+
+    return nil, "Request failed"
+end
+Shared.SpotifyHTTP = spotifyHTTP
 
 Shared.Character  = Shared.Player.Character or Shared.Player.CharacterAdded:Wait()
 Shared.HumanoidRP = Shared.Character:WaitForChild("HumanoidRootPart")

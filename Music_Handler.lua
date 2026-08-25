@@ -431,67 +431,58 @@ return function(Shared)
     -- ── PERMANENT SPOTIFY AUTO-REFRESH ENGINE ───────────────────────
     local isRefreshingToken = false
     local function refreshSpotifyToken()
-        local rawInput = cleanToken(Shared.Config.SpotifyRefreshToken)
-        if not rawInput or rawInput == "" or rawInput == "Paste Spotify Refresh Token (Permanent)" or rawInput == "Permanent Refresh Token: Set" then
-            return false, "No Refresh Token"
+        local rawInput = cleanToken(Shared.Config.SpotifyRefreshToken or "")
+        if rawInput == "" or rawInput == "Paste Spotify Refresh Token (Permanent)" or rawInput == "Permanent Refresh Token: Set" then
+            return false, "No Refresh Token set"
         end
 
-        -- Check for multi-field paste: "token|clientId|clientSecret" or "token:::clientId:::clientSecret"
+        -- Multi-field paste: "token|clientId|clientSecret"
         if rawInput:find("|") or rawInput:find(":::") then
             local sep = rawInput:find(":::") and ":::" or "|"
             local parts = rawInput:split(sep)
-            if parts[1] and parts[1] ~= "" then
-                Shared.Config.SpotifyRefreshToken = cleanToken(parts[1])
-                rawInput = cleanToken(parts[1])
-            end
-            if parts[2] and parts[2] ~= "" then
-                Shared.Config.SpotifyClientId = cleanToken(parts[2])
-            end
-            if parts[3] and parts[3] ~= "" then
-                Shared.Config.SpotifyClientSecret = cleanToken(parts[3])
-            end
+            if parts[1] and parts[1] ~= "" then Shared.Config.SpotifyRefreshToken = cleanToken(parts[1]) end
+            if parts[2] and parts[2] ~= "" then Shared.Config.SpotifyClientId     = cleanToken(parts[2]) end
+            if parts[3] and parts[3] ~= "" then Shared.Config.SpotifyClientSecret = cleanToken(parts[3]) end
             if Shared.SaveConfig then Shared.SaveConfig() end
+            rawInput = cleanToken(Shared.Config.SpotifyRefreshToken)
         end
 
-        local rToken   = cleanToken(Shared.Config.SpotifyRefreshToken)
-        local clientId = (Shared.Config.SpotifyClientId and cleanToken(Shared.Config.SpotifyClientId) ~= "") and cleanToken(Shared.Config.SpotifyClientId) or "1842aff694404946af4ac03a457c54ab"
+        local rToken    = rawInput
+        local clientId  = (Shared.Config.SpotifyClientId  and cleanToken(Shared.Config.SpotifyClientId)  ~= "") and cleanToken(Shared.Config.SpotifyClientId)  or "1842aff694404946af4ac03a457c54ab"
         local clientSec = (Shared.Config.SpotifyClientSecret and cleanToken(Shared.Config.SpotifyClientSecret) ~= "") and cleanToken(Shared.Config.SpotifyClientSecret) or "b90742dc54544188a5e2f88d5383bd3c"
 
-        if isRefreshingToken then return false, "Refresh in progress" end
+        if isRefreshingToken then return false, "Refresh already in progress" end
         isRefreshingToken = true
 
-        -- Strategy 1: Standard RFC Basic Authorization Header
         local authHeader = "Basic " .. toBase64(clientId .. ":" .. clientSec)
-        local resp = Shared.HttpRequest({
+
+        -- Strategy 1: Basic Auth header (RFC standard)
+        local resp = Shared.SpotifyHTTP({
             Url     = "https://accounts.spotify.com/api/token",
             Method  = "POST",
             Headers = {
                 ["Content-Type"]  = "application/x-www-form-urlencoded",
                 ["Authorization"] = authHeader,
             },
-            Body    = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken),
+            Body = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken),
         })
 
-        -- Strategy 2: Body credentials fallback if Basic header failed with invalid_client
-        if not resp or not resp.Body or resp.Body:find("invalid_client") then
-            resp = Shared.HttpRequest({
+        -- Strategy 2: Body credentials if Basic header failed
+        if not resp or not resp.Body or resp.Body:find("invalid_client") or resp.Body:find("invalid_grant") then
+            resp = Shared.SpotifyHTTP({
                 Url     = "https://accounts.spotify.com/api/token",
                 Method  = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/x-www-form-urlencoded",
-                },
+                Headers = { ["Content-Type"] = "application/x-www-form-urlencoded" },
                 Body    = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken) .. "&client_id=" .. Http:UrlEncode(clientId) .. "&client_secret=" .. Http:UrlEncode(clientSec),
             })
         end
 
-        -- Strategy 3: PKCE / Public Client Mode (no client_secret required)
+        -- Strategy 3: PKCE public client (no secret)
         if not resp or not resp.Body or resp.Body:find("invalid_client") then
-            resp = Shared.HttpRequest({
+            resp = Shared.SpotifyHTTP({
                 Url     = "https://accounts.spotify.com/api/token",
                 Method  = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/x-www-form-urlencoded",
-                },
+                Headers = { ["Content-Type"] = "application/x-www-form-urlencoded" },
                 Body    = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken) .. "&client_id=" .. Http:UrlEncode(clientId),
             })
         end
@@ -503,7 +494,7 @@ return function(Shared)
             if ok and data then
                 if data.access_token then
                     Shared.Config.SpotifyToken = data.access_token
-                    if data.refresh_token then
+                    if data.refresh_token and data.refresh_token ~= "" then
                         Shared.Config.SpotifyRefreshToken = data.refresh_token
                     end
                     if Shared.SaveConfig then Shared.SaveConfig() end
@@ -515,67 +506,66 @@ return function(Shared)
                 end
             end
         end
-        return false, (resp and resp.Body) or "Network/auth failed"
+        return false, (resp and resp.Body) or "Network error / no response"
     end
 
+    -- Core Spotify API request (always uses SpotifyHTTP for header guarantee)
     local function spotifyRequest(endpoint, method, body, hasRetried)
-        local token = cleanToken(Shared.Config.SpotifyToken)
-        if not token or token == "" then
-            if Shared.Config.SpotifyRefreshToken and not hasRetried then
+        local token = cleanToken(Shared.Config.SpotifyToken or "")
+        if token == "" then
+            if Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "" and not hasRetried then
                 local ok = refreshSpotifyToken()
                 if ok then return spotifyRequest(endpoint, method, body, true) end
             end
-            return nil, "No Token"
+            return nil
         end
 
-        local payload = body and Http:JSONEncode(body) or ""
-        local resp = Shared.HttpRequest({
+        local payload = body and Http:JSONEncode(body) or nil
+        local resp = Shared.SpotifyHTTP({
             Url     = "https://api.spotify.com/v1/me/player" .. endpoint,
             Method  = method or "GET",
             Headers = {
                 ["Authorization"]  = "Bearer " .. token,
                 ["Content-Type"]   = "application/json",
-                ["Content-Length"] = tostring(#payload),
+                ["Accept"]         = "application/json",
+                ["Content-Length"] = payload and tostring(#payload) or "0",
             },
-            Body    = payload ~= "" and payload or nil,
+            Body = payload,
         })
 
-        if resp and resp.StatusCode == 401 and not hasRetried and Shared.Config.SpotifyRefreshToken then
+        if resp and resp.StatusCode == 401 and not hasRetried then
             local ok = refreshSpotifyToken()
-            if ok then
-                return spotifyRequest(endpoint, method, body, true)
-            end
+            if ok then return spotifyRequest(endpoint, method, body, true) end
         end
 
         return resp
     end
 
     local function getSpotifyTrack(hasRetried)
-        local token = cleanToken(Shared.Config.SpotifyToken)
-        if not token or token == "" then
-            if Shared.Config.SpotifyRefreshToken and not hasRetried then
+        local token = cleanToken(Shared.Config.SpotifyToken or "")
+        if token == "" then
+            if Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "" and not hasRetried then
                 local ok = refreshSpotifyToken()
                 if ok then return getSpotifyTrack(true) end
             end
-            return nil, "No Token"
+            return nil, "No Token (paste your Refresh Token and click Test)"
         end
 
-        -- Endpoint 1: Currently Playing (includes tracks & podcast episodes)
-        local resp = Shared.HttpRequest({
+        -- Endpoint 1: Currently Playing
+        local resp = Shared.SpotifyHTTP({
             Url     = "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track,episode",
             Method  = "GET",
             Headers = {
                 ["Authorization"] = "Bearer " .. token,
+                ["Accept"]        = "application/json",
                 ["Content-Type"]  = "application/json",
             },
         })
 
-        if resp and resp.StatusCode == 401 and not hasRetried and Shared.Config.SpotifyRefreshToken then
+        if resp and resp.StatusCode == 401 and not hasRetried then
             local ok = refreshSpotifyToken()
-            if ok then
-                return getSpotifyTrack(true)
-            end
-            return nil, "Expired/Invalid Token (401)"
+            if ok then return getSpotifyTrack(true) end
+            return nil, "Expired Token (401) — click Test & Refresh"
         end
 
         local item = nil
@@ -586,39 +576,40 @@ return function(Shared)
         if resp and resp.Body and #resp.Body > 5 then
             local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
             if ok and data and data.item then
-                item = data.item
-                isPlaying = (data.is_playing == true)
+                item       = data.item
+                isPlaying  = (data.is_playing == true)
                 progress_ms = data.progress_ms or 0
             end
         end
 
-        -- Endpoint 2: Fallback to Recently Played if Spotify is paused or idle
+        -- Endpoint 2: Recently Played fallback (catches paused state)
         if not item then
-            local recentResp = Shared.HttpRequest({
+            local recentResp = Shared.SpotifyHTTP({
                 Url     = "https://api.spotify.com/v1/me/player/recently-played?limit=1",
                 Method  = "GET",
                 Headers = {
                     ["Authorization"] = "Bearer " .. token,
+                    ["Accept"]        = "application/json",
                     ["Content-Type"]  = "application/json",
                 },
             })
             if recentResp and recentResp.Body and #recentResp.Body > 5 then
                 local ok, data = pcall(function() return Http:JSONDecode(recentResp.Body) end)
                 if ok and data and data.items and data.items[1] and data.items[1].track then
-                    item = data.items[1].track
-                    isPlaying = false
+                    item       = data.items[1].track
+                    isPlaying  = false
                     progress_ms = 0
                 end
             end
         end
 
         if not item then
-            return nil, "No Active Playback (Play a song in Spotify)"
+            return nil, "No Active Playback — open Spotify and play a song"
         end
 
         local trackName  = item.name or "Unknown"
         local artistName = item.artists and item.artists[1] and item.artists[1].name or "Unknown"
-        duration_ms = item.duration_ms or 0
+        duration_ms      = item.duration_ms or 0
 
         local coverUrl = ""
         if item.album and item.album.images and #item.album.images > 0 then
@@ -626,8 +617,6 @@ return function(Shared)
         elseif item.images and #item.images > 0 then
             coverUrl = item.images[1].url or ""
         end
-
-        -- Multi-source fallback if cover is missing
         if not coverUrl or coverUrl == "" then
             coverUrl = fetchArtworkFallback(artistName, trackName)
         end
@@ -731,10 +720,13 @@ return function(Shared)
                 return
             end
             -- Check live playback state from /v1/me/player
-            local statusResp = Shared.HttpRequest({
+            local statusResp = Shared.SpotifyHTTP({
                 Url     = "https://api.spotify.com/v1/me/player",
                 Method  = "GET",
-                Headers = { ["Authorization"] = "Bearer " .. token }
+                Headers = {
+                    ["Authorization"] = "Bearer " .. token,
+                    ["Accept"]        = "application/json",
+                }
             })
             local isCurrentlyPlaying = false
             if statusResp and statusResp.Body and #statusResp.Body > 0 then
