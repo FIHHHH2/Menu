@@ -100,8 +100,7 @@ return function(Shared)
                     if data.syncedLyrics and #data.syncedLyrics > 0 then
                         currentLyrics = parseLRC(data.syncedLyrics)
                     elseif data.plainLyrics and #data.plainLyrics > 0 then
-                        currentLyrics = { { time = 0, text = data.plainLyrics:match("^[^
-]+") or data.plainLyrics } }
+                        currentLyrics = { { time = 0, text = data.plainLyrics:match("^[^\r\n]+") or data.plainLyrics } }
                     end
                 end
             end
