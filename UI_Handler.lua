@@ -803,7 +803,18 @@ return function(Shared)
 
     local TextService = game:GetService("TextService")
     local notifyCounter = 0
+    local lastNotificationKey = ""
+    local lastNotificationTime = 0
+
     local function sendNotification(title, message, isEnabled)
+        local key = tostring(title) .. "::" .. tostring(message) .. "::" .. tostring(isEnabled)
+        local now = tick()
+        if key == lastNotificationKey and (now - lastNotificationTime) < 0.40 then
+            return
+        end
+        lastNotificationKey = key
+        lastNotificationTime = now
+
         notifyCounter = notifyCounter + 1
         local order = notifyCounter
 
@@ -1525,10 +1536,21 @@ return function(Shared)
             saveConfigDebounced()
         end
 
+        local lastClick = 0
         local overlay = Instance.new("TextButton")
-        overlay.Size = UDim2.new(1,0,1,0); overlay.BackgroundTransparency = 1; overlay.Text = ""; overlay.Parent = row
-        overlay.MouseButton1Click:Connect(function() setToggle(not Shared.Flags[flagKey]) end)
-        box.MouseButton1Click:Connect(function() setToggle(not Shared.Flags[flagKey]) end)
+        overlay.Name = "ClickOverlay"
+        overlay.Size = UDim2.new(1,0,1,0)
+        overlay.BackgroundTransparency = 1
+        overlay.Text = ""
+        overlay.ZIndex = 10
+        overlay.Parent = row
+
+        overlay.MouseButton1Click:Connect(function()
+            local now = tick()
+            if now - lastClick < 0.15 then return end
+            lastClick = now
+            setToggle(not Shared.Flags[flagKey])
+        end)
 
         Shared.Toggles[flagKey] = {Name=labelText, SetToggle=setToggle, Key=nil}
 
