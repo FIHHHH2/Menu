@@ -792,14 +792,23 @@ return function(Shared)
     end
 
     local minimized = false
-    winBtns["close"].MouseButton1Click:Connect(animClose)
+    winBtns["close"].MouseButton1Click:Connect(function()
+        minimized = true
+        local curW = Window.AbsoluteSize.X
+        savedWindowHeight = math.max(Window.AbsoluteSize.Y, WIN_H)
+        pcall(function()
+            TweenService:Create(Window, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, curW, 0, TITLE_H)
+            }):Play()
+        end)
+    end)
     winBtns["min"].MouseButton1Click:Connect(function()
         minimized = not minimized
         local curW = Window.AbsoluteSize.X
         pcall(function()
             if minimized then
                 savedWindowHeight = math.max(Window.AbsoluteSize.Y, WIN_H)
-                TweenService:Create(Window, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                TweenService:Create(Window, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, curW, 0, TITLE_H)
                 }):Play()
             else
@@ -1666,13 +1675,16 @@ return function(Shared)
 
         local targetH = getLbTargetHeight(#Players:GetPlayers())
         if isLbCollapsed then
-            if lbScroll then lbScroll.Visible = false end
-            if lbResizeGrip then lbResizeGrip.Visible = false end
             lbMinBtn.Text = "+"
             pcall(function()
-                TweenSvc:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                TweenSvc:Create(lbWindow, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, 230, 0, 24)
                 }):Play()
+            end)
+            task.delay(0.20, function()
+                if isLbCollapsed then
+                    if lbResizeGrip then lbResizeGrip.Visible = false end
+                end
             end)
         else
             lbMinBtn.Text = "-"
@@ -1720,24 +1732,12 @@ return function(Shared)
                 end
             end)
         else
-            if lbScroll then lbScroll.Visible = false end
-            if lbResizeGrip then lbResizeGrip.Visible = false end
-            pcall(function()
-                TweenSvc:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-                    Size = UDim2.new(0, 230, 0, 24),
-                    BackgroundTransparency = 1
-                }):Play()
-            end)
-            task.delay(0.20, function()
-                if not isLbOpen then
-                    lbWindow.Visible = false
-                end
-            end)
+            toggleLeaderboardCollapse(true)
         end
     end
 
     lbCloseBtn.MouseButton1Click:Connect(function()
-        toggleLeaderboard(false)
+        toggleLeaderboardCollapse(true)
     end)
 
     -- Dragging Logic for Leaderboard

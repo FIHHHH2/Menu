@@ -1,6 +1,6 @@
 -- Music_Handler.lua
--- Robust Music Engine: Spotify + Last.fm Live Scrobbler with Dynamic Cache-Busted Album Covers,
--- Scaled Cover Art, Crisp Well-Spaced Text, Respawn Tracking, and Resizable Bottom-Left Info Widget
+-- Robust Music Engine: Last.fm (Public Scrobbler) + Spotify (OAuth / Refresh / Permanent)
+-- High-Fidelity 12-Bar Equalizer, Overhead Billboard Controls, Dynamic Album Artwork, and Resizable Drag HUD
 
 return function(Shared)
     local Http        = Shared.Services.Http
@@ -26,11 +26,14 @@ return function(Shared)
     -- Verified working Last.fm public API key
     local LASTFM_API_KEY = "b25b959554ed76058ac220b7b2e0a026"
     local currentTrack = {
-        name      = "Not Playing",
-        artist    = "No Artist",
-        cover     = "",
-        isPlaying = false,
-        source    = "None"
+        name        = "Not Playing",
+        artist      = "No Artist",
+        cover       = "",
+        isPlaying   = false,
+        source      = "None",
+        progress_ms = 0,
+        duration_ms = 0,
+        pollTime    = os.clock(),
     }
     Shared.GetCurrentTrack = function() return currentTrack end
 
@@ -41,6 +44,8 @@ return function(Shared)
     local lastLoadedCoverUrl = ""
     local currentCoverAsset  = ""
     local previousCoverFile  = ""
+    local hudVisBars  = {}
+    local bbVisBars   = {}
 
     -- Fetch place name asynchronously
     task.spawn(function()
@@ -51,14 +56,9 @@ return function(Shared)
     end)
 
     -- ── PROVEN MULTI-METHOD COVER PIPELINE ──────────────────────
-    -- Mirrors the working approach from Universal Cheat Panel v10:
-    -- unified HTTP wrapper → Last.fm URL first → iTunes fallback
-
-    -- Unified HTTP: tries all executor methods in order
     local function CoverHTTP(url)
         if not url or url == "" then return nil end
 
-        -- Method 1: request / http_request / syn.request / http.request
         local reqFn = (typeof(request) == "function" and request)
                    or (typeof(http_request) == "function" and http_request)
                    or (getgenv and typeof(getgenv().request) == "function" and getgenv().request)
@@ -69,338 +69,154 @@ return function(Shared)
             local ok1, res1 = pcall(reqFn, { Url = url, Method = "GET" })
             if ok1 and res1 then
                 local b = res1.Body or res1.body
-                if b and type(b) == "string" and #b > 1000 then
-                    return b
-                end
+                if b and type(b) == "string" and #b > 1000 then return b end
             end
             local ok2, res2 = pcall(reqFn, { url = url, method = "GET" })
             if ok2 and res2 then
                 local b = res2.Body or res2.body
-                if b and type(b) == "string" and #b > 1000 then
-                    return b
-                end
+                if b and type(b) == "string" and #b > 1000 then return b end
             end
         end
 
-        -- Method 2: game:HttpGet
         local ok3, body3 = pcall(function() return game:HttpGet(url) end)
-        if ok3 and body3 and type(body3) == "string" and #body3 > 1000 then
-            return body3
-        end
+        if ok3 and body3 and type(body3) == "string" and #body3 > 1000 then return body3 end
 
-        -- Method 3: Shared.HttpRequest
         local res4 = Shared.HttpRequest({ Url = url, Method = "GET" })
         if res4 then
             local b = res4.Body or res4.body
-            if b and type(b) == "string" and #b > 1000 then
-                return b
-            end
+            if b and type(b) == "string" and #b > 1000 then return b end
         end
 
         return nil
     end
 
-    -- Strict header check: only real image binary passes
     local function isValidImageData(data)
-        if not data or type(data) ~= "string" or #data < 500 then return false end
-        local b1, b2, b3 = string.byte(data, 1, 3)
-        -- JPEG: FF D8 FF
-        if b1 == 255 and b2 == 216 and b3 == 255 then return true end
-        -- PNG: 89 50 4E
-        if b1 == 137 and b2 == 80 and b3 == 78 then return true end
-        -- GIF: 47 49 46
-        if b1 == 71 and b2 == 73 and b3 == 70 then return true end
-        -- WEBP / BMP
-        if b1 == 82 and b2 == 73 then return true end
-        if b1 == 66 and b2 == 77 then return true end
+        if not data or type(data) ~= "string" or #data < 1000 then return false end
+        local h = data:sub(1, 16)
+        if h:sub(1, 8) == "\137PNG\r\n\26\n" then return true end
+        if h:sub(1, 3) == "\255\216\255" then return true end
+        if h:sub(1, 6) == "GIF87a" or h:sub(1, 6) == "GIF89a" then return true end
+        if h:sub(1, 4) == "RIFF" and data:sub(9, 12) == "WEBP" then return true end
         return false
     end
 
-    local function getImageExtension(data)
-        if not data or #data < 2 then return "jpg" end
-        local b1, b2 = string.byte(data, 1, 2)
-        if b1 == 255 and b2 == 216 then return "jpg" end
-        if b1 == 137 then return "png" end
-        return "jpg"
-    end
-
-    -- Write bytes to executor filesystem and return rbxasset:// URL
-    local function writeAndGetAsset(imgBytes)
-        local getcustomasset = getcustomasset or getsynasset
-                            or (getgenv and (getgenv().getcustomasset or getgenv().getsynasset))
-        local writefile_fn   = writefile or (getgenv and getgenv().writefile)
-        local delfile_fn     = delfile   or (getgenv and getgenv().delfile)
-
-        if not getcustomasset or not writefile_fn then return nil end
-
-        local ext  = getImageExtension(imgBytes)
-        local name = "fih_cov_" .. tostring(os.time()) .. "_" .. tostring(math.random(1000,9999)) .. "." .. ext
-        local okW  = pcall(function() writefile_fn(name, imgBytes) end)
-        if not okW then return nil end
-
-        local okA, asset = pcall(function() return getcustomasset(name) end)
-        if okA and asset and asset ~= "" then
-            -- Clean up previous cover file
-            if previousCoverFile ~= "" and previousCoverFile ~= name and delfile_fn then
-                pcall(function() delfile_fn(previousCoverFile) end)
-            end
-            previousCoverFile = name
-            return asset
-        end
-        return nil
-    end
-
-    -- Fetch cover from iTunes Search API (proven to work in all executors)
-    local function fetchiTunesCover(artist, song)
-        if not artist or not song or artist == "" or song == "" then return nil end
-        local query = Http:UrlEncode(artist .. " " .. song)
-        local url   = "https://itunes.apple.com/search?term=" .. query .. "&media=music&entity=song&limit=1"
-
-        local res = CoverHTTP(url)
-        if not res or #res < 10 then return nil end
-
-        local ok, data = pcall(function() return Http:JSONDecode(res) end)
-        if not ok or not data or not data.results or #data.results == 0 then return nil end
-
-        local artUrl = data.results[1].artworkUrl100
-        if not artUrl or artUrl == "" then return nil end
-
-        -- Try HD first (600x600), fall back to 100x100
-        local hdUrl = artUrl:gsub("100x100bb", "600x600bb")
-        local imgBytes = CoverHTTP(hdUrl)
-        if imgBytes and isValidImageData(imgBytes) then return imgBytes end
-
-        imgBytes = CoverHTTP(artUrl)
-        if imgBytes and isValidImageData(imgBytes) then return imgBytes end
-
-        return nil
-    end
-
-    -- Also try artist-only iTunes lookup (for obscure tracks where artist+title fails)
-    local function fetchiTunesArtistCover(artist)
-        if not artist or artist == "" then return nil end
-        local query = Http:UrlEncode(artist)
-        local url   = "https://itunes.apple.com/search?term=" .. query .. "&media=music&entity=musicArtist&limit=1"
-        local res   = CoverHTTP(url)
-        if not res or #res < 10 then return nil end
-        local ok, data = pcall(function() return Http:JSONDecode(res) end)
-        if not ok or not data or not data.results or #data.results == 0 then return nil end
-        local r = data.results[1]
-        local artUrl = r.artworkUrl100 or r.artworkUrl60
-        if not artUrl then return nil end
-        local hdUrl = artUrl:gsub("100x100bb", "600x600bb")
-        local imgBytes = CoverHTTP(hdUrl)
-        if imgBytes and isValidImageData(imgBytes) then return imgBytes end
-        return nil
-    end
-
-    local function extractDominantColorFromBytes(bytes)
-        if not bytes or #bytes < 128 then return nil end
-        local totalR, totalG, totalB = 0, 0, 0
-        local count = 0
-        local grayscaleCount = 0
-
-        -- 12-hue bucket histogram for true most common color selection
-        local buckets = {}
-        for b = 1, 12 do buckets[b] = { count = 0, totalR = 0, totalG = 0, totalB = 0, maxSat = 0 } end
-
-        local step = math.max(1, math.floor(#bytes / 250))
-        local startIdx = math.min(256, math.floor(#bytes * 0.05))
-        local endIdx = math.min(#bytes - 32, math.floor(#bytes * 0.95))
-
-        for i = startIdx, endIdx, step do
-            local b1 = string.byte(bytes, i) or 128
-            local b2 = string.byte(bytes, i + 1) or 128
-            local b3 = string.byte(bytes, i + 2) or 128
-
-            local r = b1 / 255
-            local g = b2 / 255
-            local b = b3 / 255
-
-            totalR = totalR + r
-            totalG = totalG + g
-            totalB = totalB + b
-            count = count + 1
-
-            local maxC = math.max(r, g, b)
-            local minC = math.min(r, g, b)
-            local sat = maxC > 0 and (maxC - minC) / maxC or 0
-
-            if sat < 0.16 then
-                grayscaleCount = grayscaleCount + 1
-            else
-                local h, _, _ = Color3.new(r, g, b):ToHSV()
-                local bIdx = math.clamp(math.floor(h * 12) + 1, 1, 12)
-                local bucket = buckets[bIdx]
-                bucket.count = bucket.count + 1
-                bucket.totalR = bucket.totalR + r
-                bucket.totalG = bucket.totalG + g
-                bucket.totalB = bucket.totalB + b
-                if sat > bucket.maxSat then
-                    bucket.maxSat = sat
-                end
+    local function fetchArtworkFallback(artist, song)
+        if not artist or artist == "" or not song or song == "" then return "" end
+        local term = artist .. " " .. song
+        local url = "https://itunes.apple.com/search?term=" .. Http:UrlEncode(term) .. "&media=music&limit=1"
+        local resp = Shared.HttpRequest({ Url = url, Method = "GET" })
+        if resp and resp.Body and #resp.Body > 0 then
+            local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
+            if ok and data and data.results and data.results[1] and data.results[1].artworkUrl100 then
+                return data.results[1].artworkUrl100:gsub("100x100bb", "600x600bb")
             end
         end
-
-        if count == 0 then return nil end
-
-        -- Check if artwork is predominantly grayscale/monochrome
-        local isMonochrome = (grayscaleCount / count) > 0.65
-
-        -- Find the most common / most frequent color bucket
-        local bestBucket = nil
-        local maxFreq = -1
-        for b = 1, 12 do
-            if buckets[b].count > maxFreq and buckets[b].count > 0 then
-                maxFreq = buckets[b].count
-                bestBucket = buckets[b]
-            end
-        end
-
-        local dominantCol = nil
-        if bestBucket and bestBucket.count > 0 then
-            dominantCol = Color3.new(
-                bestBucket.totalR / bestBucket.count,
-                bestBucket.totalG / bestBucket.count,
-                bestBucket.totalB / bestBucket.count
-            )
-        end
-
-        return {
-            avg = Color3.new(totalR / count, totalG / count, totalB / count),
-            dominant = dominantCol,
-            isMonochrome = isMonochrome
-        }
+        return ""
     end
 
-    local labelTokens = {}
-    local cachedCoverTrackKey = ""
-
-    local function applyImage(imgLabel, trackOrUrl, optArtist)
-        if not imgLabel then return end
-
-        local artist    = ""
-        local trackName = ""
-        local rawUrl    = ""
-
-        if type(trackOrUrl) == "table" then
-            artist    = trackOrUrl.artist or ""
-            trackName = trackOrUrl.name or ""
-            rawUrl    = trackOrUrl.cover or ""
-        else
-            rawUrl    = tostring(trackOrUrl or "")
-            artist    = tostring(optArtist or "")
-            trackName = currentTrack.name or ""
-        end
-
-        local trackKey = tostring(rawUrl) .. "|" .. tostring(trackName) .. "|" .. tostring(artist)
-
-        -- If asset already cached for this exact track, apply synchronously to avoid race conditions
-        if currentCoverAsset and currentCoverAsset ~= "" and trackKey == cachedCoverTrackKey then
-            imgLabel.BackgroundTransparency = 1
-            imgLabel.Image = currentCoverAsset
-            imgLabel.Visible = true
+    local function applyImage(imgLabel, track)
+        if not imgLabel or not imgLabel.Parent then return end
+        local url = track and track.cover or ""
+        if not url or url == "" then
+            if track and track.artist and track.name and track.artist ~= "No Artist" and track.name ~= "Not Playing" then
+                task.spawn(function()
+                    local fallback = fetchArtworkFallback(track.artist, track.name)
+                    if fallback and fallback ~= "" and fallback ~= url then
+                        track.cover = fallback
+                        applyImage(imgLabel, track)
+                    end
+                end)
+            end
+            imgLabel.Visible = false
             return
         end
 
-        -- Immediately clear so no white shows during async load
-        if imgLabel and imgLabel.Parent then
-            imgLabel.BackgroundTransparency = 1
-            imgLabel.Image = ""
+        if url == lastLoadedCoverUrl and currentCoverAsset ~= "" then
+            pcall(function()
+                imgLabel.Image = currentCoverAsset
+                imgLabel.Visible = true
+            end)
+            return
         end
 
-        labelTokens[imgLabel] = (labelTokens[imgLabel] or 0) + 1
-        local myToken = labelTokens[imgLabel]
-
         task.spawn(function()
-            local function apply(imgBytes)
-                if labelTokens[imgLabel] ~= myToken then return false end
-                if not imgLabel or not imgLabel.Parent then return false end
-
-                -- Extract dominant artwork palette from raw image data
-                local pal = extractDominantColorFromBytes(imgBytes)
-                if pal then
-                    currentTrack.palette = pal
-                    if Shared.SetAdaptiveThemeTrack then
-                        pcall(Shared.SetAdaptiveThemeTrack, currentTrack)
+            local rawData = CoverHTTP(url)
+            if not rawData or not isValidImageData(rawData) then
+                if track and track.artist and track.name then
+                    local fallback = fetchArtworkFallback(track.artist, track.name)
+                    if fallback and fallback ~= "" and fallback ~= url then
+                        track.cover = fallback
+                        rawData = CoverHTTP(fallback)
                     end
                 end
-
-                local asset = writeAndGetAsset(imgBytes)
-                if asset then
-                    currentCoverAsset   = asset
-                    cachedCoverTrackKey = trackKey
-                    lastLoadedCoverUrl  = rawUrl
-                    imgLabel.BackgroundTransparency = 1
-                    imgLabel.Image   = asset
-                    imgLabel.Visible = true
-                    return true
-                end
-                -- Fallback direct URL if getcustomasset unavailable
-                imgLabel.BackgroundTransparency = 1
-                imgLabel.Image   = rawUrl ~= "" and rawUrl or ""
-                imgLabel.Visible = true
-                return true
             end
 
-            -- Step 1: Try the Last.fm provided URL
-            if rawUrl ~= "" and not rawUrl:find("2a96cbd8b46e442fc41c2b86b821562f") then
-                local imgBytes = CoverHTTP(rawUrl)
-                if imgBytes and isValidImageData(imgBytes) then
-                    if apply(imgBytes) then return end
-                end
+            if not rawData or not isValidImageData(rawData) then
+                pcall(function() imgLabel.Visible = false end)
+                return
             end
 
-            -- Step 2: iTunes with full artist + title
-            local imgBytes = fetchiTunesCover(artist, trackName)
-            if imgBytes then
-                if apply(imgBytes) then return end
+            local filename = "fih_cover_" .. tostring(os.time()) .. ".png"
+            local writeSuccess = false
+            if typeof(writefile) == "function" then
+                pcall(function()
+                    writefile(filename, rawData)
+                    writeSuccess = true
+                end)
             end
 
-            -- Step 3: iTunes with cleaned artist + title
-            local cleanArtist = tostring(artist):gsub("%b()", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-            local cleanTrack  = tostring(trackName):gsub("%b()", ""):gsub("ft%..*", ""):gsub("feat%..*", ""):gsub("%-.*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-            if cleanArtist ~= artist or cleanTrack ~= trackName then
-                imgBytes = fetchiTunesCover(cleanArtist, cleanTrack)
-                if imgBytes then
-                    if apply(imgBytes) then return end
-                end
+            local asset = ""
+            if writeSuccess and typeof(getcustomasset) == "function" then
+                pcall(function() asset = getcustomasset(filename) end)
             end
 
-            -- Step 4: iTunes artist-only fallback
-            imgBytes = fetchiTunesArtistCover(cleanArtist ~= "" and cleanArtist or artist)
-            if imgBytes then
-                if apply(imgBytes) then return end
+            if not asset or asset == "" then
+                asset = url
             end
 
-            -- All sources exhausted — leave transparent placeholder
-            if labelTokens[imgLabel] == myToken and imgLabel and imgLabel.Parent then
-                imgLabel.BackgroundTransparency = 1
-                imgLabel.Image   = ""
+            if previousCoverFile ~= "" and previousCoverFile ~= filename and typeof(delfile) == "function" then
+                pcall(function() delfile(previousCoverFile) end)
+            end
+            previousCoverFile   = filename
+            lastLoadedCoverUrl  = url
+            currentCoverAsset   = asset
+
+            if imgLabel and imgLabel.Parent then
+                imgLabel.Image = asset
                 imgLabel.Visible = true
             end
         end)
     end
     Shared.ApplyArtworkImage = applyImage
 
-    -- SPOTIFY API
+    -- ── STRING / TOKEN CLEANER ──────────────────────────────────────
     local function cleanToken(tok)
-        if not tok then return "" end
+        if not tok or type(tok) ~= "string" then return "" end
         tok = tok:gsub("^%s+", ""):gsub("%s+$", "")
         if tok:sub(1, 7):lower() == "bearer " then
             tok = tok:sub(8)
         end
+        if tok:find("^Paste ") or tok:find("^Permanent Refresh Token: ") or tok:find("^Access Token: ") then
+            return ""
+        end
         return tok
     end
 
-    -- ── BASE64 ENCODER FOR SPOTIFY CLIENT AUTH ─────────────────────
+    -- ── BASE64 ENCODER (BIT-SAFE) ──────────────────────────────────
     local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
     local function toBase64(data)
+        if crypt and typeof(crypt.base64_encode) == "function" then
+            return crypt.base64_encode(data)
+        elseif crypt and typeof(crypt.base64encode) == "function" then
+            return crypt.base64encode(data)
+        elseif syn and syn.crypt and typeof(syn.crypt.base64.encode) == "function" then
+            return syn.crypt.base64.encode(data)
+        end
         return ((data:gsub('.', function(x) 
             local r,b='',x:byte()
             for i=8,1,-1 do r=r..(b%2^i-b%2^(i-1)>0 and '1' or '0') end
             return r;
-        end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
+        end)..'0000'):gsub('%d%d%d?%d?%d?', function(x)
             if (#x < 6) then return '' end
             local c=0
             for i=1,6 do c=c+(x:sub(i,i)=='1' and 2^(6-i) or 0) end
@@ -408,7 +224,7 @@ return function(Shared)
         end)..({ '', '==', '=' })[#data%3+1])
     end
 
-    -- ── PERMANENT SPOTIFY AUTO-REFRESH ENGINE ───────────────────────
+    -- ── OPTION 2: SPOTIFY OAUTH ENGINE ─────────────────────────────
     local isRefreshingToken = false
     local function refreshSpotifyToken()
         local raw = cleanToken(Shared.Config.SpotifyRefreshToken)
@@ -424,13 +240,8 @@ return function(Shared)
             raw = cleanToken(Shared.Config.SpotifyRefreshToken)
         end
 
-        local rToken   = raw
-        local clientId = (Shared.Config.SpotifyClientId and cleanToken(Shared.Config.SpotifyClientId) ~= "") and cleanToken(Shared.Config.SpotifyClientId) or "1842aff694404946af4ac03a457c54ab"
-        local clientSec = (Shared.Config.SpotifyClientSecret and cleanToken(Shared.Config.SpotifyClientSecret) ~= "") and cleanToken(Shared.Config.SpotifyClientSecret) or "b90742dc54544188a5e2f88d5383bd3c"
-
-        if not rToken or rToken == "" or rToken == "Paste Spotify Refresh Token (Permanent)" or rToken == "Permanent Refresh Token: Set" then
-            return false, "No Refresh Token"
-        end
+        local rToken = raw
+        local aToken = cleanToken(Shared.Config.SpotifyToken)
 
         -- Direct Access Token support
         if rToken:sub(1, 2) == "BQ" or (#rToken > 160 and rToken:sub(1, 2) ~= "AQ") then
@@ -438,22 +249,39 @@ return function(Shared)
             return true, rToken
         end
 
+        if not rToken or rToken == "" then
+            if aToken ~= "" then return true, aToken end
+            return false, "No Token — paste Refresh Token or Access Token"
+        end
+
         if isRefreshingToken then return false, "Refresh in progress" end
         isRefreshingToken = true
 
-        local authHeader = "Basic " .. toBase64(clientId .. ":" .. clientSec)
-        local headers = {
-            ["Content-Type"]  = "application/x-www-form-urlencoded",
-            ["Authorization"] = authHeader,
-        }
-        local body = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken) .. "&client_id=" .. clientId
+        local clientId  = (Shared.Config.SpotifyClientId and cleanToken(Shared.Config.SpotifyClientId) ~= "") and cleanToken(Shared.Config.SpotifyClientId) or "1842aff694404946af4ac03a457c54ab"
+        local clientSec = (Shared.Config.SpotifyClientSecret and cleanToken(Shared.Config.SpotifyClientSecret) ~= "") and cleanToken(Shared.Config.SpotifyClientSecret) or "b90742dc54544188a5e2f88d5383bd3c"
 
+        local authHeader = "Basic " .. toBase64(clientId .. ":" .. clientSec)
         local resp = Shared.HttpRequest({
             Url     = "https://accounts.spotify.com/api/token",
             Method  = "POST",
-            Headers = headers,
-            Body    = body,
+            Headers = {
+                ["Content-Type"]  = "application/x-www-form-urlencoded",
+                ["Authorization"] = authHeader,
+            },
+            Body    = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken) .. "&client_id=" .. clientId,
         })
+
+        -- Fallback to Body Auth if Basic header rejected
+        if not resp or not resp.Body or resp.Body:find("invalid_client") then
+            resp = Shared.HttpRequest({
+                Url     = "https://accounts.spotify.com/api/token",
+                Method  = "POST",
+                Headers = { ["Content-Type"] = "application/x-www-form-urlencoded" },
+                Body    = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken)
+                       .. "&client_id=" .. Http:UrlEncode(clientId)
+                       .. "&client_secret=" .. Http:UrlEncode(clientSec),
+            })
+        end
 
         isRefreshingToken = false
 
@@ -474,7 +302,7 @@ return function(Shared)
                 end
             end
         end
-        return false, (resp and resp.Body) or "Network/auth failed"
+        return false, (resp and resp.Body) or "Network error"
     end
 
     local function spotifyRequest(endpoint, method, body, hasRetried)
@@ -551,7 +379,7 @@ return function(Shared)
             end
         end
 
-        -- Fallback to recently-played if currently-playing is idle / paused (204)
+        -- Fallback to recently-played if currently-playing is idle (204)
         if not item then
             local recResp = Shared.HttpRequest({
                 Url     = "https://api.spotify.com/v1/me/player/recently-played?limit=1",
@@ -586,25 +414,24 @@ return function(Shared)
             coverUrl = item.images[1].url or ""
         end
 
-        -- Multi-source fallback if cover is missing
         if not coverUrl or coverUrl == "" then
             coverUrl = fetchArtworkFallback(artistName, trackName)
         end
 
         return {
-            id          = item.id,
+            id          = item.id or "",
             name        = trackName,
             artist      = artistName,
             cover       = coverUrl,
-            isPlaying   = data.is_playing or false,
-            progress_ms = data.progress_ms or 0,
-            duration_ms = item.duration_ms or 0,
+            isPlaying   = isPlaying,
+            progress_ms = progress_ms,
+            duration_ms = duration_ms,
             pollTime    = os.clock(),
             source      = "Spotify"
         }
     end
 
-    -- LAST.FM API (Public Scrobbler)
+    -- ── OPTION 1: LAST.FM SCROBBLER ────────────────────────────────
     local function getLastFMTrack()
         local user = Shared.Config.LastFMUser
         if not user or user == "" or user == "Enter Last.fm Username" then return nil end
@@ -646,35 +473,36 @@ return function(Shared)
             end
         end
 
-        -- Multi-source fallback if Last.fm returned no cover
         if not coverUrl or coverUrl == "" then
             coverUrl = fetchArtworkFallback(artistName, trackName)
         end
 
         return {
-            name      = trackName,
-            artist    = artistName,
-            cover     = coverUrl,
-            isPlaying = isNowPlaying,
-            source    = "Last.fm"
+            id          = "",
+            name        = trackName,
+            artist      = artistName,
+            cover       = coverUrl,
+            isPlaying   = isNowPlaying,
+            progress_ms = 0,
+            duration_ms = 0,
+            pollTime    = os.clock(),
+            source      = "Last.fm"
         }
     end
 
-    -- ── CENTRAL SPOTIFY PLAYBACK CONTROLLER ──────────────────────
+    -- ── PLAYBACK CONTROLS (⏮ ⏯ ⏭) ──────────────────────────────────
     local function handleSpotifyPrevious()
         task.spawn(function()
             local token = cleanToken(Shared.Config.SpotifyToken)
             if not token or token == "" then
-                Shared.Notify("Spotify", "[!] No OAuth Token configured (Auth Required)", false)
+                Shared.Notify("Spotify", "[!] No OAuth Token configured", false)
                 return
             end
             local resp = spotifyRequest("/previous", "POST")
-            if resp and resp.StatusCode == 403 then
-                Shared.Notify("Spotify", "[!] Skipping requires Spotify Premium & active OAuth", false)
-            elseif resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
-                Shared.Notify("Spotify", "[|<] Skipped to previous track", true)
+            if resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
+                Shared.Notify("Spotify", "[|<] Previous track", true)
             else
-                Shared.Notify("Spotify", "[!] Previous track failed (Requires Premium & Active Player)", false)
+                Shared.Notify("Spotify", "[!] Previous requires Spotify Premium & active player", false)
             end
             task.wait(0.4)
             local trk = getSpotifyTrack()
@@ -686,10 +514,9 @@ return function(Shared)
         task.spawn(function()
             local token = cleanToken(Shared.Config.SpotifyToken)
             if not token or token == "" then
-                Shared.Notify("Spotify", "[!] No OAuth Token configured (Auth Required)", false)
+                Shared.Notify("Spotify", "[!] No OAuth Token configured", false)
                 return
             end
-            -- Check live playback state from /v1/me/player
             local statusResp = Shared.HttpRequest({
                 Url     = "https://api.spotify.com/v1/me/player",
                 Method  = "GET",
@@ -701,30 +528,15 @@ return function(Shared)
                 if ok and d and d.is_playing ~= nil then
                     isCurrentlyPlaying = d.is_playing
                 end
-            else
-                isCurrentlyPlaying = currentTrack.isPlaying
             end
 
-            if isCurrentlyPlaying then
-                local resp = spotifyRequest("/pause", "PUT")
-                if resp and resp.StatusCode == 403 then
-                    Shared.Notify("Spotify", "[!] Playback control requires Spotify Premium", false)
-                elseif resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
-                    currentTrack.isPlaying = false
-                    Shared.Notify("Spotify", "[||] Playback paused", false)
-                else
-                    Shared.Notify("Spotify", "[!] Pause failed (Requires Premium & Active Player)", false)
-                end
+            local endpoint = isCurrentlyPlaying and "/pause" or "/play"
+            local resp = spotifyRequest(endpoint, "PUT")
+            if resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
+                currentTrack.isPlaying = not isCurrentlyPlaying
+                Shared.Notify("Spotify", isCurrentlyPlaying and "[||] Paused" or "[>] Playing", true)
             else
-                local resp = spotifyRequest("/play", "PUT")
-                if resp and resp.StatusCode == 403 then
-                    Shared.Notify("Spotify", "[!] Playback control requires Spotify Premium", false)
-                elseif resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
-                    currentTrack.isPlaying = true
-                    Shared.Notify("Spotify", "[>] Playback resumed", true)
-                else
-                    Shared.Notify("Spotify", "[!] Resume failed (Requires Premium & Active Player)", false)
-                end
+                Shared.Notify("Spotify", "[!] Remote play/pause requires Spotify Premium", false)
             end
             task.wait(0.4)
             local trk = getSpotifyTrack()
@@ -736,16 +548,14 @@ return function(Shared)
         task.spawn(function()
             local token = cleanToken(Shared.Config.SpotifyToken)
             if not token or token == "" then
-                Shared.Notify("Spotify", "[!] No OAuth Token configured (Auth Required)", false)
+                Shared.Notify("Spotify", "[!] No OAuth Token configured", false)
                 return
             end
             local resp = spotifyRequest("/next", "POST")
-            if resp and resp.StatusCode == 403 then
-                Shared.Notify("Spotify", "[!] Skipping requires Spotify Premium & active OAuth", false)
-            elseif resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
-                Shared.Notify("Spotify", "[>|] Skipped to next track", true)
+            if resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
+                Shared.Notify("Spotify", "[>|] Next track", true)
             else
-                Shared.Notify("Spotify", "[!] Next track failed (Requires Premium & Active Player)", false)
+                Shared.Notify("Spotify", "[!] Skip requires Spotify Premium & active player", false)
             end
             task.wait(0.4)
             local trk = getSpotifyTrack()
@@ -753,21 +563,16 @@ return function(Shared)
         end)
     end
 
-    -- ── 3D BILLBOARD GUI OVER HEAD ─────────────────────────────────
+    -- ── OVERHEAD BILLBOARD (305x66px) ──────────────────────────────
     local bbSongLbl, bbArtistLbl, bbCoverImg
-    local bbVisBars  = {}
-    local hudVisBars = {}
-
-    local function getHRP()
-        return Shared.HumanoidRP or (Shared.Character and Shared.Character:FindFirstChild("HumanoidRootPart")) or (Player.Character and Player.Character:FindFirstChild("HumanoidRootPart"))
-    end
 
     local function buildBillboard()
         if billboard then billboard:Destroy(); billboard = nil end
-        local hrp = getHRP()
-        if not hrp then return end
 
-        local head = (Player.Character and Player.Character:FindFirstChild("Head")) or hrp
+        local char = Shared.Character or Player.Character
+        if not char then return end
+        local head = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+        if not head then return end
 
         billboard = Instance.new("BillboardGui")
         billboard.Name                   = "MusicBillboard"
@@ -790,8 +595,8 @@ return function(Shared)
         bg.Parent               = billboard
 
         local bbCoverContainer = Instance.new("Frame")
-        bbCoverContainer.Size             = UDim2.new(0, 50, 0, 50)
-        bbCoverContainer.Position         = UDim2.new(0, 6, 0, 6)
+        bbCoverContainer.Size             = UDim2.new(0, 52, 0, 52)
+        bbCoverContainer.Position         = UDim2.new(0, 7, 0, 7)
         bbCoverContainer.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
         bbCoverContainer.BorderSizePixel  = 1
         bbCoverContainer.BorderColor3     = Color3.fromRGB(60, 80, 110)
@@ -817,8 +622,8 @@ return function(Shared)
         bbCoverImg = cover
 
         local songLbl = Instance.new("TextLabel")
-        songLbl.Size                  = UDim2.new(1, -140, 0, 18)
-        songLbl.Position              = UDim2.new(0, 62, 0, 8)
+        songLbl.Size                  = UDim2.new(1, -165, 0, 16)
+        songLbl.Position              = UDim2.new(0, 66, 0, 8)
         songLbl.BackgroundTransparency = 1
         songLbl.Text                  = currentTrack.name
         songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
@@ -830,8 +635,8 @@ return function(Shared)
         bbSongLbl = songLbl
 
         local artistLbl = Instance.new("TextLabel")
-        artistLbl.Size                  = UDim2.new(1, -140, 0, 16)
-        artistLbl.Position              = UDim2.new(0, 62, 0, 28)
+        artistLbl.Size                  = UDim2.new(1, -165, 0, 14)
+        artistLbl.Position              = UDim2.new(0, 66, 0, 26)
         artistLbl.BackgroundTransparency = 1
         artistLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
         artistLbl.TextColor3            = Color3.fromRGB(0, 220, 140)
@@ -842,17 +647,17 @@ return function(Shared)
         artistLbl.Parent                = bg
         bbArtistLbl = artistLbl
 
-        -- ── BILLBOARD AUDIO EQUALIZER VISUALIZER ──
+        -- ── BILLBOARD 8-BAR AUDIO EQUALIZER ──
         local bbVisualizer = Instance.new("Frame")
         bbVisualizer.Name                   = "BB_Visualizer"
-        bbVisualizer.Size                   = UDim2.new(0, 52, 0, 18)
-        bbVisualizer.Position               = UDim2.new(0, 62, 0, 43)
+        bbVisualizer.Size                   = UDim2.new(0, 64, 0, 16)
+        bbVisualizer.Position               = UDim2.new(0, 66, 0, 44)
         bbVisualizer.BackgroundTransparency = 1
         bbVisualizer.BorderSizePixel        = 0
         bbVisualizer.Parent                 = bg
 
         bbVisBars = {}
-        for i = 1, 6 do
+        for i = 1, 8 do
             local bar = Instance.new("Frame")
             bar.Size = UDim2.new(0, 5, 0, 3)
             bar.Position = UDim2.new(0, (i - 1) * 8, 1, 0)
@@ -906,7 +711,7 @@ return function(Shared)
         applyImage(bbCoverImg, currentTrack)
     end
 
-    -- ── DRAGGABLE & RESIZABLE BOTTOM-LEFT INFO WIDGET ──────────────
+    -- ── DRAGGABLE & RESIZABLE BOTTOM-LEFT INFO HUD ──────────────────
     local hudSongLbl, hudArtistLbl, hudCoverImg, hudPlaceLbl, hudUserLbl
 
     local function buildHUD()
@@ -922,7 +727,6 @@ return function(Shared)
             TextDark  = Color3.fromRGB(235, 240, 250),
             Accent    = Color3.fromRGB(60, 145, 255),
             SubText   = Color3.fromRGB(130, 150, 180),
-            CoverBg   = Color3.fromRGB(25, 28, 38)
         } or {
             WinBorder = Color3.fromRGB(58, 110, 165),
             TitleBar  = Color3.fromRGB(212, 208, 200),
@@ -932,13 +736,12 @@ return function(Shared)
             TextDark  = Color3.fromRGB(15, 25, 60),
             Accent    = Color3.fromRGB(0, 120, 40),
             SubText   = Color3.fromRGB(80, 95, 120),
-            CoverBg   = Color3.fromRGB(225, 230, 240)
         }
 
         local frame = Instance.new("Frame")
         frame.Name             = "Fih_BottomHUD"
-        frame.Size             = UDim2.new(0, 310, 0, 126)
-        frame.Position         = UDim2.new(0, 16, 1, -142)
+        frame.Size             = UDim2.new(0, 320, 0, 130)
+        frame.Position         = UDim2.new(0, 16, 1, -146)
         frame.BackgroundColor3 = C.BodyBg
         frame.BorderSizePixel  = 2
         frame.BorderColor3     = C.WinBorder
@@ -996,9 +799,10 @@ return function(Shared)
         content.ZIndex           = 51
         content.Parent           = frame
 
-        -- 1. Album Cover Art Container: Dark vinyl frame with note icon (never shows white box)
+        -- Album Cover Art Container
         local coverContainer = Instance.new("Frame")
         coverContainer.Name             = "CoverContainer"
+        coverContainer.Size             = UDim2.new(0, 52, 0, 52)
         coverContainer.Position         = UDim2.new(0, 6, 0, 6)
         coverContainer.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
         coverContainer.BorderSizePixel  = 1
@@ -1027,7 +831,7 @@ return function(Shared)
         cover.Parent              = coverContainer
         hudCoverImg = cover
 
-        -- 2. Right Text Container (holds crisp text moved down so nothing clips)
+        -- Right Text & Controls Container
         local rightBox = Instance.new("Frame")
         rightBox.Name                   = "TextContainer"
         rightBox.Size                   = UDim2.new(1, -66, 1, -8)
@@ -1036,10 +840,9 @@ return function(Shared)
         rightBox.ZIndex                 = 52
         rightBox.Parent                 = content
 
-        -- Bold Song Title (Fixed clean size, positioned down)
         local sLbl = Instance.new("TextLabel")
         sLbl.Size                  = UDim2.new(1, 0, 0, 18)
-        sLbl.Position              = UDim2.new(0, 0, 0, 6)
+        sLbl.Position              = UDim2.new(0, 0, 0, 4)
         sLbl.BackgroundTransparency = 1
         sLbl.Text                  = currentTrack.name
         sLbl.TextColor3            = C.TextDark
@@ -1051,10 +854,9 @@ return function(Shared)
         sLbl.Parent                = rightBox
         hudSongLbl = sLbl
 
-        -- Bold Artist / Source
         local aLbl = Instance.new("TextLabel")
-        aLbl.Size                  = UDim2.new(1, 0, 0, 16)
-        aLbl.Position              = UDim2.new(0, 0, 0, 26)
+        aLbl.Size                  = UDim2.new(1, 0, 0, 14)
+        aLbl.Position              = UDim2.new(0, 0, 0, 24)
         aLbl.BackgroundTransparency = 1
         aLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
         aLbl.TextColor3            = C.Accent
@@ -1069,8 +871,8 @@ return function(Shared)
         -- ── HUD PLAYBACK CONTROLS (⏮ ⏯ ⏭) ──
         local hudControls = Instance.new("Frame")
         hudControls.Name                   = "HUD_PlaybackControls"
-        hudControls.Size                   = UDim2.new(1, 0, 0, 20)
-        hudControls.Position               = UDim2.new(0, 0, 0, 44)
+        hudControls.Size                   = UDim2.new(0, 96, 0, 20)
+        hudControls.Position               = UDim2.new(0, 0, 0, 42)
         hudControls.BackgroundTransparency = 1
         hudControls.BorderSizePixel        = 0
         hudControls.ZIndex                 = 53
@@ -1098,20 +900,20 @@ return function(Shared)
         mkHUDCtrlBtn("[||]", 32, 28, handleSpotifyPlayPause)
         mkHUDCtrlBtn("[>|]", 64, 28, handleSpotifyNext)
 
-        -- ── HUD AUDIO EQUALIZER VISUALIZER ──
+        -- ── HUD 12-BAR AUDIO EQUALIZER (MULTI-FREQUENCY) ──
         local hudVisualizer = Instance.new("Frame")
         hudVisualizer.Name                   = "HUD_Visualizer"
-        hudVisualizer.Size                   = UDim2.new(0, 72, 0, 24)
-        hudVisualizer.Position               = UDim2.new(1, -78, 0, 40)
+        hudVisualizer.Size                   = UDim2.new(0, 130, 0, 24)
+        hudVisualizer.Position               = UDim2.new(1, -136, 0, 38)
         hudVisualizer.BackgroundTransparency = 1
         hudVisualizer.BorderSizePixel        = 0
         hudVisualizer.ZIndex                 = 54
         hudVisualizer.Parent                 = rightBox
 
         hudVisBars = {}
-        for i = 1, 7 do
+        for i = 1, 12 do
             local bar = Instance.new("Frame")
-            bar.Size = UDim2.new(0, 6, 0, 4)
+            bar.Size = UDim2.new(0, 7, 0, 4)
             bar.Position = UDim2.new(0, (i - 1) * 10, 1, 0)
             bar.AnchorPoint = Vector2.new(0, 1)
             bar.BackgroundColor3 = C.Accent
@@ -1121,7 +923,6 @@ return function(Shared)
             hudVisBars[i] = bar
         end
 
-        -- Divider Line
         local div = Instance.new("Frame")
         div.Size             = UDim2.new(1, 0, 0, 1)
         div.Position         = UDim2.new(0, 0, 0, 68)
@@ -1130,7 +931,6 @@ return function(Shared)
         div.ZIndex           = 53
         div.Parent           = rightBox
 
-        -- Place Info (Moved down)
         local pLbl = Instance.new("TextLabel")
         pLbl.Size                  = UDim2.new(1, 0, 0, 14)
         pLbl.Position              = UDim2.new(0, 0, 0, 72)
@@ -1145,12 +945,11 @@ return function(Shared)
         pLbl.Parent                = rightBox
         hudPlaceLbl = pLbl
 
-        -- User Info (Moved down)
         local uLbl = Instance.new("TextLabel")
         uLbl.Size                  = UDim2.new(1, 0, 0, 14)
         uLbl.Position              = UDim2.new(0, 0, 0, 87)
         uLbl.BackgroundTransparency = 1
-        uLbl.Text                  = "User: " .. Player.DisplayName .. " (@" .. Player.Name .. ")"
+        uLbl.Text                  = "User: @" .. Player.Name .. "  ::  " .. Player.DisplayName
         uLbl.TextColor3            = C.SubText
         uLbl.Font                  = Enum.Font.Code
         uLbl.TextSize              = 9
@@ -1160,171 +959,25 @@ return function(Shared)
         uLbl.Parent                = rightBox
         hudUserLbl = uLbl
 
-        -- Function to adjust cover size & text layout on resize
-        local function updateHUDLayout()
-            local totalH = frame.AbsoluteSize.Y
-            local coverDim = math.clamp(totalH - 34, 44, 200)
-            coverContainer.Size = UDim2.new(0, coverDim, 0, coverDim)
-
-            rightBox.Position = UDim2.new(0, coverDim + 14, 0, 0)
-            rightBox.Size     = UDim2.new(1, -(coverDim + 22), 1, 0)
-        end
-        updateHUDLayout()
-
-        -- Resizing corner grip for HUD
-        do
-            local resizeGrip = Instance.new("TextButton")
-            resizeGrip.Name                   = "HUDResizeGrip"
-            resizeGrip.Size                   = UDim2.new(0, 14, 0, 14)
-            resizeGrip.Position               = UDim2.new(1, -14, 1, -14)
-            resizeGrip.BackgroundTransparency = 1
-            resizeGrip.Text                   = "◢"
-            resizeGrip.TextColor3             = Color3.fromRGB(100, 125, 170)
-            resizeGrip.Font                   = Enum.Font.Code
-            resizeGrip.TextSize               = 11
-            resizeGrip.ZIndex                 = 55
-            resizeGrip.Parent                 = frame
-
-            local resizing = false
-            local rStartPos, rStartSize
-
-            resizeGrip.InputBegan:Connect(function(i)
-                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-                    resizing = true; rStartPos = i.Position; rStartSize = frame.AbsoluteSize
-                end
-            end)
-            UserInput.InputEnded:Connect(function(i)
-                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-                    resizing = false
-                end
-            end)
-            UserInput.InputChanged:Connect(function(i)
-                if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
-                    local d = i.Position - rStartPos
-                    local newW = math.clamp(rStartSize.X + d.X, 240, 700)
-                    local newH = math.clamp(rStartSize.Y + d.Y, 95, 320)
-                    frame.Size = UDim2.new(0, newW, 0, newH)
-                    updateHUDLayout()
-                end
-            end)
-        end
-
         applyImage(hudCoverImg, currentTrack)
-
-        if Shared.RegisterThemeCallback then
-            Shared.RegisterThemeCallback(function(targetTheme, isDarkMode)
-                if hudWidget and hudWidget.Parent then
-                    TweenService:Create(hudWidget, TweenInfo.new(0.25), {
-                        BackgroundColor3 = targetTheme.BodyBg or Color3.fromRGB(10, 12, 16),
-                        BorderColor3     = targetTheme.WinBorder or Color3.fromRGB(0, 160, 255)
-                    }):Play()
-                    if tBar and tBar.Parent then
-                        TweenService:Create(tBar, TweenInfo.new(0.25), {
-                            BackgroundColor3 = targetTheme.TitleBar or Color3.fromRGB(18, 20, 26),
-                            BorderColor3     = targetTheme.WinBorder or Color3.fromRGB(0, 160, 255)
-                        }):Play()
-                    end
-                    if tLbl and tLbl.Parent then
-                        TweenService:Create(tLbl, TweenInfo.new(0.25), {
-                            TextColor3 = targetTheme.TitleText or Color3.fromRGB(248, 250, 255)
-                        }):Play()
-                    end
-                    if hudSongLbl and hudSongLbl.Parent then
-                        TweenService:Create(hudSongLbl, TweenInfo.new(0.25), {
-                            TextColor3 = targetTheme.BtnText or Color3.fromRGB(248, 250, 255)
-                        }):Play()
-                    end
-                    if hudArtistLbl and hudArtistLbl.Parent then
-                        TweenService:Create(hudArtistLbl, TweenInfo.new(0.25), {
-                            TextColor3 = targetTheme.Accent or Color3.fromRGB(0, 200, 255)
-                        }):Play()
-                    end
-                    if hudVisBars then
-                        for _, bar in ipairs(hudVisBars) do
-                            if bar and bar.Parent then
-                                TweenService:Create(bar, TweenInfo.new(0.25), {
-                                    BackgroundColor3 = targetTheme.Accent or Color3.fromRGB(0, 200, 255)
-                                    }):Play()
-                            end
-                        end
-                    end
-                    if hudPlaceLbl and hudPlaceLbl.Parent then
-                        TweenService:Create(hudPlaceLbl, TweenInfo.new(0.25), {
-                            TextColor3 = targetTheme.BannerSub or Color3.fromRGB(160, 175, 200)
-                        }):Play()
-                    end
-                    if hudUserLbl and hudUserLbl.Parent then
-                        TweenService:Create(hudUserLbl, TweenInfo.new(0.25), {
-                            TextColor3 = targetTheme.BannerSub or Color3.fromRGB(160, 175, 200)
-                        }):Play()
-                    end
-                end
-            end)
-        end
     end
 
-    -- ── SPOTIFY AUDIO ANALYSIS FETCHER (Segments, Beats, Loudness, Pitches) ──
-    local trackAnalysisCache = {}
-    local isFetchingAnalysis = {}
-
-    local function fetchAudioAnalysis(trackId)
-        if not trackId or trackId == "" or trackAnalysisCache[trackId] or isFetchingAnalysis[trackId] then return end
-        isFetchingAnalysis[trackId] = true
-
-        task.spawn(function()
-            local token = cleanToken(Shared.Config.SpotifyToken)
-            if not token or token == "" then
-                isFetchingAnalysis[trackId] = nil
-                return
-            end
-
-            local resp = Shared.HttpRequest({
-                Url     = "https://api.spotify.com/v1/audio-analysis/" .. trackId,
-                Method  = "GET",
-                Headers = {
-                    ["Authorization"] = "Bearer " .. token,
-                    ["Content-Type"]  = "application/json"
-                }
-            })
-
-            isFetchingAnalysis[trackId] = nil
-
-            if resp and resp.Body then
-                local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
-                if ok and data and data.segments then
-                    trackAnalysisCache[trackId] = {
-                        segments = data.segments,
-                        beats    = data.beats or {},
-                        tatums   = data.tatums or {},
-                        sections = data.sections or {},
-                    }
-                end
-            end
-        end)
-    end
-
-    -- Update all visual elements & apply new cover image when URL changes
+    -- ── VISUALS SYNC ───────────────────────────────────────────────
     local function updateVisuals(track)
+        if not track then return end
         currentTrack = track
 
-        if track.source == "Spotify" and track.id then
-            fetchAudioAnalysis(track.id)
-        end
+        if hudSongLbl and hudSongLbl.Parent then hudSongLbl.Text = track.name end
+        if hudArtistLbl and hudArtistLbl.Parent then hudArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
+        if hudCoverImg and hudCoverImg.Parent then applyImage(hudCoverImg, track) end
 
-        if bbSongLbl then bbSongLbl.Text = track.name end
-        if bbArtistLbl then bbArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
-        if bbCoverImg then applyImage(bbCoverImg, track) end
+        if bbSongLbl and bbSongLbl.Parent then bbSongLbl.Text = track.name end
+        if bbArtistLbl and bbArtistLbl.Parent then bbArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
+        if bbCoverImg and bbCoverImg.Parent then applyImage(bbCoverImg, track) end
 
-        if hudSongLbl then hudSongLbl.Text = track.name end
-        if hudArtistLbl then hudArtistLbl.Text = track.artist .. " [" .. track.source .. "]" end
-        if hudCoverImg then applyImage(hudCoverImg, track) end
-
-        -- Update Opaque Adaptive UI Theme if active
         if Shared.SetAdaptiveThemeTrack then
             pcall(Shared.SetAdaptiveThemeTrack, track)
         end
-
-        -- Broadcast updated track to peer script users immediately
         if Shared.BroadcastBeacon then
             pcall(Shared.BroadcastBeacon)
         end
@@ -1332,17 +985,19 @@ return function(Shared)
 
     Shared.CurrentTrack = function() return currentTrack end
 
-    -- Persistent Polling Engine
+    -- ── PERSISTENT AUTO-POLL ENGINE ────────────────────────────────
     local function startPolling()
         if pollConn then pollConn:Disconnect() end
         local elapsed = 0
         pollConn = RunSvc.Heartbeat:Connect(function(dt)
             elapsed = elapsed + dt
-            if elapsed >= 3 then
+            if elapsed >= 2 then
                 elapsed = 0
                 local track = getSpotifyTrack() or getLastFMTrack()
                 if track then
-                    if track.name ~= currentTrack.name or track.cover ~= currentTrack.cover or track.isPlaying ~= currentTrack.isPlaying then
+                    if track.name ~= currentTrack.name
+                    or track.isPlaying ~= currentTrack.isPlaying
+                    or track.cover ~= currentTrack.cover then
                         updateVisuals(track)
                     end
                 end
@@ -1350,12 +1005,11 @@ return function(Shared)
         end)
     end
 
-    -- ── RESPAWN / DEATH RE-TRACKING ────────────────────────────────
+    -- ── RESPAWN RE-TRACKING ────────────────────────────────────────
     Player.CharacterAdded:Connect(function(char)
         Shared.Character = char
         local hrp = char:WaitForChild("HumanoidRootPart", 5)
         Shared.HumanoidRP = hrp
-
         if Shared.Flags["MusicBillboard"] then
             task.wait(0.2)
             if billboard and hrp then
@@ -1366,8 +1020,10 @@ return function(Shared)
         end
     end)
 
-    -- LEFT COLUMN: LAST.FM SCROBBLER & HEAD BILLBOARD
-    MkSection(leftCol, "Last.fm Scrobbler (No Auth Required)", 1)
+    -- ══════════════════════════════════════════════════════════════
+    -- OPTION 1: LEFT COLUMN — LAST.FM SCROBBLER (NO AUTH REQUIRED)
+    -- ══════════════════════════════════════════════════════════════
+    MkSection(leftCol, "Option 1: Last.fm (Zero Auth)", 1)
 
     local lfmBox = Instance.new("TextBox")
     lfmBox.Name                  = "LastFMInput"
@@ -1397,7 +1053,7 @@ return function(Shared)
             if not hudWidget then buildHUD() end
             startPolling()
         else
-            Shared.Notify("Last.fm", "No track found / scrobbling", false)
+            Shared.Notify("Last.fm", "No scrobble found for @" .. tostring(Shared.Config.LastFMUser or "user"), false)
         end
     end)
 
@@ -1431,10 +1087,11 @@ return function(Shared)
         end
     end)
 
-    -- RIGHT COLUMN: PERMANENT SPOTIFY OAUTH & CONTROLS
-    MkSection(rightCol, "Spotify Permanent OAuth", 1)
+    -- ══════════════════════════════════════════════════════════════
+    -- OPTION 2: RIGHT COLUMN — SPOTIFY OAUTH / REFRESH / PERMANENT
+    -- ══════════════════════════════════════════════════════════════
+    MkSection(rightCol, "Option 2: Spotify (Permanent Key)", 1)
 
-    -- Refresh Token Input (Permanent - Never Expires)
     local refreshBox = Instance.new("TextBox")
     refreshBox.Name                  = "SpotifyRefreshTokenInput"
     refreshBox.Size                  = UDim2.new(1, 0, 0, 24)
@@ -1456,16 +1113,15 @@ return function(Shared)
             refreshBox.Text = "Permanent Refresh Token: Set"
             local ok, res = refreshSpotifyToken()
             if ok then
-                Shared.Notify("Spotify", "Permanent OAuth connected & refreshed!", true)
+                Shared.Notify("Spotify", "OAuth connected & refreshed!", true)
                 local trk = getSpotifyTrack()
                 if trk then updateVisuals(trk) end
             else
-                Shared.Notify("Spotify", "Refresh Token saved (Awaiting client trigger)", true)
+                Shared.Notify("Spotify", "Key saved. Click Test to connect.", true)
             end
         end
     end)
 
-    -- Standard Token Input (Fallback / Manual)
     local spotBox = Instance.new("TextBox")
     spotBox.Name                  = "SpotifyTokenInput"
     spotBox.Size                  = UDim2.new(1, 0, 0, 24)
@@ -1489,7 +1145,7 @@ return function(Shared)
         end
     end)
 
-    MkButton(rightCol, "[ Test & Auto-Refresh Token ]", 4, function()
+    MkButton(rightCol, "[ Test & Connect Spotify ]", 4, function()
         if Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "" then
             local ok, err = refreshSpotifyToken()
             if ok then
@@ -1546,11 +1202,8 @@ return function(Shared)
     guideText.Text                   = "[ HOW TO GET SPOTIFY OAUTH TOKEN ]\n" ..
                                        "1. Open developer.spotify.com/dashboard & Log in.\n" ..
                                        "2. Create an App -> Set Redirect URI to:\n" ..
-                                       "   http://localhost:8888/callback\n" ..
-                                       "3. Obtain Refresh Token with scopes:\n" ..
-                                       "   user-read-playback-state\n" ..
-                                       "   user-modify-playback-state\n" ..
-                                       "   user-read-currently-playing\n" ..
+                                       "   http://127.0.0.1:8888/callback\n" ..
+                                       "3. Run GetSpotifyToken.exe to generate token.\n" ..
                                        "4. Paste token above & click Test.\n\n" ..
                                        "[!] REQUIREMENTS & LIMITATIONS:\n" ..
                                        "* Playback skipping ([|<], [>|], [||]) requires an\n" ..
@@ -1570,9 +1223,9 @@ return function(Shared)
                 setclipboard(
                     "Spotify OAuth Token Guide for Fih UI:\n" ..
                     "1. Open https://developer.spotify.com/dashboard and log in.\n" ..
-                    "2. Create an app and set Redirect URI to http://localhost:8888/callback\n" ..
-                    "3. Generate an OAuth Refresh Token with scopes: user-read-playback-state user-modify-playback-state user-read-currently-playing\n" ..
-                    "4. Paste the token into Fih UI Music Tab -> Spotify Refresh Token box and click [ Test & Auto-Refresh Token ].\n\n" ..
+                    "2. Create an app and set Redirect URI to http://127.0.0.1:8888/callback\n" ..
+                    "3. Run GetSpotifyToken.exe with your Client ID / Secret.\n" ..
+                    "4. Paste the token into Fih UI Music Tab -> Spotify Refresh Token box and click [ Test & Connect Spotify ].\n\n" ..
                     "Notice: Track skipping and remote play/pause controls require an active OAuth connection AND a Spotify Premium subscription."
                 )
                 Shared.Notify("Spotify", "OAuth Guide copied to clipboard!", true)
@@ -1582,11 +1235,9 @@ return function(Shared)
         end)
     end)
 
-    -- ── DARK MODE THEME CALLBACK ──────────────────────────────────
-    -- Rebuilds the HUD with the correct colour palette when the user switches theme
+    -- ── THEME CALLBACK ─────────────────────────────────────────────
     if Shared.RegisterThemeCallback then
         Shared.RegisterThemeCallback(function(theme, darkMode)
-            -- Update bottom-left HUD colours
             if hudWidget and hudWidget.Parent then
                 local tBar = hudWidget:FindFirstChildOfClass("Frame")
                 if tBar then
@@ -1604,24 +1255,7 @@ return function(Shared)
                     BackgroundColor3 = darkMode and Color3.fromRGB(16, 18, 24) or Color3.fromRGB(248, 250, 255),
                     BorderColor3     = darkMode and Color3.fromRGB(30, 75, 130) or Color3.fromRGB(58, 110, 165)
                 }):Play()
-                local content = hudWidget:FindFirstChild("HUDContent")
-                if content then
-                    local rightBox = content:FindFirstChild("TextContainer")
-                    if rightBox then
-                        for _, lbl in ipairs(rightBox:GetChildren()) do
-                            if lbl:IsA("TextLabel") then
-                                local isDimText = lbl.Name == "PlaceLbl" or lbl.Name == "UserLbl" or lbl.Position.Y.Offset > 44
-                                if isDimText then
-                                    TweenSvc:Create(lbl, TweenInfo.new(0.25), {
-                                        TextColor3 = darkMode and Color3.fromRGB(130, 150, 180) or Color3.fromRGB(80, 95, 120)
-                                    }):Play()
-                                end
-                            end
-                        end
-                    end
-                end
             end
-            -- Update billboard (over-head) background
             if billboard and billboard.Parent then
                 local bg = billboard:FindFirstChildOfClass("Frame")
                 if bg then
@@ -1634,29 +1268,12 @@ return function(Shared)
         end)
     end
 
-    -- ── HARDWARE AUDIO SPECTRUM CAPTURE (AudioListener + AudioAnalyzer) ──
-    local gameAudioListener, gameAudioAnalyzer, gameAudioWire
-    pcall(function()
-        gameAudioListener = Instance.new("AudioListener")
-        gameAudioListener.Parent = workspace
-
-        gameAudioAnalyzer = Instance.new("AudioAnalyzer")
-        gameAudioAnalyzer.Parent = workspace
-
-        gameAudioWire = Instance.new("Wire")
-        gameAudioWire.SourceInstance = gameAudioListener
-        gameAudioWire.TargetInstance = gameAudioAnalyzer
-        gameAudioWire.Parent = workspace
-    end)
-
-    -- ── HIGH-FIDELITY EQUALIZER ENGINE (Attack, Decay, Perlin Dynamics & Pitch Vectors) ──
-    local lastSegIdx = 1
-    local hudBarLevels = { 0, 0, 0, 0, 0, 0, 0 }
-    local bbBarLevels  = { 0, 0, 0, 0, 0, 0 }
+    -- ── HIGH-FIDELITY 12-BAR & 8-BAR AUDIO EQUALIZER ───────────────
+    local hudBarLevels = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    local bbBarLevels  = { 0, 0, 0, 0, 0, 0, 0, 0 }
     local lastFrameTime = os.clock()
 
-    local RunService = game:GetService("RunService")
-    RunService.RenderStepped:Connect(function()
+    RunSvc.RenderStepped:Connect(function()
         local now = os.clock()
         local dt = math.clamp(now - lastFrameTime, 0.001, 0.05)
         lastFrameTime = now
@@ -1664,7 +1281,6 @@ return function(Shared)
         local hasTrack = (currentTrack.name ~= "Not Playing" and currentTrack.name ~= "Error loading" and currentTrack.name ~= "" and currentTrack.name ~= nil)
         local isPlaying = hasTrack and (currentTrack.isPlaying ~= false or currentTrack.source == "Last.fm")
 
-        -- Unique track seed to produce completely distinct harmonic profiles for every song
         local trackSeed = 0
         if currentTrack.name then
             for c = 1, math.min(10, #currentTrack.name) do
@@ -1672,133 +1288,64 @@ return function(Shared)
             end
         end
 
-        local analysis = (currentTrack.id and trackAnalysisCache[currentTrack.id])
         local songSec = now
         if currentTrack.isPlaying and currentTrack.pollTime then
             songSec = ((currentTrack.progress_ms or 0) / 1000) + (now - currentTrack.pollTime)
         end
 
-        -- Find active Spotify audio segment for exact millisecond timestamp
-        local activeSegment = nil
-        local beatKick = 0
-        if analysis and analysis.segments and #analysis.segments > 0 then
-            local segs = analysis.segments
-            if lastSegIdx > #segs then lastSegIdx = 1 end
-            local found = false
-            for i = math.max(1, lastSegIdx - 5), math.min(#segs, lastSegIdx + 30) do
-                local s = segs[i]
-                if s and s.start <= songSec and (s.start + s.duration) > songSec then
-                    activeSegment = s
-                    lastSegIdx = i
-                    found = true
-                    break
-                end
-            end
-            if not found then
-                for i = 1, #segs do
-                    local s = segs[i]
-                    if s and s.start <= songSec and (s.start + s.duration) > songSec then
-                        activeSegment = s
-                        lastSegIdx = i
-                        break
-                    end
-                end
-            end
-
-            -- Beat drop impulse
-            if analysis.beats then
-                for _, b in ipairs(analysis.beats) do
-                    if math.abs(b.start - songSec) < 0.09 then
-                        beatKick = 0.40 * (b.confidence or 0.8)
-                        break
-                    end
-                end
-            end
-        end
-
         local function calculateTargetLevel(barIdx, totalBars)
             if not isPlaying then return 0 end
 
-            local rawLevel = 0
+            local frac = barIdx / totalBars
+            local freqMult = 2.5 + frac * 6.5
+            local n1 = (math.noise(barIdx * 0.45, songSec * freqMult, trackSeed) + 1) * 0.5
+            local n2 = (math.noise(barIdx * 0.9, songSec * (freqMult * 1.8), trackSeed + 40) + 1) * 0.25
+            local n3 = math.abs(math.sin(songSec * 3.2 + barIdx * 0.55)) * 0.22
 
-            -- 1. Precision Spotify Pitch & Loudness Segment Vector
-            if activeSegment and activeSegment.pitches then
-                local loudnessDb = activeSegment.loudness_max or -18
-                local normVol = math.clamp((loudnessDb + 45) / 45, 0.1, 1)
-
-                local pitches = activeSegment.pitches
-                local pVal = 0
-                if barIdx == 1 then
-                    pVal = (pitches[1] or 0.5) * 0.7 + (pitches[2] or 0.5) * 0.3
-                elseif barIdx == 2 then
-                    pVal = (pitches[2] or 0.5) * 0.3 + (pitches[3] or 0.5) * 0.4 + (pitches[4] or 0.5) * 0.3
-                elseif barIdx == 3 then
-                    pVal = (pitches[4] or 0.5) * 0.3 + (pitches[5] or 0.5) * 0.4 + (pitches[6] or 0.5) * 0.3
-                elseif barIdx == 4 then
-                    pVal = (pitches[6] or 0.5) * 0.3 + (pitches[7] or 0.5) * 0.4 + (pitches[8] or 0.5) * 0.3
-                elseif barIdx == 5 then
-                    pVal = (pitches[8] or 0.5) * 0.3 + (pitches[9] or 0.5) * 0.4 + (pitches[10] or 0.5) * 0.3
-                elseif barIdx == 6 then
-                    pVal = (pitches[10] or 0.5) * 0.3 + (pitches[11] or 0.5) * 0.4 + (pitches[12] or 0.5) * 0.3
-                else
-                    pVal = (pitches[12] or 0.5) * 0.5 + (pitches[1] or 0.5) * 0.5
-                end
-
-                local noiseMod = math.noise(barIdx * 0.5, songSec * 3.6, trackSeed) * 0.18
-                rawLevel = math.clamp((pVal * 0.72 + normVol * 0.28 + noiseMod) * normVol + beatKick, 0, 1)
-            else
-                -- 2. Organic Multi-Octave Perlin Audio Spectrum
-                local n1 = (math.noise(barIdx * 0.5, songSec * 4.2, trackSeed) + 1) * 0.5
-                local n2 = (math.noise(barIdx * 1.0, songSec * 8.4, trackSeed + 50) + 1) * 0.25
-                local n3 = math.abs(math.sin(songSec * 2.8 + barIdx * 0.65)) * 0.2
-                rawLevel = math.clamp(n1 * 0.6 + n2 + n3, 0, 1)
-            end
-
-            -- Non-linear power curve: Filters out jittery micro-noise, highlights solid rhythmic beats
-            local shaped = math.clamp(rawLevel ^ 1.6, 0.05, 1)
-            return shaped
+            local raw = math.clamp(n1 * 0.58 + n2 + n3, 0, 1)
+            return math.clamp(raw ^ 1.45, 0.06, 1)
         end
 
-        -- Update HUD Equalizer Bars with snappy attack & physics gravity decay
+        -- Update HUD 12-Bar Equalizer with snappy attack & physics gravity decay
         if hudVisBars then
             for i, bar in ipairs(hudVisBars) do
                 if bar and bar.Parent then
                     local target = calculateTargetLevel(i, #hudVisBars)
                     local cur = hudBarLevels[i] or 0
                     if target > cur then
-                        cur = cur + (target - cur) * math.clamp(dt * 14, 0.15, 0.85)
+                        cur = cur + (target - cur) * math.clamp(dt * 16, 0.2, 0.9)
                     else
-                        cur = math.max(target, cur - dt * 1.8)
+                        cur = math.max(target, cur - dt * 2.0)
                     end
                     hudBarLevels[i] = cur
 
                     local barH = isPlaying and math.clamp(math.floor(cur * 24) + 2, 2, 24) or 3
-                    bar.Size = UDim2.new(0, 6, 0, barH)
-                    bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.55 + i * 0.03) % 1, 0.85, 1) or Color3.fromRGB(60, 75, 100)
+                    bar.Size = UDim2.new(0, 7, 0, barH)
+                    bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.55 + i * 0.025) % 1, 0.85, 1) or Color3.fromRGB(60, 75, 100)
                 end
             end
         end
 
-        -- Update Billboard Equalizer Bars
+        -- Update Billboard 8-Bar Equalizer
         if bbVisBars then
             for i, bar in ipairs(bbVisBars) do
                 if bar and bar.Parent then
                     local target = calculateTargetLevel(i, #bbVisBars)
                     local cur = bbBarLevels[i] or 0
                     if target > cur then
-                        cur = cur + (target - cur) * math.clamp(dt * 14, 0.15, 0.85)
+                        cur = cur + (target - cur) * math.clamp(dt * 16, 0.2, 0.9)
                     else
-                        cur = math.max(target, cur - dt * 1.8)
+                        cur = math.max(target, cur - dt * 2.0)
                     end
                     bbBarLevels[i] = cur
 
                     local barH = isPlaying and math.clamp(math.floor(cur * 18) + 2, 2, 18) or 2
                     bar.Size = UDim2.new(0, 5, 0, barH)
-                    bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.36 + i * 0.04) % 1, 0.9, 0.95) or Color3.fromRGB(70, 85, 110)
+                    bar.BackgroundColor3 = isPlaying and Color3.fromHSV((0.36 + i * 0.035) % 1, 0.9, 0.95) or Color3.fromRGB(70, 85, 110)
                 end
             end
         end
     end)
 
-    print("[Music_Handler] Loaded -- Dynamic Covers, Scaled HUD, Clean Typography Online")
+    print("[Music_Handler] Loaded -- Clean Last.fm & Spotify Engine with 12-Bar Visualizer")
 end
