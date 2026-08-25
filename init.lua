@@ -45,14 +45,37 @@ local function loadModule(name)
     return mod
 end
 
--- Universal HTTP Request engine supporting getgenv.request, http_request, syn.request
+-- Universal HTTP Request engine with multi-executor normalization
 local function httpRequest(opt)
-    local req = (getgenv and (getgenv().request or getgenv().http_request)) or request or http_request or (syn and syn.request)
-    if req then
-        local ok1, res1 = pcall(function() return req(opt) end)
-        if ok1 and res1 then return res1 end
+    local req = (getgenv and (getgenv().request or getgenv().http_request))
+             or (typeof(request) == "function" and request)
+             or (typeof(http_request) == "function" and http_request)
+             or (syn and typeof(syn.request) == "function" and syn.request)
+             or (http and typeof(http.request) == "function" and http.request)
 
-        -- Some executors require lowercase parameters
+    local function normalize(res)
+        if not res or type(res) ~= "table" then return res end
+        local body = res.Body or res.body or ""
+        local code = tonumber(res.StatusCode or res.statusCode or res.status_code or res.Status or res.status) or 200
+        local hdrs = res.Headers or res.headers or {}
+        return {
+            Body        = body,
+            body        = body,
+            StatusCode  = code,
+            statusCode  = code,
+            status_code = code,
+            Headers     = hdrs,
+            headers     = hdrs,
+            Success     = (code >= 200 and code < 300)
+        }
+    end
+
+    if req then
+        -- 1. Try standard uppercase option keys
+        local ok1, res1 = pcall(function() return req(opt) end)
+        if ok1 and res1 then return normalize(res1) end
+
+        -- 2. Try lowercase option keys (Fluxus, Delta, Solara variants)
         local lowerOpt = {
             url     = opt.Url or opt.url,
             method  = opt.Method or opt.method or "GET",
@@ -60,12 +83,19 @@ local function httpRequest(opt)
             body    = opt.Body or opt.body
         }
         local ok2, res2 = pcall(function() return req(lowerOpt) end)
-        if ok2 and res2 then return res2 end
+        if ok2 and res2 then return normalize(res2) end
     end
-    if (opt.Method == "GET" or not opt.Method) and opt.Url then
-        local ok, res = pcall(function() return game:HttpGet(opt.Url) end)
-        if ok and res then return { StatusCode = 200, Body = res } end
+
+    -- Fallback to game:HttpGet ONLY for unauthenticated public GET requests
+    local hasAuth = (opt.Headers and (opt.Headers["Authorization"] or opt.Headers["authorization"]))
+                 or (opt.headers and (opt.headers["Authorization"] or opt.headers["authorization"]))
+    if not hasAuth and (opt.Method == "GET" or not opt.Method) and (opt.Url or opt.url) then
+        local ok, res = pcall(function() return game:HttpGet(opt.Url or opt.url) end)
+        if ok and res and type(res) == "string" and #res > 0 then
+            return normalize({ StatusCode = 200, Body = res })
+        end
     end
+
     return nil
 end
 
