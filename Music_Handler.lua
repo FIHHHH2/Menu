@@ -411,13 +411,33 @@ return function(Shared)
     -- ── PERMANENT SPOTIFY AUTO-REFRESH ENGINE ───────────────────────
     local isRefreshingToken = false
     local function refreshSpotifyToken()
-        local rToken   = cleanToken(Shared.Config.SpotifyRefreshToken)
+        local raw = cleanToken(Shared.Config.SpotifyRefreshToken)
+
+        -- Parse combined paste "token|clientId|clientSecret"
+        if raw:find("|") or raw:find(":::") then
+            local sep = raw:find(":::") and ":::" or "|"
+            local parts = raw:split(sep)
+            if parts[1] and parts[1] ~= "" then Shared.Config.SpotifyRefreshToken = cleanToken(parts[1]) end
+            if parts[2] and parts[2] ~= "" then Shared.Config.SpotifyClientId     = cleanToken(parts[2]) end
+            if parts[3] and parts[3] ~= "" then Shared.Config.SpotifyClientSecret = cleanToken(parts[3]) end
+            if Shared.SaveConfig then Shared.SaveConfig() end
+            raw = cleanToken(Shared.Config.SpotifyRefreshToken)
+        end
+
+        local rToken   = raw
         local clientId = (Shared.Config.SpotifyClientId and cleanToken(Shared.Config.SpotifyClientId) ~= "") and cleanToken(Shared.Config.SpotifyClientId) or "1842aff694404946af4ac03a457c54ab"
         local clientSec = (Shared.Config.SpotifyClientSecret and cleanToken(Shared.Config.SpotifyClientSecret) ~= "") and cleanToken(Shared.Config.SpotifyClientSecret) or "b90742dc54544188a5e2f88d5383bd3c"
 
         if not rToken or rToken == "" or rToken == "Paste Spotify Refresh Token (Permanent)" or rToken == "Permanent Refresh Token: Set" then
             return false, "No Refresh Token"
         end
+
+        -- Direct Access Token support
+        if rToken:sub(1, 2) == "BQ" or (#rToken > 160 and rToken:sub(1, 2) ~= "AQ") then
+            Shared.Config.SpotifyToken = rToken
+            return true, rToken
+        end
+
         if isRefreshingToken then return false, "Refresh in progress" end
         isRefreshingToken = true
 
@@ -450,7 +470,7 @@ return function(Shared)
                 elseif data.error_description then
                     return false, data.error_description
                 elseif data.error then
-                    return false, data.error
+                    return false, tostring(data.error)
                 end
             end
         end
