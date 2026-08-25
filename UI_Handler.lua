@@ -470,16 +470,20 @@ return function(Shared)
             }):Play()
         end
 
-        -- Handle semi-translucency for Adaptive Theme vs solid for Light/Dark
+        -- Handle semi-translucency for Main UI (Aero glass across all themes)
         local isAdaptive = (targetTheme.IsAdaptive == true)
-        local winTrans   = isAdaptive and 0.12 or 0
-        local bodyTrans  = isAdaptive and 0.18 or 0
-        local navTrans   = isAdaptive and 0.12 or 0
-        local drawerTrans= isAdaptive and 0.15 or 0
+        local winTrans   = isAdaptive and 0.30 or 0.25
+        local titleTrans = isAdaptive and 0.25 or 0.20
+        local bodyTrans  = isAdaptive and 0.40 or 0.35
+        local navTrans   = isAdaptive and 0.35 or 0.30
+        local drawerTrans= isAdaptive and 0.30 or 0.25
 
         pcall(function()
             if Window and Window.Parent then
                 TweenService:Create(Window, tweenInfo, { BackgroundTransparency = winTrans }):Play()
+            end
+            if TitleBar and TitleBar.Parent then
+                TweenService:Create(TitleBar, tweenInfo, { BackgroundTransparency = titleTrans }):Play()
             end
             if Body and Body.Parent then
                 TweenService:Create(Body, tweenInfo, { BackgroundTransparency = bodyTrans }):Play()
@@ -494,10 +498,10 @@ return function(Shared)
                 TweenService:Create(Drawer, tweenInfo, { BackgroundTransparency = drawerTrans }):Play()
             end
             if DrawerScroll and DrawerScroll.Parent then
-                TweenService:Create(DrawerScroll, tweenInfo, { BackgroundTransparency = drawerTrans }):Play()
+                TweenService:Create(DrawerScroll, tweenInfo, { BackgroundTransparency = 1 }):Play()
             end
             if ContentArea and ContentArea.Parent then
-                TweenService:Create(ContentArea, tweenInfo, { BackgroundTransparency = isAdaptive and 0.10 or 0 }):Play()
+                TweenService:Create(ContentArea, tweenInfo, { BackgroundTransparency = 1 }):Play()
             end
         end)
 
@@ -666,6 +670,7 @@ return function(Shared)
     Window.Size             = UDim2.new(0, WIN_W, 0, WIN_H)
     Window.Position         = UDim2.new(0.5, -WIN_W/2, 0.5, -WIN_H/2)
     Window.BackgroundColor3 = C.BodyBg
+    Window.BackgroundTransparency = 0.25
     Window.BorderSizePixel  = 2; Window.BorderColor3 = C.WinBorder
     Window.ClipsDescendants = true; Window.Parent = ScreenGui
     registerThemed(Window, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
@@ -675,6 +680,7 @@ return function(Shared)
     local TitleBar = Instance.new("Frame")
     TitleBar.Name             = "TitleBar"; TitleBar.Size = UDim2.new(1,0,0,TITLE_H)
     TitleBar.BackgroundColor3 = C.TitleBar; TitleBar.BorderSizePixel = 1
+    TitleBar.BackgroundTransparency = 0.20
     TitleBar.BorderColor3     = Color3.fromRGB(140,140,140); TitleBar.Parent = Window
     registerThemed(TitleBar, { BackgroundColor3 = "TitleBar" })
 
@@ -692,6 +698,7 @@ return function(Shared)
         b.Name = "WinBtn_"..def.id; b.Size = UDim2.new(0,26,0,20)
         b.Position = UDim2.new(1,def.x,0.5,-10)
         b.BackgroundColor3 = C.BtnBg; b.Text = def.label
+        b.BackgroundTransparency = 0.25
         b.TextColor3 = C.BtnText; b.Font = Enum.Font.Code
         b.TextSize = 11; b.BorderSizePixel = 1; b.BorderColor3 = C.BtnBorder
         b.Parent = TitleBar
@@ -796,7 +803,7 @@ return function(Shared)
         pcall(function()
             TweenService:Create(Window, TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                 Size = UDim2.new(0, curW, 0, savedWindowHeight),
-                BackgroundTransparency = C.IsAdaptive and 0.12 or 0
+                BackgroundTransparency = C.IsAdaptive and 0.30 or 0.25
             }):Play()
         end)
     end
@@ -839,6 +846,7 @@ return function(Shared)
     local NavBar = Instance.new("Frame")
     NavBar.Size = UDim2.new(1,0,0,NAV_H); NavBar.Position = UDim2.new(0,0,0,TITLE_H)
     NavBar.BackgroundColor3 = C.NavBar; NavBar.BorderSizePixel = 1
+    NavBar.BackgroundTransparency = 0.30
     NavBar.BorderColor3 = Color3.fromRGB(140,160,200); NavBar.Parent = Window
     registerThemed(NavBar, { BackgroundColor3 = "NavBar" })
 
@@ -925,12 +933,14 @@ return function(Shared)
     local Body = Instance.new("Frame")
     Body.Size = UDim2.new(1,0,1,-BODY_Y); Body.Position = UDim2.new(0,0,0,BODY_Y)
     Body.BackgroundColor3 = C.BodyBg; Body.BorderSizePixel = 0
+    Body.BackgroundTransparency = 0.35
     Body.ClipsDescendants = true; Body.Parent = Window
     registerThemed(Body, { BackgroundColor3 = "BodyBg" })
 
     -- SIDEBAR
     local Sidebar = Instance.new("Frame")
     Sidebar.Size = UDim2.new(0,SIDEBAR_W,1,0); Sidebar.BackgroundColor3 = C.BodyBg
+    Sidebar.BackgroundTransparency = 0.35
     Sidebar.BorderSizePixel = 0; Sidebar.ClipsDescendants = true; Sidebar.Parent = Body
     registerThemed(Sidebar, { BackgroundColor3 = "BodyBg" })
 
@@ -983,6 +993,7 @@ return function(Shared)
     ContentArea.Size                 = UDim2.new(1, -SIDEBAR_W, 1, 0)
     ContentArea.Position             = UDim2.new(0, SIDEBAR_W, 0, 0)
     ContentArea.BackgroundColor3     = C.BodyBg
+    ContentArea.BackgroundTransparency = 1
     ContentArea.BorderSizePixel      = 0
     ContentArea.ScrollBarThickness   = 0
     ContentArea.ScrollBarImageTransparency = 1
@@ -1004,12 +1015,14 @@ return function(Shared)
     Drawer.Name = "Drawer"; Drawer.Size = UDim2.new(1,-SIDEBAR_W,1,0)
     Drawer.Position = UDim2.new(0,SIDEBAR_W,-1,0)
     Drawer.BackgroundColor3 = C.DrawerBg; Drawer.BorderSizePixel = 1
+    Drawer.BackgroundTransparency = 0.25
     Drawer.BorderColor3 = C.SidebarBorder; Drawer.ZIndex = 20
     Drawer.Visible = false; Drawer.ClipsDescendants = true; Drawer.Parent = Body
     registerThemed(Drawer, { BackgroundColor3 = "DrawerBg", BorderColor3 = "SidebarBorder" })
 
     local DHeader = Instance.new("Frame")
     DHeader.Size = UDim2.new(1,0,0,24); DHeader.BackgroundColor3 = C.SectionBg
+    DHeader.BackgroundTransparency = 0.25
     DHeader.BorderSizePixel = 1; DHeader.BorderColor3 = C.SidebarBorder
     DHeader.ZIndex = 21; DHeader.Parent = Drawer
     registerThemed(DHeader, { BackgroundColor3 = "SectionBg", BorderColor3 = "SidebarBorder" })
@@ -1025,6 +1038,7 @@ return function(Shared)
     local DClose = Instance.new("TextButton")
     DClose.Size = UDim2.new(0,76,0,18); DClose.Position = UDim2.new(1,-80,0,3)
     DClose.BackgroundColor3 = C.BtnBg; DClose.Text = "[ ▲ Close ]"
+    DClose.BackgroundTransparency = 0.25
     DClose.TextColor3 = C.BtnText; DClose.Font = Enum.Font.Code
     DClose.TextSize = 10; DClose.BorderSizePixel = 1; DClose.BorderColor3 = C.BtnBorder
     DClose.ZIndex = 22; DClose.Parent = DHeader
@@ -1033,6 +1047,7 @@ return function(Shared)
     local DrawerScroll = Instance.new("ScrollingFrame")
     DrawerScroll.Size = UDim2.new(1,0,1,-24); DrawerScroll.Position = UDim2.new(0,0,0,24)
     DrawerScroll.BackgroundColor3 = C.DrawerBg; DrawerScroll.BorderSizePixel = 0
+    DrawerScroll.BackgroundTransparency = 1
     DrawerScroll.ScrollBarThickness = 0
     DrawerScroll.ScrollBarImageTransparency = 1
     DrawerScroll.CanvasSize = UDim2.new(0,0,0,0); DrawerScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -1134,6 +1149,7 @@ return function(Shared)
     for _, def in ipairs(tabDefs) do
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(0,80,0,24); btn.BackgroundColor3 = C.BtnBg
+        btn.BackgroundTransparency = 0.25
         btn.Text = def.name; btn.TextColor3 = C.BtnText; btn.Font = Enum.Font.Code
         btn.TextSize = 11; btn.BorderSizePixel = 1; btn.BorderColor3 = C.BtnBorder
         btn.LayoutOrder = def.order; btn.ZIndex = 7; btn.Parent = TabContainer
@@ -1190,6 +1206,7 @@ return function(Shared)
     local mainTab = Tabs["Main"]
     local logoBox = Instance.new("Frame")
     logoBox.Size = UDim2.new(1,-8,0,76); logoBox.BackgroundColor3 = C.BannerBg
+    logoBox.BackgroundTransparency = 0.35
     logoBox.BorderSizePixel = 1; logoBox.BorderColor3 = C.WinBorder
     logoBox.LayoutOrder = 1; logoBox.Parent = mainTab
     registerThemed(logoBox, { BackgroundColor3 = "BannerBg", BorderColor3 = "WinBorder" })
@@ -1213,6 +1230,7 @@ return function(Shared)
     local function makeSection(parent, labelText, order)
         local lbl = Instance.new("TextLabel")
         lbl.Size = UDim2.new(1,0,0,20); lbl.BackgroundColor3 = C.SectionBg
+        lbl.BackgroundTransparency = 0.30
         lbl.TextColor3 = C.SectionText; lbl.Font = Enum.Font.Code; lbl.TextSize = 11
         lbl.Text = "  ["..labelText.."]"; lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.BorderSizePixel = 1; lbl.BorderColor3 = C.SidebarBorder
@@ -1225,6 +1243,7 @@ return function(Shared)
         local row = Instance.new("Frame")
         row.Name = "Toggle_"..flagKey; row.Size = UDim2.new(1,0,0,26)
         row.BackgroundColor3 = C.RowBg; row.BorderSizePixel = 1; row.BorderColor3 = C.RowBorder
+        row.BackgroundTransparency = 0.35
         row.LayoutOrder = order or 0; row.Parent = parent
         registerThemed(row, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder" })
 
@@ -1238,6 +1257,7 @@ return function(Shared)
         local box = Instance.new("TextButton")
         box.Name = "CheckBox"; box.Size = UDim2.new(0,18,0,18); box.Position = UDim2.new(1,-24,0.5,-9)
         box.BackgroundColor3 = C.BodyBg; box.BorderSizePixel = 1
+        box.BackgroundTransparency = 0.25
         box.BorderColor3 = Color3.fromRGB(100,100,100); box.Text = ""; box.TextSize = 12
         box.Font = Enum.Font.Code; box.TextColor3 = C.Accent; box.Parent = row
         registerThemed(box, { BackgroundColor3 = "BodyBg", TextColor3 = "Accent" })
@@ -1273,6 +1293,7 @@ return function(Shared)
         local row = Instance.new("Frame")
         row.Name = "Slider_"..flagKey; row.Size = UDim2.new(1,0,0,36)
         row.BackgroundColor3 = C.RowBg; row.BorderSizePixel = 1; row.BorderColor3 = C.RowBorder
+        row.BackgroundTransparency = 0.35
         row.LayoutOrder = order or 0; row.Parent = parent
         registerThemed(row, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder" })
 
@@ -1337,6 +1358,7 @@ return function(Shared)
         local btn = Instance.new("TextButton")
         btn.Name = "Btn_"..labelText:gsub("%s+","_"); btn.Size = UDim2.new(1,0,0,26)
         btn.BackgroundColor3 = C.BtnBg; btn.Text = labelText; btn.TextColor3 = C.BtnText
+        btn.BackgroundTransparency = 0.25
         btn.Font = Enum.Font.Code; btn.TextSize = 11; btn.BorderSizePixel = 1; btn.BorderColor3 = C.BtnBorder
         btn.LayoutOrder = order or 0; btn.Parent = parent
         registerThemed(btn, { BackgroundColor3 = "BtnBg", TextColor3 = "BtnText", BorderColor3 = "BtnBorder" })

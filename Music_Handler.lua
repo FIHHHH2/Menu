@@ -817,6 +817,7 @@ return function(Shared)
         frame.Size             = UDim2.new(0, 390, 0, 150)
         frame.Position         = UDim2.new(0, 16, 1, -165)
         frame.BackgroundColor3 = C.BodyBg
+        frame.BackgroundTransparency = 0.25
         frame.BorderSizePixel  = 2
         frame.BorderColor3     = C.WinBorder
         frame.ClipsDescendants = true
@@ -827,6 +828,7 @@ return function(Shared)
         local tBar = Instance.new("Frame")
         tBar.Size             = UDim2.new(1, 0, 0, 20)
         tBar.BackgroundColor3 = C.TitleBar
+        tBar.BackgroundTransparency = 0.20
         tBar.BorderSizePixel  = 1
         tBar.BorderColor3     = Color3.fromRGB(140, 140, 140)
         tBar.ZIndex           = 51
@@ -879,6 +881,7 @@ return function(Shared)
         coverContainer.Size             = UDim2.new(0, 118, 1, -12)
         coverContainer.Position         = UDim2.new(0, 6, 0, 6)
         coverContainer.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
+        coverContainer.BackgroundTransparency = 0.35
         coverContainer.BorderSizePixel  = 1
         coverContainer.BorderColor3     = C.BorderCol
         coverContainer.ZIndex           = 52
@@ -1391,7 +1394,8 @@ return function(Shared)
                 local tBar = hudWidget:FindFirstChildOfClass("Frame")
                 if tBar then
                     TweenSvc:Create(tBar, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
-                        BackgroundColor3 = darkMode and (theme.TitleBar or Color3.fromRGB(32, 36, 46)) or (theme.TitleBar or Color3.fromRGB(212, 208, 200))
+                        BackgroundColor3 = darkMode and (theme.TitleBar or Color3.fromRGB(32, 36, 46)) or (theme.TitleBar or Color3.fromRGB(212, 208, 200)),
+                        BackgroundTransparency = 0.20
                     }):Play()
                     local tLbl = tBar:FindFirstChildOfClass("TextLabel")
                     if tLbl then
@@ -1402,7 +1406,8 @@ return function(Shared)
                 end
                 TweenSvc:Create(hudWidget, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
                     BackgroundColor3 = darkMode and (theme.BodyBg or Color3.fromRGB(16, 18, 24)) or (theme.BodyBg or Color3.fromRGB(248, 250, 255)),
-                    BorderColor3     = darkMode and (theme.WinBorder or Color3.fromRGB(30, 75, 130)) or (theme.WinBorder or Color3.fromRGB(58, 110, 165))
+                    BorderColor3     = darkMode and (theme.WinBorder or Color3.fromRGB(30, 75, 130)) or (theme.WinBorder or Color3.fromRGB(58, 110, 165)),
+                    BackgroundTransparency = 0.25
                 }):Play()
             end
             if billboard and billboard.Parent then
