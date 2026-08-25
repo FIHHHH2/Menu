@@ -394,18 +394,38 @@ return function(Shared)
     end
 
     -- ── BASE64 ENCODER FOR SPOTIFY CLIENT AUTH ─────────────────────
-    local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
     local function toBase64(data)
-        return ((data:gsub('.', function(x) 
-            local r,b='',x:byte()
-            for i=8,1,-1 do r=r..(b%2^i-b%2^(i-1)>0 and '1' or '0') end
-            return r;
-        end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
-            if (#x < 6) then return '' end
-            local c=0
-            for i=1,6 do c=c+(x:sub(i,i)=='1' and 2^(6-i) or 0) end
-            return b64chars:sub(c+1,c+1)
-        end)..({ '', '==', '=' })[#data%3+1])
+        if crypt and typeof(crypt.base64_encode) == "function" then
+            return crypt.base64_encode(data)
+        elseif crypt and typeof(crypt.base64encode) == "function" then
+            return crypt.base64encode(data)
+        elseif syn and syn.crypt and typeof(syn.crypt.base64.encode) == "function" then
+            return syn.crypt.base64.encode(data)
+        elseif typeof(base64_encode) == "function" then
+            return base64_encode(data)
+        end
+
+        local b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+        local out = {}
+        local length = #data
+        local i = 1
+        while i <= length do
+            local b1 = string.byte(data, i)
+            local b2 = (i + 1 <= length) and string.byte(data, i + 1) or nil
+            local b3 = (i + 2 <= length) and string.byte(data, i + 2) or nil
+
+            local n1 = math.floor(b1 / 4)
+            local n2 = (b1 % 4) * 16 + (b2 and math.floor(b2 / 16) or 0)
+            local n3 = b2 and ((b2 % 16) * 4 + (b3 and math.floor(b3 / 64) or 0)) or nil
+            local n4 = b3 and (b3 % 64) or nil
+
+            table.insert(out, b64chars:sub(n1 + 1, n1 + 1))
+            table.insert(out, b64chars:sub(n2 + 1, n2 + 1))
+            table.insert(out, n3 and b64chars:sub(n3 + 1, n3 + 1) or "=")
+            table.insert(out, n4 and b64chars:sub(n4 + 1, n4 + 1) or "=")
+            i = i + 3
+        end
+        return table.concat(out)
     end
 
     -- ── PERMANENT SPOTIFY AUTO-REFRESH ENGINE ───────────────────────
@@ -440,19 +460,41 @@ return function(Shared)
         if isRefreshingToken then return false, "Refresh in progress" end
         isRefreshingToken = true
 
+        -- Strategy 1: Standard RFC Basic Authorization Header
         local authHeader = "Basic " .. toBase64(clientId .. ":" .. clientSec)
-        local headers = {
-            ["Content-Type"]  = "application/x-www-form-urlencoded",
-            ["Authorization"] = authHeader,
-        }
-        local body = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken) .. "&client_id=" .. clientId .. "&client_secret=" .. clientSec
-
         local resp = Shared.HttpRequest({
             Url     = "https://accounts.spotify.com/api/token",
             Method  = "POST",
-            Headers = headers,
-            Body    = body,
+            Headers = {
+                ["Content-Type"]  = "application/x-www-form-urlencoded",
+                ["Authorization"] = authHeader,
+            },
+            Body    = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken),
         })
+
+        -- Strategy 2: Body credentials fallback if Basic header failed with invalid_client
+        if not resp or not resp.Body or resp.Body:find("invalid_client") then
+            resp = Shared.HttpRequest({
+                Url     = "https://accounts.spotify.com/api/token",
+                Method  = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/x-www-form-urlencoded",
+                },
+                Body    = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken) .. "&client_id=" .. Http:UrlEncode(clientId) .. "&client_secret=" .. Http:UrlEncode(clientSec),
+            })
+        end
+
+        -- Strategy 3: PKCE / Public Client Mode (no client_secret required)
+        if not resp or not resp.Body or resp.Body:find("invalid_client") then
+            resp = Shared.HttpRequest({
+                Url     = "https://accounts.spotify.com/api/token",
+                Method  = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/x-www-form-urlencoded",
+                },
+                Body    = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken) .. "&client_id=" .. Http:UrlEncode(clientId),
+            })
+        end
 
         isRefreshingToken = false
 
