@@ -560,8 +560,9 @@ return function(Shared)
             return nil, "No Token"
         end
 
+        -- Endpoint 1: Currently Playing (includes tracks & podcast episodes)
         local resp = Shared.HttpRequest({
-            Url     = "https://api.spotify.com/v1/me/player/currently-playing",
+            Url     = "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track,episode",
             Method  = "GET",
             Headers = {
                 ["Authorization"] = "Bearer " .. token,
@@ -577,23 +578,53 @@ return function(Shared)
             return nil, "Expired/Invalid Token (401)"
         end
 
-        if not resp or (resp.StatusCode and resp.StatusCode == 401) then
-            return nil, "Expired/Invalid Token (401)"
-        end
-        if resp.StatusCode == 204 or not resp.Body or #resp.Body == 0 then
-            return nil, "No Active Playback"
+        local item = nil
+        local isPlaying = false
+        local progress_ms = 0
+        local duration_ms = 0
+
+        if resp and resp.Body and #resp.Body > 5 then
+            local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
+            if ok and data and data.item then
+                item = data.item
+                isPlaying = (data.is_playing == true)
+                progress_ms = data.progress_ms or 0
+            end
         end
 
-        local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
-        if not ok or not data or not data.item then return nil, "No Track Found" end
-        local item = data.item
+        -- Endpoint 2: Fallback to Recently Played if Spotify is paused or idle
+        if not item then
+            local recentResp = Shared.HttpRequest({
+                Url     = "https://api.spotify.com/v1/me/player/recently-played?limit=1",
+                Method  = "GET",
+                Headers = {
+                    ["Authorization"] = "Bearer " .. token,
+                    ["Content-Type"]  = "application/json",
+                },
+            })
+            if recentResp and recentResp.Body and #recentResp.Body > 5 then
+                local ok, data = pcall(function() return Http:JSONDecode(recentResp.Body) end)
+                if ok and data and data.items and data.items[1] and data.items[1].track then
+                    item = data.items[1].track
+                    isPlaying = false
+                    progress_ms = 0
+                end
+            end
+        end
+
+        if not item then
+            return nil, "No Active Playback (Play a song in Spotify)"
+        end
 
         local trackName  = item.name or "Unknown"
         local artistName = item.artists and item.artists[1] and item.artists[1].name or "Unknown"
+        duration_ms = item.duration_ms or 0
 
         local coverUrl = ""
         if item.album and item.album.images and #item.album.images > 0 then
             coverUrl = item.album.images[1].url or ""
+        elseif item.images and #item.images > 0 then
+            coverUrl = item.images[1].url or ""
         end
 
         -- Multi-source fallback if cover is missing
@@ -606,9 +637,9 @@ return function(Shared)
             name        = trackName,
             artist      = artistName,
             cover       = coverUrl,
-            isPlaying   = data.is_playing or false,
-            progress_ms = data.progress_ms or 0,
-            duration_ms = item.duration_ms or 0,
+            isPlaying   = isPlaying,
+            progress_ms = progress_ms,
+            duration_ms = duration_ms,
             pollTime    = os.clock(),
             source      = "Spotify"
         }
