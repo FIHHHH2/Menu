@@ -64,9 +64,15 @@ return function(Shared)
         DrawerBg      = Color3.fromRGB(244, 246, 250),
         NotifyBg      = Color3.fromRGB(250, 250, 255),
         NotifyBorder  = Color3.fromRGB(58, 110, 165),
-        BannerBg      = Color3.fromRGB(248, 250, 255),
+        BannerBg      = Color3.fromRGB(240, 245, 255),
         BannerTitle   = Color3.fromRGB(15, 30, 80),
         BannerSub     = Color3.fromRGB(90, 110, 150),
+        TitleGradTop  = Color3.fromRGB(242, 244, 248),
+        TitleGradBot  = Color3.fromRGB(208, 204, 196),
+        NavGradTop    = Color3.fromRGB(215, 224, 240),
+        NavGradBot    = Color3.fromRGB(180, 192, 215),
+        BannerGradTop = Color3.fromRGB(225, 235, 255),
+        BannerGradBot = Color3.fromRGB(245, 248, 255),
         IsDark        = false
     }
 
@@ -101,10 +107,16 @@ return function(Shared)
         BannerBg      = Color3.fromRGB(22, 26, 36),
         BannerTitle   = Color3.fromRGB(210, 230, 255),
         BannerSub     = Color3.fromRGB(130, 150, 180),
+        TitleGradTop  = Color3.fromRGB(42, 48, 62),
+        TitleGradBot  = Color3.fromRGB(22, 26, 34),
+        NavGradTop    = Color3.fromRGB(32, 38, 52),
+        NavGradBot    = Color3.fromRGB(16, 20, 28),
+        BannerGradTop = Color3.fromRGB(26, 38, 62),
+        BannerGradBot = Color3.fromRGB(14, 18, 26),
         IsDark        = true
     }
 
-    -- ── ADAPTIVE SONG THEME PALETTE ENGINE ────────────────────────
+    -- ── ADAPTIVE SONG THEME PALETTE ENGINE (AUTHENTIC COLOR EXTRACTION) ─
     local function generateAdaptivePalette(track)
         local title = (track and track.name) or "Unknown Track"
         local artist = (track and track.artist) or "Unknown Artist"
@@ -113,7 +125,7 @@ return function(Shared)
         local titleLower = title:lower()
         local artistLower = artist:lower()
 
-        -- Check if artwork is monochrome/grayscale (like kelestiial - i'm not around)
+        -- Check if artwork is monochrome/grayscale
         local isMono = false
         if track and track.palette and track.palette.isMonochrome then
             isMono = true
@@ -154,52 +166,54 @@ return function(Shared)
                 BannerBg      = Color3.fromRGB(16, 18, 24),
                 BannerTitle   = Color3.fromRGB(250, 252, 255),
                 BannerSub     = Color3.fromRGB(160, 175, 200),
+                TitleGradTop  = Color3.fromRGB(28, 32, 40),
+                TitleGradBot  = Color3.fromRGB(12, 14, 18),
+                NavGradTop    = Color3.fromRGB(22, 26, 34),
+                NavGradBot    = Color3.fromRGB(10, 12, 16),
+                BannerGradTop = Color3.fromRGB(30, 36, 48),
+                BannerGradBot = Color3.fromRGB(12, 14, 18),
                 IsDark        = true,
                 IsAdaptive    = true
             }
         end
 
-        local hue = 0.95
-        local sat = 0.80
-        local val = 0.90
-        local accentHue = 0.95
+        local hue = 0.60
+        local sat = 0.75
+        local val = 0.85
+        local accentHue = 0.60
 
-        -- 1. Known artist/track chromatic profiles (Matching authentic cover art)
-        if artistLower:find("wifiskeleton") or titleLower:find("ugly") then
-            hue = 0.04 -- Neon Amber/Orange & Cyberpunk Red matching ugly pony artwork
-            accentHue = 0.03
-            sat = 0.90
-            val = 0.95
-        elseif artistLower:find("interworld") or titleLower:find("metamorphosis") or titleLower:find("phonk") then
-            hue = 0.85 -- Vivid Neon Magenta / Phonk Violet
-            accentHue = 0.88
-            sat = 0.85
-            val = 0.95
-        elseif artistLower:find("weeknd") or titleLower:find("starboy") or titleLower:find("blinding") then
-            hue = 0.01 -- Crimson Blood Red / Neon Ruby
-            accentHue = 0.01
-            sat = 0.90
-            val = 0.98
-        elseif artistLower:find("m83") or titleLower:find("midnight city") or titleLower:find("synthwave") then
-            hue = 0.58 -- Cyberpunk Cyan / Electric Ice
-            accentHue = 0.55
-            sat = 0.85
-            val = 0.95
-        elseif track and track.palette and track.palette.dominant then
+        -- Authentic cover palette extraction
+        if track and track.palette and track.palette.dominant then
             local d = track.palette.dominant
-            local h, s, l = Color3.toHSV(d)
-            hue = h
-            sat = math.clamp(s, 0.55, 0.95)
-            val = math.clamp(l, 0.60, 0.98)
-            accentHue = h
+            local s = track.palette.secondary or d
+            local h1, s1, v1 = Color3.toHSV(d)
+            local h2, s2, v2 = Color3.toHSV(s)
+
+            hue = h1
+            sat = math.clamp(math.max(s1, 0.40), 0.35, 0.95)
+            val = math.clamp(math.max(v1, 0.65), 0.55, 0.98)
+
+            if s2 > 0.18 and math.abs(h1 - h2) > 0.04 then
+                accentHue = h2
+            else
+                accentHue = (h1 + 0.05) % 1.0
+            end
         elseif track and track.palette and track.palette.avg then
             local a = track.palette.avg
             local h, s, l = Color3.toHSV(a)
             hue = h
-            sat = math.clamp(s, 0.50, 0.90)
-            accentHue = h
+            sat = math.clamp(s, 0.40, 0.90)
+            val = math.clamp(l, 0.60, 0.98)
+            accentHue = (h + 0.05) % 1.0
+        elseif artistLower:find("wifiskeleton") or titleLower:find("ugly") then
+            hue = 0.04; accentHue = 0.03; sat = 0.90; val = 0.95
+        elseif artistLower:find("interworld") or titleLower:find("metamorphosis") or titleLower:find("phonk") then
+            hue = 0.85; accentHue = 0.88; sat = 0.85; val = 0.95
+        elseif artistLower:find("weeknd") or titleLower:find("starboy") or titleLower:find("blinding") then
+            hue = 0.01; accentHue = 0.01; sat = 0.90; val = 0.98
+        elseif artistLower:find("m83") or titleLower:find("midnight city") or titleLower:find("synthwave") then
+            hue = 0.58; accentHue = 0.55; sat = 0.85; val = 0.95
         else
-            -- High-entropy deterministic color hashing
             local hash = 5381
             local combined = tostring(cover) .. ":" .. tostring(title) .. ":" .. tostring(artist)
             for i = 1, #combined do
@@ -207,41 +221,49 @@ return function(Shared)
             end
             hue = (hash % 360) / 360
             accentHue = hue
-            sat = 0.85
-            val = 0.92
+            sat = 0.80
+            val = 0.90
         end
 
         -- Generate unified, harmonized, vibrant palette across all UI components
-        local winBorderCol = Color3.fromHSV(accentHue, math.clamp(sat, 0.70, 1.0), math.clamp(val, 0.80, 1.0))
-        local titleBarCol  = Color3.fromHSV(hue, math.clamp(sat * 0.6, 0.25, 0.55), 0.12)
+        local winBorderCol = Color3.fromHSV(accentHue, math.clamp(sat, 0.70, 1.0), math.clamp(val, 0.85, 1.0))
+        local titleBarCol  = Color3.fromHSV(hue, math.clamp(sat * 0.55, 0.20, 0.50), 0.12)
         local titleTextCol = Color3.fromRGB(248, 250, 255)
-        local navBarCol    = Color3.fromHSV(hue, math.clamp(sat * 0.7, 0.30, 0.60), 0.09)
+        local navBarCol    = Color3.fromHSV(hue, math.clamp(sat * 0.65, 0.25, 0.55), 0.09)
         local navTextCol   = Color3.fromHSV(accentHue, 0.25, 0.98)
         local navLinkCol   = Color3.fromHSV(accentHue, math.clamp(sat, 0.70, 1.0), 1.0)
         local navHoverCol  = Color3.fromHSV((accentHue + 0.05) % 1.0, 0.90, 1.0)
-        local bodyBgCol    = Color3.fromHSV(hue, math.clamp(sat * 0.5, 0.20, 0.50), 0.06)
-        local cellACol     = Color3.fromHSV(hue, math.clamp(sat * 0.45, 0.18, 0.45), 0.09)
-        local cellBCol     = Color3.fromHSV(hue, math.clamp(sat * 0.45, 0.18, 0.45), 0.12)
-        local sideBorder   = Color3.fromHSV(hue, math.clamp(sat * 0.7, 0.30, 0.65), 0.24)
-        local btnBgCol     = Color3.fromHSV(hue, math.clamp(sat * 0.4, 0.15, 0.45), 0.14)
-        local btnBorderCol = Color3.fromHSV(hue, math.clamp(sat * 0.6, 0.25, 0.55), 0.28)
-        local btnHoverCol  = Color3.fromHSV(hue, math.clamp(sat * 0.5, 0.20, 0.50), 0.20)
-        local btnDownCol   = Color3.fromHSV(hue, math.clamp(sat * 0.6, 0.25, 0.55), 0.09)
+        local bodyBgCol    = Color3.fromHSV(hue, math.clamp(sat * 0.45, 0.15, 0.45), 0.06)
+        local cellACol     = Color3.fromHSV(hue, math.clamp(sat * 0.40, 0.15, 0.40), 0.09)
+        local cellBCol     = Color3.fromHSV(hue, math.clamp(sat * 0.40, 0.15, 0.40), 0.12)
+        local sideBorder   = Color3.fromHSV(hue, math.clamp(sat * 0.65, 0.25, 0.60), 0.24)
+        local btnBgCol     = Color3.fromHSV(hue, math.clamp(sat * 0.40, 0.15, 0.40), 0.14)
+        local btnBorderCol = Color3.fromHSV(hue, math.clamp(sat * 0.55, 0.20, 0.50), 0.28)
+        local btnHoverCol  = Color3.fromHSV(hue, math.clamp(sat * 0.45, 0.18, 0.45), 0.20)
+        local btnDownCol   = Color3.fromHSV(hue, math.clamp(sat * 0.55, 0.20, 0.50), 0.09)
         local btnTextCol   = Color3.fromRGB(245, 248, 255)
-        local tabActiveBg  = Color3.fromHSV(hue, math.clamp(sat * 0.5, 0.20, 0.50), 0.06)
+        local tabActiveBg  = Color3.fromHSV(hue, math.clamp(sat * 0.45, 0.15, 0.45), 0.06)
         local tabActiveTxt = Color3.fromHSV(accentHue, math.clamp(sat, 0.70, 1.0), 1.0)
-        local secBgCol     = Color3.fromHSV(hue, math.clamp(sat * 0.6, 0.25, 0.55), 0.15)
+        local secBgCol     = Color3.fromHSV(hue, math.clamp(sat * 0.55, 0.20, 0.50), 0.15)
         local secTextCol   = Color3.fromHSV(accentHue, 0.35, 0.98)
-        local rowBgCol     = Color3.fromHSV(hue, math.clamp(sat * 0.4, 0.15, 0.40), 0.09)
-        local rowBorderCol = Color3.fromHSV(hue, math.clamp(sat * 0.5, 0.20, 0.50), 0.20)
-        local rowHoverCol  = Color3.fromHSV(hue, math.clamp(sat * 0.5, 0.20, 0.50), 0.15)
+        local rowBgCol     = Color3.fromHSV(hue, math.clamp(sat * 0.35, 0.12, 0.35), 0.09)
+        local rowBorderCol = Color3.fromHSV(hue, math.clamp(sat * 0.45, 0.18, 0.45), 0.20)
+        local rowHoverCol  = Color3.fromHSV(hue, math.clamp(sat * 0.45, 0.18, 0.45), 0.15)
         local accentCol    = Color3.fromHSV(accentHue, math.clamp(sat, 0.75, 1.0), math.clamp(val, 0.85, 1.0))
-        local drawerBgCol  = Color3.fromHSV(hue, math.clamp(sat * 0.5, 0.20, 0.50), 0.08)
-        local notifyBgCol  = Color3.fromHSV(hue, math.clamp(sat * 0.55, 0.25, 0.55), 0.10)
+        local drawerBgCol  = Color3.fromHSV(hue, math.clamp(sat * 0.45, 0.15, 0.45), 0.08)
+        local notifyBgCol  = Color3.fromHSV(hue, math.clamp(sat * 0.50, 0.20, 0.50), 0.10)
         local notifyBrdCol = Color3.fromHSV(accentHue, math.clamp(sat, 0.75, 1.0), 0.85)
-        local bannerBgCol  = Color3.fromHSV(hue, math.clamp(sat * 0.55, 0.25, 0.55), 0.10)
+        local bannerBgCol  = Color3.fromHSV(hue, math.clamp(sat * 0.50, 0.20, 0.50), 0.10)
         local bannerTitle  = Color3.fromHSV(accentHue, 0.30, 1.0)
         local bannerSub    = Color3.fromHSV(accentHue, 0.20, 0.85)
+
+        -- Dynamic Multi-Tone Cover Gradient Palettes
+        local titleGradTop = Color3.fromHSV(hue, math.clamp(sat * 0.65, 0.25, 0.60), 0.22)
+        local titleGradBot = Color3.fromHSV(hue, math.clamp(sat * 0.50, 0.18, 0.45), 0.09)
+        local navGradTop   = Color3.fromHSV(hue, math.clamp(sat * 0.70, 0.28, 0.65), 0.16)
+        local navGradBot   = Color3.fromHSV(hue, math.clamp(sat * 0.55, 0.20, 0.50), 0.07)
+        local bannerGradTop= Color3.fromHSV(accentHue, math.clamp(sat * 0.75, 0.35, 0.75), 0.24)
+        local bannerGradBot= Color3.fromHSV(hue, math.clamp(sat * 0.50, 0.20, 0.50), 0.07)
 
         return {
             WinBorder     = winBorderCol,
@@ -274,6 +296,12 @@ return function(Shared)
             BannerBg      = bannerBgCol,
             BannerTitle   = bannerTitle,
             BannerSub     = bannerSub,
+            TitleGradTop  = titleGradTop,
+            TitleGradBot  = titleGradBot,
+            NavGradTop    = navGradTop,
+            NavGradBot    = navGradBot,
+            BannerGradTop = bannerGradTop,
+            BannerGradBot = bannerGradBot,
             IsDark        = true,
             IsAdaptive    = true
         }
@@ -484,18 +512,51 @@ return function(Shared)
             end
             if TitleBar and TitleBar.Parent then
                 TweenService:Create(TitleBar, tweenInfo, { BackgroundTransparency = titleTrans }):Play()
+                local tGrad = TitleBar:FindFirstChildOfClass("UIGradient")
+                if tGrad then
+                    tGrad.Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, targetTheme.TitleGradTop or Color3.fromRGB(42, 48, 62)),
+                        ColorSequenceKeypoint.new(1, targetTheme.TitleGradBot or Color3.fromRGB(22, 26, 34))
+                    })
+                end
             end
             if Body and Body.Parent then
                 TweenService:Create(Body, tweenInfo, { BackgroundTransparency = bodyTrans }):Play()
             end
             if NavBar and NavBar.Parent then
                 TweenService:Create(NavBar, tweenInfo, { BackgroundTransparency = navTrans }):Play()
+                local nGrad = NavBar:FindFirstChildOfClass("UIGradient")
+                if nGrad then
+                    nGrad.Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, targetTheme.NavGradTop or Color3.fromRGB(32, 38, 52)),
+                        ColorSequenceKeypoint.new(1, targetTheme.NavGradBot or Color3.fromRGB(16, 20, 28))
+                    })
+                end
             end
-            if Sidebar and Sidebar.Parent then
-                TweenService:Create(Sidebar, tweenInfo, { BackgroundTransparency = bodyTrans }):Play()
+            if logoBox and logoBox.Parent then
+                local bGrad = logoBox:FindFirstChildOfClass("UIGradient")
+                if bGrad then
+                    bGrad.Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, targetTheme.BannerGradTop or Color3.fromRGB(26, 38, 62)),
+                        ColorSequenceKeypoint.new(1, targetTheme.BannerGradBot or Color3.fromRGB(14, 18, 26))
+                    })
+                end
             end
             if Drawer and Drawer.Parent then
                 TweenService:Create(Drawer, tweenInfo, { BackgroundTransparency = drawerTrans }):Play()
+                local dH = Drawer:FindFirstChild("Frame")
+                if dH then
+                    local dGrad = dH:FindFirstChildOfClass("UIGradient")
+                    if dGrad then
+                        dGrad.Color = ColorSequence.new({
+                            ColorSequenceKeypoint.new(0, targetTheme.TitleGradTop or Color3.fromRGB(36, 42, 54)),
+                            ColorSequenceKeypoint.new(1, targetTheme.SectionBg or Color3.fromRGB(26, 32, 46))
+                        })
+                    end
+                end
+            end
+            if Sidebar and Sidebar.Parent then
+                TweenService:Create(Sidebar, tweenInfo, { BackgroundTransparency = bodyTrans }):Play()
             end
             if DrawerScroll and DrawerScroll.Parent then
                 TweenService:Create(DrawerScroll, tweenInfo, { BackgroundTransparency = 1 }):Play()
@@ -682,6 +743,15 @@ return function(Shared)
     TitleBar.BorderColor3     = Color3.fromRGB(140,140,140); TitleBar.Parent = Window
     registerThemed(TitleBar, { BackgroundColor3 = "TitleBar" })
 
+    local titleGrad = Instance.new("UIGradient")
+    titleGrad.Name = "TitleGradient"
+    titleGrad.Rotation = 90
+    titleGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, C.TitleGradTop or Color3.fromRGB(42, 48, 62)),
+        ColorSequenceKeypoint.new(1, C.TitleGradBot or Color3.fromRGB(22, 26, 34))
+    })
+    titleGrad.Parent = TitleBar
+
     local TitleText = Instance.new("TextLabel")
     TitleText.Size = UDim2.new(0,200,1,0); TitleText.Position = UDim2.new(0,10,0,0)
     TitleText.BackgroundTransparency = 1; TitleText.Text = "Fih Ui"
@@ -847,6 +917,15 @@ return function(Shared)
     NavBar.BackgroundTransparency = 0.30
     NavBar.BorderColor3 = Color3.fromRGB(140,160,200); NavBar.Parent = Window
     registerThemed(NavBar, { BackgroundColor3 = "NavBar" })
+
+    local navGrad = Instance.new("UIGradient")
+    navGrad.Name = "NavGradient"
+    navGrad.Rotation = 90
+    navGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, C.NavGradTop or Color3.fromRGB(32, 38, 52)),
+        ColorSequenceKeypoint.new(1, C.NavGradBot or Color3.fromRGB(16, 20, 28))
+    })
+    navGrad.Parent = NavBar
 
     local NavTabLabel = Instance.new("TextLabel")
     NavTabLabel.Size = UDim2.new(0.5,0,1,0); NavTabLabel.Position = UDim2.new(0,10,0,0)
@@ -1024,6 +1103,15 @@ return function(Shared)
     DHeader.BorderSizePixel = 1; DHeader.BorderColor3 = C.SidebarBorder
     DHeader.ZIndex = 21; DHeader.Parent = Drawer
     registerThemed(DHeader, { BackgroundColor3 = "SectionBg", BorderColor3 = "SidebarBorder" })
+
+    local dGrad = Instance.new("UIGradient")
+    dGrad.Name = "DHeaderGradient"
+    dGrad.Rotation = 90
+    dGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, C.TitleGradTop or Color3.fromRGB(36, 42, 54)),
+        ColorSequenceKeypoint.new(1, C.SectionBg)
+    })
+    dGrad.Parent = DHeader
 
     local DTitle = Instance.new("TextLabel")
     DTitle.Size = UDim2.new(1,-85,1,0); DTitle.Position = UDim2.new(0,8,0,0)
@@ -1209,6 +1297,15 @@ return function(Shared)
     logoBox.LayoutOrder = 1; logoBox.Parent = mainTab
     registerThemed(logoBox, { BackgroundColor3 = "BannerBg", BorderColor3 = "WinBorder" })
 
+    local bannerGrad = Instance.new("UIGradient")
+    bannerGrad.Name = "BannerGradient"
+    bannerGrad.Rotation = 45
+    bannerGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, C.BannerGradTop or Color3.fromRGB(26, 38, 62)),
+        ColorSequenceKeypoint.new(1, C.BannerGradBot or Color3.fromRGB(14, 18, 26))
+    })
+    bannerGrad.Parent = logoBox
+
     local logoText = Instance.new("TextLabel")
     logoText.Size = UDim2.new(1,0,0,46); logoText.Position = UDim2.new(0,0,0,4)
     logoText.BackgroundTransparency = 1; logoText.Text = "Fih Ui"
@@ -1234,6 +1331,17 @@ return function(Shared)
         lbl.BorderSizePixel = 1; lbl.BorderColor3 = C.SidebarBorder
         lbl.LayoutOrder = order or 0; lbl.Parent = parent
         registerThemed(lbl, { BackgroundColor3 = "SectionBg", TextColor3 = "SectionText", BorderColor3 = "SidebarBorder" })
+
+        local secGrad = Instance.new("UIGradient")
+        secGrad.Name = "SectionGradient"
+        secGrad.Rotation = 0
+        secGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+            ColorSequenceKeypoint.new(0.65, Color3.fromRGB(240, 240, 240)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 180, 180))
+        })
+        secGrad.Parent = lbl
+
         return lbl
     end
 

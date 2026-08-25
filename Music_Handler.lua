@@ -174,6 +174,116 @@ return function(Shared)
         return ""
     end
 
+    -- ── RAW IMAGE PALETTE ANALYZER & DOMINANT COLOR SAMPLER ───────
+    local function extractPaletteFromImage(rawData)
+        if not rawData or type(rawData) ~= "string" or #rawData < 40 then return nil end
+
+        local rSum, gSum, bSum, totalSamples = 0, 0, 0, 0
+        local colorBuckets = {}
+        local len = #rawData
+
+        local isPNG = (rawData:sub(1, 4) == "\137PNG")
+        local isJPEG = (rawData:sub(1, 2) == "\255\216")
+
+        local startOffset = 64
+        if isJPEG then
+            local sos = rawData:find("\255\218")
+            if sos and sos + 10 < len then
+                startOffset = sos + 4
+            end
+        elseif isPNG then
+            local plte = rawData:find("PLTE")
+            if plte and plte + 10 < len then
+                local plteLen = string.byte(rawData, plte - 4) * 16777216 
+                              + string.byte(rawData, plte - 3) * 65536 
+                              + string.byte(rawData, plte - 2) * 256 
+                              + string.byte(rawData, plte - 1)
+                for i = plte + 4, math.min(plte + 4 + plteLen - 3, len - 2), 3 do
+                    local r, g, b = string.byte(rawData, i, i + 2)
+                    if r and g and b then
+                        rSum = rSum + r; gSum = gSum + g; bSum = bSum + b; totalSamples = totalSamples + 1
+                        local qR, qG, qB = math.floor(r / 32), math.floor(g / 32), math.floor(b / 32)
+                        local key = (qR * 64) + (qG * 8) + qB
+                        colorBuckets[key] = (colorBuckets[key] or 0) + 1
+                    end
+                end
+            else
+                local idat = rawData:find("IDAT")
+                if idat and idat + 10 < len then
+                    startOffset = idat + 8
+                end
+            end
+        end
+
+        if totalSamples == 0 then
+            local step = math.max(math.floor((len - startOffset) / 450), 3)
+            for i = startOffset, len - 3, step do
+                local r = string.byte(rawData, i)
+                local g = string.byte(rawData, i + 1)
+                local b = string.byte(rawData, i + 2)
+                if r and g and b then
+                    local lum = 0.299 * r + 0.587 * g + 0.114 * b
+                    local maxC = math.max(r, g, b)
+                    local minC = math.min(r, g, b)
+                    local sat = maxC > 0 and ((maxC - minC) / maxC) or 0
+                    
+                    rSum = rSum + r
+                    gSum = gSum + g
+                    bSum = bSum + b
+                    totalSamples = totalSamples + 1
+
+                    local qR = math.floor(r / 32)
+                    local qG = math.floor(g / 32)
+                    local qB = math.floor(b / 32)
+                    local key = (qR * 64) + (qG * 8) + qB
+
+                    local weight = 1 + math.floor(sat * 5) + (lum > 25 and lum < 235 and 2 or 0)
+                    colorBuckets[key] = (colorBuckets[key] or 0) + weight
+                end
+            end
+        end
+
+        if totalSamples == 0 then return nil end
+
+        local avgR = (rSum / totalSamples) / 255
+        local avgG = (gSum / totalSamples) / 255
+        local avgB = (bSum / totalSamples) / 255
+        local avgCol = Color3.new(avgR, avgG, avgB)
+
+        local topKey1, topW1 = nil, -1
+        local topKey2, topW2 = nil, -1
+
+        for key, weight in pairs(colorBuckets) do
+            if weight > topW1 then
+                topKey2, topW2 = topKey1, topW1
+                topKey1, topW1 = key, weight
+            elseif weight > topW2 then
+                topKey2, topW2 = key, weight
+            end
+        end
+
+        local function keyToColor(key)
+            if not key then return avgCol end
+            local qR = math.floor(key / 64)
+            local qG = math.floor((key % 64) / 8)
+            local qB = key % 8
+            return Color3.fromRGB(math.clamp(qR * 32 + 16, 0, 255), math.clamp(qG * 32 + 16, 0, 255), math.clamp(qB * 32 + 16, 0, 255))
+        end
+
+        local domCol = topKey1 and keyToColor(topKey1) or avgCol
+        local secCol = topKey2 and keyToColor(topKey2) or domCol
+
+        local _, domS, _ = Color3.toHSV(domCol)
+        local isMono = (domS < 0.12) and (math.abs(avgR - avgG) < 0.05 and math.abs(avgG - avgB) < 0.05)
+
+        return {
+            dominant = domCol,
+            secondary = secCol,
+            avg = avgCol,
+            isMonochrome = isMono
+        }
+    end
+
     applyImage = function(imgLabel, track)
         if not imgLabel or not imgLabel.Parent then return end
         local url = track and track.cover or ""
@@ -215,6 +325,18 @@ return function(Shared)
                 pcall(function() imgLabel.Visible = false end)
                 return
             end
+
+            -- Extract authentic cover color palette and update Adaptive Theme
+            pcall(function()
+                local pal = extractPaletteFromImage(rawData)
+                if pal then
+                    track.palette = pal
+                    currentTrack.palette = pal
+                    if Shared.SetAdaptiveThemeTrack then
+                        Shared.SetAdaptiveThemeTrack(track)
+                    end
+                end
+            end)
 
             local filename = "fih_cover_" .. tostring(os.time()) .. ".png"
             local writeSuccess = false
@@ -703,6 +825,19 @@ return function(Shared)
         frame.Parent           = Shared.GUI
         hudWidget = frame
 
+        local hudFrameGrad = Instance.new("UIGradient")
+        hudFrameGrad.Name = "HUD_Gradient"
+        hudFrameGrad.Rotation = 135
+        hudFrameGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, C.BodyBg),
+            ColorSequenceKeypoint.new(1, Color3.new(
+                math.clamp(C.BodyBg.R * 0.7 + C.Accent.R * 0.3, 0, 1),
+                math.clamp(C.BodyBg.G * 0.7 + C.Accent.G * 0.3, 0, 1),
+                math.clamp(C.BodyBg.B * 0.7 + C.Accent.B * 0.3, 0, 1)
+            ))
+        })
+        hudFrameGrad.Parent = frame
+
         local tBar = Instance.new("Frame")
         tBar.Size             = UDim2.new(1, 0, 0, 20)
         tBar.BackgroundColor3 = C.TitleBar
@@ -711,6 +846,19 @@ return function(Shared)
         tBar.BorderColor3     = Color3.fromRGB(140, 140, 140)
         tBar.ZIndex           = 51
         tBar.Parent           = frame
+
+        local hudTBarGrad = Instance.new("UIGradient")
+        hudTBarGrad.Name = "HUD_TitleGradient"
+        hudTBarGrad.Rotation = 90
+        hudTBarGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.new(
+                math.clamp(C.TitleBar.R * 1.3, 0, 1),
+                math.clamp(C.TitleBar.G * 1.3, 0, 1),
+                math.clamp(C.TitleBar.B * 1.3, 0, 1)
+            )),
+            ColorSequenceKeypoint.new(1, C.TitleBar)
+        })
+        hudTBarGrad.Parent = tBar
 
         local tLbl = Instance.new("TextLabel")
         tLbl.Size                   = UDim2.new(1, -8, 1, 0)
@@ -862,10 +1010,23 @@ return function(Shared)
             bar.Size = UDim2.new(0, 5, 0, 4)
             bar.Position = UDim2.new(0, (i - 1) * 7, 1, 0)
             bar.AnchorPoint = Vector2.new(0, 1)
-            bar.BackgroundColor3 = C.Accent
+            bar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             bar.BorderSizePixel = 0
             bar.ZIndex = 55
             bar.Parent = hudVisualizer
+
+            local barGrad = Instance.new("UIGradient")
+            barGrad.Name = "BarGradient"
+            barGrad.Rotation = 90
+            barGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, C.Accent),
+                ColorSequenceKeypoint.new(1, Color3.new(
+                    math.clamp(C.Accent.R * 0.4, 0, 1),
+                    math.clamp(C.Accent.G * 0.4, 0, 1),
+                    math.clamp(C.Accent.B * 0.4, 0, 1)
+                ))
+            })
+            barGrad.Parent = bar
             hudVisBars[i] = bar
         end
 
@@ -1239,10 +1400,18 @@ return function(Shared)
             if hudWidget and hudWidget.Parent then
                 local tBar = hudWidget:FindFirstChildOfClass("Frame")
                 if tBar then
+                    local tBarBg = darkMode and (theme.TitleBar or Color3.fromRGB(32, 36, 46)) or (theme.TitleBar or Color3.fromRGB(212, 208, 200))
                     TweenSvc:Create(tBar, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
-                        BackgroundColor3 = darkMode and (theme.TitleBar or Color3.fromRGB(32, 36, 46)) or (theme.TitleBar or Color3.fromRGB(212, 208, 200)),
+                        BackgroundColor3 = tBarBg,
                         BackgroundTransparency = 0.20
                     }):Play()
+                    local tGrad = tBar:FindFirstChildOfClass("UIGradient")
+                    if tGrad then
+                        tGrad.Color = ColorSequence.new({
+                            ColorSequenceKeypoint.new(0, Color3.new(math.clamp(tBarBg.R * 1.3, 0, 1), math.clamp(tBarBg.G * 1.3, 0, 1), math.clamp(tBarBg.B * 1.3, 0, 1))),
+                            ColorSequenceKeypoint.new(1, tBarBg)
+                        })
+                    end
                     local tLbl = tBar:FindFirstChildOfClass("TextLabel")
                     if tLbl then
                         TweenSvc:Create(tLbl, TweenInfo.new(0.25), {
@@ -1250,11 +1419,37 @@ return function(Shared)
                         }):Play()
                     end
                 end
+                local hudBg = darkMode and (theme.BodyBg or Color3.fromRGB(16, 18, 24)) or (theme.BodyBg or Color3.fromRGB(248, 250, 255))
+                local accent = theme.Accent or (darkMode and Color3.fromRGB(60, 145, 255) or Color3.fromRGB(0, 120, 40))
                 TweenSvc:Create(hudWidget, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
-                    BackgroundColor3 = darkMode and (theme.BodyBg or Color3.fromRGB(16, 18, 24)) or (theme.BodyBg or Color3.fromRGB(248, 250, 255)),
+                    BackgroundColor3 = hudBg,
                     BorderColor3     = darkMode and (theme.WinBorder or Color3.fromRGB(30, 75, 130)) or (theme.WinBorder or Color3.fromRGB(58, 110, 165)),
                     BackgroundTransparency = 0.25
                 }):Play()
+
+                local fGrad = hudWidget:FindFirstChild("HUD_Gradient")
+                if fGrad then
+                    fGrad.Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, hudBg),
+                        ColorSequenceKeypoint.new(1, Color3.new(
+                            math.clamp(hudBg.R * 0.7 + accent.R * 0.3, 0, 1),
+                            math.clamp(hudBg.G * 0.7 + accent.G * 0.3, 0, 1),
+                            math.clamp(hudBg.B * 0.7 + accent.B * 0.3, 0, 1)
+                        ))
+                    })
+                end
+
+                if hudVisBars then
+                    for _, bar in ipairs(hudVisBars) do
+                        local bGrad = bar:FindFirstChildOfClass("UIGradient")
+                        if bGrad then
+                            bGrad.Color = ColorSequence.new({
+                                ColorSequenceKeypoint.new(0, accent),
+                                ColorSequenceKeypoint.new(1, Color3.new(math.clamp(accent.R * 0.35, 0, 1), math.clamp(accent.G * 0.35, 0, 1), math.clamp(accent.B * 0.35, 0, 1)))
+                            })
+                        end
+                    end
+                end
             end
             if billboard and billboard.Parent then
                 local bg = billboard:FindFirstChildOfClass("Frame")
