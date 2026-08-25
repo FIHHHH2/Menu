@@ -1527,6 +1527,13 @@ return function(Shared)
         box.MouseButton1Click:Connect(function() setToggle(not Shared.Flags[flagKey]) end)
 
         Shared.Toggles[flagKey] = {Name=labelText, SetToggle=setToggle, Key=nil}
+
+        if initialState and callback then
+            task.spawn(function()
+                pcall(callback, true)
+            end)
+        end
+
         return row, setToggle
     end
 
@@ -1611,6 +1618,13 @@ return function(Shared)
             SetValue = setValue,
             Row      = row
         }
+
+        if callback then
+            task.spawn(function()
+                pcall(callback, currentVal)
+            end)
+        end
+
         return row
     end
 

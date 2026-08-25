@@ -56,28 +56,43 @@ return function(Shared)
     end)
 
     local flightBV, flightConn
-    MkToggle(leftCol, "Flight", "Flight", 3, function(state)
-        local hrp = getHRP(); if not hrp then return end
-        if state then
+    local function startFlight()
+        if flightConn then flightConn:Disconnect(); flightConn = nil end
+        if flightBV then flightBV:Destroy(); flightBV = nil end
+        local hrp = getHRP()
+        if hrp then
             hrp.Velocity = Vector3.zero
             flightBV = Instance.new("BodyVelocity")
             flightBV.MaxForce = Vector3.new(1e5,1e5,1e5); flightBV.Velocity = Vector3.zero; flightBV.Parent = hrp
-            local cam = workspace.CurrentCamera
-            flightConn = RunService.Heartbeat:Connect(function()
-                if not Shared.Flags["Flight"] then return end
-                local speed = Shared.Flags["FlightSpeed"] or 65; local dir = Vector3.zero
-                if UserInput:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.CFrame.LookVector end
-                if UserInput:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.CFrame.LookVector end
-                if UserInput:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.CFrame.RightVector end
-                if UserInput:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.CFrame.RightVector end
-                if UserInput:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0,1,0) end
-                if UserInput:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3.new(0,1,0) end
-                flightBV.Velocity = dir.Magnitude > 0 and (dir.Unit * speed) or Vector3.zero
-            end)
-        else
-            if flightConn then flightConn:Disconnect(); flightConn = nil end
-            if flightBV   then flightBV:Destroy();     flightBV   = nil end
         end
+        local cam = workspace.CurrentCamera
+        flightConn = RunService.Heartbeat:Connect(function()
+            if not Shared.Flags["Flight"] then return end
+            local currentHRP = getHRP()
+            if currentHRP and (not flightBV or flightBV.Parent ~= currentHRP) then
+                if flightBV then flightBV:Destroy() end
+                flightBV = Instance.new("BodyVelocity")
+                flightBV.MaxForce = Vector3.new(1e5,1e5,1e5); flightBV.Velocity = Vector3.zero; flightBV.Parent = currentHRP
+            end
+            local speed = Shared.Flags["FlightSpeed"] or 65; local dir = Vector3.zero
+            if UserInput:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.CFrame.LookVector end
+            if UserInput:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.CFrame.LookVector end
+            if UserInput:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.CFrame.RightVector end
+            if UserInput:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.CFrame.RightVector end
+            if UserInput:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0,1,0) end
+            if UserInput:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3.new(0,1,0) end
+            if flightBV and flightBV.Parent then
+                flightBV.Velocity = dir.Magnitude > 0 and (dir.Unit * speed) or Vector3.zero
+            end
+        end)
+    end
+    local function stopFlight()
+        if flightConn then flightConn:Disconnect(); flightConn = nil end
+        if flightBV then flightBV:Destroy(); flightBV = nil end
+    end
+
+    MkToggle(leftCol, "Flight", "Flight", 3, function(state)
+        if state then startFlight() else stopFlight() end
     end)
 
     MkSlider(leftCol, "Flight Speed", "FlightSpeed", 20, 300, 65, 4, function(val) Shared.Flags["FlightSpeed"] = val end)
@@ -324,6 +339,24 @@ return function(Shared)
         end
         restoreDefaultCollisions(char)
         if Shared.Flags["FragilePlayer"] then setupFragileCharacter(char) end
+        if Shared.Flags["Flight"] then startFlight() end
+        if Shared.Flags["Reach"] and Shared.Flags["Reach"] > 2 then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.Size = Vector3.new(Shared.Flags["Reach"], 2, Shared.Flags["Reach"])
+                hrp.CanCollide = false
+            end
+        end
+        if Shared.Flags["AntiRagdoll"] then
+            for _, obj in ipairs(char:GetDescendants()) do
+                if obj:IsA("BallSocketConstraint") or obj:IsA("HingeConstraint") then
+                    obj.Enabled = false
+                end
+            end
+        end
+        if Shared.Flags["Gravity"] then
+            workspace.Gravity = Shared.Flags["Gravity"]
+        end
     end)
 
     MkSection(rightCol, "World Modifiers", 20)

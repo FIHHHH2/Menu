@@ -142,6 +142,11 @@ local function loadConfig()
             for k, v in pairs(data) do
                 Shared.Config[k] = v
             end
+            if data.Flags and type(data.Flags) == "table" then
+                for k, v in pairs(data.Flags) do
+                    Shared.Flags[k] = v
+                end
+            end
         end
     end
 end
