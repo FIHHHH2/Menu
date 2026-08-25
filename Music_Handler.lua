@@ -26,6 +26,12 @@ return function(Shared)
     local leftCol  = cols.Left
     local rightCol = cols.Right
 
+    -- Forward declarations to ensure zero nil-function reference errors
+    local updateVisuals, buildBillboard, buildHUD, startPolling
+    local getSpotifyTrack, getLastFMTrack, refreshSpotifyToken, spotifyRequest
+    local handleSpotifyPrevious, handleSpotifyPlayPause, handleSpotifyNext
+    local fetchSyncedLyrics, applyImage, parseLRC
+
     -- Verified working Last.fm public API key
     local LASTFM_API_KEY = "b25b959554ed76058ac220b7b2e0a026"
     local currentTrack = {
@@ -55,7 +61,7 @@ return function(Shared)
     local lastLyricsQuery = ""
     local hudLyricsLbl, bbLyricsLbl
 
-    local function parseLRC(lrcText)
+    parseLRC = function(lrcText)
         if not lrcText or type(lrcText) ~= "string" or #lrcText == 0 then return nil end
         local parsed = {}
         for line in lrcText:gmatch("[^\r\n]+") do
@@ -72,7 +78,7 @@ return function(Shared)
         return #parsed > 0 and parsed or nil
     end
 
-    local function fetchSyncedLyrics(artist, trackName)
+    fetchSyncedLyrics = function(artist, trackName)
         if not artist or artist == "" or not trackName or trackName == "" then return end
         local queryKey = artist:lower() .. "::" .. trackName:lower()
         if queryKey == lastLyricsQuery then return end
@@ -169,7 +175,7 @@ return function(Shared)
         return ""
     end
 
-    local function applyImage(imgLabel, track)
+    applyImage = function(imgLabel, track)
         if not imgLabel or not imgLabel.Parent then return end
         local url = track and track.cover or ""
         if not url or url == "" then
@@ -281,7 +287,7 @@ return function(Shared)
 
     -- ── OPTION 2: SPOTIFY OAUTH ENGINE ─────────────────────────────
     local isRefreshingToken = false
-    local function refreshSpotifyToken()
+    refreshSpotifyToken = function()
         local raw = cleanToken(Shared.Config.SpotifyRefreshToken)
 
         -- Parse combined paste "token|clientId|clientSecret"
@@ -360,7 +366,7 @@ return function(Shared)
         return false, (resp and resp.Body) or "Network error"
     end
 
-    local function spotifyRequest(endpoint, method, body, hasRetried)
+    spotifyRequest = function(endpoint, method, body, hasRetried)
         local token = cleanToken(Shared.Config.SpotifyToken)
         if not token or token == "" then
             if Shared.Config.SpotifyRefreshToken and not hasRetried then
@@ -392,7 +398,7 @@ return function(Shared)
         return resp
     end
 
-    local function getSpotifyTrack(hasRetried)
+    getSpotifyTrack = function(hasRetried)
         local token = cleanToken(Shared.Config.SpotifyToken)
         if not token or token == "" then
             if Shared.Config.SpotifyRefreshToken and not hasRetried then
@@ -487,7 +493,7 @@ return function(Shared)
     end
 
     -- ── OPTION 1: LAST.FM SCROBBLER ────────────────────────────────
-    local function getLastFMTrack()
+    getLastFMTrack = function()
         local user = Shared.Config.LastFMUser
         if not user or user == "" or user == "Enter Last.fm Username" then return nil end
         local url = "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=" .. Http:UrlEncode(user) .. "&api_key=" .. LASTFM_API_KEY .. "&format=json&limit=1"
@@ -546,7 +552,7 @@ return function(Shared)
     end
 
     -- ── PLAYBACK CONTROLS (⏮ ⏯ ⏭) ──────────────────────────────────
-    local function handleSpotifyPrevious()
+    handleSpotifyPrevious = function()
         task.spawn(function()
             local token = cleanToken(Shared.Config.SpotifyToken)
             if not token or token == "" then
@@ -565,7 +571,7 @@ return function(Shared)
         end)
     end
 
-    local function handleSpotifyPlayPause()
+    handleSpotifyPlayPause = function()
         task.spawn(function()
             local token = cleanToken(Shared.Config.SpotifyToken)
             if not token or token == "" then
@@ -599,7 +605,7 @@ return function(Shared)
         end)
     end
 
-    local function handleSpotifyNext()
+    handleSpotifyNext = function()
         task.spawn(function()
             local token = cleanToken(Shared.Config.SpotifyToken)
             if not token or token == "" then
@@ -621,7 +627,7 @@ return function(Shared)
     -- ── OVERHEAD BILLBOARD (305x70px) ──────────────────────────────
     local bbSongLbl, bbArtistLbl, bbCoverImg
 
-    local function buildBillboard()
+    buildBillboard = function()
         if billboard then billboard:Destroy(); billboard = nil end
 
         local char = Shared.Character or Player.Character
@@ -783,7 +789,7 @@ return function(Shared)
     -- ── DRAGGABLE & RESIZABLE BOTTOM-LEFT INFO HUD ──────────────────
     local hudSongLbl, hudArtistLbl, hudCoverImg, hudPlaceLbl, hudUserLbl, coverContainerRef, rightBoxRef
 
-    local function buildHUD()
+    buildHUD = function()
         if hudWidget then hudWidget:Destroy(); hudWidget = nil end
 
         local isDark = (Shared.IsDark and Shared.IsDark()) or (Shared.Config and Shared.Config.DarkMode == true)
@@ -1102,7 +1108,7 @@ return function(Shared)
     end
 
     -- ── VISUALS SYNC ───────────────────────────────────────────────
-    local function updateVisuals(track)
+    updateVisuals = function(track)
         if not track then return end
         currentTrack = track
 
@@ -1130,7 +1136,7 @@ return function(Shared)
     Shared.CurrentTrack = function() return currentTrack end
 
     -- ── PERSISTENT AUTO-POLL ENGINE ────────────────────────────────
-    local function startPolling()
+    startPolling = function()
         if pollConn then pollConn:Disconnect() end
         local elapsed = 0
         pollConn = RunSvc.Heartbeat:Connect(function(dt)

@@ -200,6 +200,8 @@ loadModule("UI_Handler")(Shared)
 task.wait(0.01)
 loadModule("Main_Functions")(Shared)
 task.wait(0.01)
+loadModule("Spy_Functions")(Shared)
+task.wait(0.01)
 if isMM2 then
     loadModule("MM2_Functions")(Shared)
     task.wait(0.01)

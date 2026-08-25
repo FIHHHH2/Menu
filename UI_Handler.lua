@@ -933,16 +933,17 @@ return function(Shared)
     Sidebar.BorderSizePixel = 0; Sidebar.ClipsDescendants = true; Sidebar.Parent = Body
     registerThemed(Sidebar, { BackgroundColor3 = "BodyBg" })
 
-    -- Lightweight checkered pattern (Zero startup lag)
+    -- Checkered pattern covering full sidebar height (dynamically fills to any scale)
     local SidebarPattern = Instance.new("Frame")
     SidebarPattern.Size = UDim2.new(1, 0, 1, 0)
     SidebarPattern.BackgroundTransparency = 1
     SidebarPattern.ZIndex = 2
+    SidebarPattern.ClipsDescendants = true
     SidebarPattern.Parent = Sidebar
 
     local CELL = 9
-    for r = 0, 36 do
-        for c = 0, 10 do
+    for r = 0, 120 do
+        for c = 0, 12 do
             if (r + c) % 2 == 1 then
                 local cell = Instance.new("Frame")
                 cell.Size = UDim2.new(0, CELL, 0, CELL)
@@ -1091,9 +1092,10 @@ return function(Shared)
         table.insert(tabDefs, {name="Blade Ball", order=curOrder})
         curOrder = curOrder + 1
     end
-    table.insert(tabDefs, {name="Music",    order=curOrder})
-    table.insert(tabDefs, {name="Troll",    order=curOrder + 1})
-    table.insert(tabDefs, {name="Keybinds", order=curOrder + 2})
+    table.insert(tabDefs, {name="Spy",      order=curOrder})
+    table.insert(tabDefs, {name="Music",    order=curOrder + 1})
+    table.insert(tabDefs, {name="Troll",    order=curOrder + 2})
+    table.insert(tabDefs, {name="Keybinds", order=curOrder + 3})
 
     local function switchTab(name)
         if activeTab == name then return end
