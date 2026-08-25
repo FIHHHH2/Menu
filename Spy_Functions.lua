@@ -258,7 +258,7 @@ return function(Shared)
     end)
 
     -- Auto-restore camera if target dies or leaves
-    RunService.Heartbeat:Connect(function()
+    local spyHbConn = RunService.Heartbeat:Connect(function()
         if isSpectating then
             local cam = workspace.CurrentCamera
             if not selectedPlayer or not selectedPlayer.Parent or not getHum(selectedPlayer) then
@@ -272,6 +272,7 @@ return function(Shared)
             end
         end
     end)
+    if Shared.AddCleanup then Shared.AddCleanup(spyHbConn) end
 
     -- ── TACTICAL SPY UTILITIES ─────────────────────────────────────
     MkSection(rightCol, "Spy Actions & Utilities", 20)

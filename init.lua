@@ -2,6 +2,15 @@
 -- Modular Loadstring Entry Point with Cache Busting
 -- Usage: loadstring(game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu/main/init.lua?t=" .. tick()))()
 
+-- Terminate and disconnect all connections and objects from previous executions
+pcall(function()
+    if getgenv and type(getgenv().FihUI_Cleanup) == "function" then
+        getgenv().FihUI_Cleanup()
+    elseif type(_G.FihUI_Cleanup) == "function" then
+        _G.FihUI_Cleanup()
+    end
+end)
+
 local commitSha = nil
 pcall(function()
     local res = game:HttpGet("https://api.github.com/repos/FIHHHH2/Menu/commits/main?t=" .. tostring(os.time()) .. tostring(math.random(1000, 9999)))

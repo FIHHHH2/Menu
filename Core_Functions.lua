@@ -947,9 +947,28 @@ return function(Shared)
         end
     end)
 
-    RunService.RenderStepped:Connect(function()
+    if Shared.AddCleanup then
+        Shared.AddCleanup(function()
+            pcall(function()
+                if hwMicWire then hwMicWire:Destroy() end
+                if hwMicAnalyzer then hwMicAnalyzer:Destroy() end
+                if hwMicInput then hwMicInput:Destroy() end
+            end)
+        end)
+    end
+
+    local micRenderConn = RunService.RenderStepped:Connect(function()
+        if isMicMuted then 
+            for i, mb in ipairs(micBars) do
+                if mb and mb.Parent then
+                    mb.Size = UDim2.new(0, 4, 0, 3)
+                    mb.BackgroundColor3 = Color3.fromRGB(60, 70, 90)
+                end
+            end
+            return 
+        end
         local rawLevel = 0
-        if hwMicAnalyzer and not isMicMuted then
+        if hwMicAnalyzer then
             pcall(function()
                 local rms  = hwMicAnalyzer.RmsLevel or 0
                 local peak = hwMicAnalyzer.PeakLevel or 0
@@ -957,31 +976,27 @@ return function(Shared)
             end)
         end
 
-        local level = isMicMuted and 0 or math.clamp(rawLevel, 0, 1)
+        local level = math.clamp(rawLevel, 0, 1)
         local fallbackT = os.clock() * 8
 
         for i, mb in ipairs(micBars) do
             if mb and mb.Parent then
-                if isMicMuted then
-                    mb.Size = UDim2.new(0, 4, 0, 3)
-                    mb.BackgroundColor3 = Color3.fromRGB(60, 70, 90)
+                local threshold = (i / 4.0)
+                local barLevel
+                if rawLevel > 0.005 then
+                    barLevel = math.clamp((level - (threshold - 0.25)) / 0.25, 0.15, 1)
                 else
-                    local threshold = (i / 4.0)
-                    local barLevel
-                    if rawLevel > 0.005 then
-                        barLevel = math.clamp((level - (threshold - 0.25)) / 0.25, 0.15, 1)
-                    else
-                        barLevel = 0.2 + 0.1 * math.sin(fallbackT + i * 0.8)
-                    end
-                    local barH = math.clamp(math.floor(barLevel * 15) + 1, 3, 16)
-                    mb.Size = UDim2.new(0, 4, 0, barH)
-                    mb.BackgroundColor3 = (i == 4) and Color3.fromRGB(255, 80, 80)
-                        or ((i >= 3) and Color3.fromRGB(255, 205, 40)
-                        or Color3.fromRGB(0, 230, 140))
+                    barLevel = 0.2 + 0.1 * math.sin(fallbackT + i * 0.8)
                 end
+                local barH = math.clamp(math.floor(barLevel * 15) + 1, 3, 16)
+                mb.Size = UDim2.new(0, 4, 0, barH)
+                mb.BackgroundColor3 = (i == 4) and Color3.fromRGB(255, 80, 80)
+                    or ((i >= 3) and Color3.fromRGB(255, 205, 40)
+                    or Color3.fromRGB(0, 230, 140))
             end
         end
     end)
+    if Shared.AddCleanup then Shared.AddCleanup(micRenderConn) end
 
     -- Title Label
     local chatTitleText = Instance.new("TextLabel")

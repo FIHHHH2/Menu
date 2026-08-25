@@ -196,7 +196,7 @@ return function(Shared)
 
     MkToggle(leftCol, "Kill Aura (All Players)", "KillAura", 4, function(state) end)
 
-    RunService.RenderStepped:Connect(function()
+    local visualizerConn = RunService.RenderStepped:Connect(function()
         if Shared.Flags["KillAuraBox"] then
             local hrp = getHRP()
             if hrp then updateVisualizer(hrp, Shared.Flags["KillAuraRadius"] or 20) else clearVisualizer() end
@@ -204,8 +204,9 @@ return function(Shared)
             clearVisualizer()
         end
     end)
+    if Shared.AddCleanup then Shared.AddCleanup(visualizerConn) end
 
-    RunService.Heartbeat:Connect(function()
+    local killAuraConn = RunService.Heartbeat:Connect(function()
         if not Shared.Flags["KillAura"] then return end
         if not selfAliveInRound() then return end
 
@@ -553,12 +554,13 @@ return function(Shared)
                     end
                 end
             end)
+            if Shared.AddCleanup then Shared.AddCleanup(knifeThrowConn) end
         end
     end)
 
     MkToggle(rightCol, "Auto Throw Knife at Nearest", "AutoThrow", 3, function(state) end)
 
-    RunService.Heartbeat:Connect(function()
+    local autoThrowConn = RunService.Heartbeat:Connect(function()
         if not Shared.Flags["AutoThrow"] then return end
         if not selfAliveInRound() then return end
         if getRole(Player) ~= "Murderer" then return end
@@ -586,12 +588,12 @@ return function(Shared)
             end
         end
     end)
+    if Shared.AddCleanup then Shared.AddCleanup(autoThrowConn) end
 
-    -- ── 100% PERSISTENT ESP & HIGHLIGHT CHAMS ─────────────────────
     MkSection(rightCol, "ESP & Visuals", 10)
 
-    local espEntries = {}  -- [plr] = { gui = BillboardGui, hl = Highlight, lbl = TextLabel, bg = Frame, lastChar = Character }
-    local espConn
+    local espEntries = {}
+    local espConn = nil
 
     local function cleanupPlayerESP(plr)
         local entry = espEntries[plr]
@@ -606,6 +608,7 @@ return function(Shared)
         for plr in pairs(espEntries) do cleanupPlayerESP(plr) end
         espEntries = {}
     end
+    if Shared.AddCleanup then Shared.AddCleanup(clearAllESP) end
 
     MkToggle(rightCol, "Role ESP & Highlight Chams", "RoleESP", 11, function(state)
         clearAllESP()
@@ -614,8 +617,6 @@ return function(Shared)
 
         espConn = RunService.RenderStepped:Connect(function()
             local myHRP = getHRP()
-
-            -- Clean removed players
             for plr, entry in pairs(espEntries) do
                 if not plr.Parent or not plr.Character or not isAlive(plr) then
                     cleanupPlayerESP(plr)
@@ -636,19 +637,13 @@ return function(Shared)
 
                 if hrp and hum and hum.Health > 0 then
                     local entry = espEntries[plr]
-
-                    -- Rebind if character respawned or highlight was dropped
                     if not entry or entry.lastChar ~= char or not (entry.hl and entry.hl.Parent) or not (entry.gui and entry.gui.Parent) then
                         cleanupPlayerESP(plr)
-
-                        -- Strip any residual/duplicate highlights on this character to prevent VHS scanline buffer bug
                         for _, oldHl in ipairs(char:GetChildren()) do
                             if oldHl:IsA("Highlight") and oldHl.Name:find("Fih_") then
                                 pcall(function() oldHl:Destroy() end)
                             end
                         end
-
-                        -- 1. Highlight Chams (AlwaysOnTop, bound directly to character)
                         local hl = Instance.new("Highlight")
                         hl.Name                = "Fih_Chams"
                         hl.Adornee             = char
@@ -657,7 +652,6 @@ return function(Shared)
                         hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
                         hl.Parent              = char
 
-                        -- 2. AlwaysOnTop Billboard Box & Text
                         local bb = Instance.new("BillboardGui")
                         bb.Name         = "Fih_RoleTag"
                         bb.Size         = UDim2.new(0, 130, 0, 32)
@@ -687,7 +681,6 @@ return function(Shared)
                         espEntries[plr] = entry
                     end
 
-                    -- Live Role & Color Updates
                     local role = getRole(plr)
                     local col, roleTag = Color3.fromRGB(80, 240, 120), "[INNOCENT]"
                     if role == "Murderer" then
@@ -714,9 +707,9 @@ return function(Shared)
                 end
             end
         end)
+        if Shared.AddCleanup then Shared.AddCleanup(espConn) end
     end)
 
-    -- Dropped Gun Beacon ESP
     local gunEspHL = nil
     local gunEspBB = nil
     local gunEspConn
@@ -725,6 +718,7 @@ return function(Shared)
         if gunEspHL then gunEspHL:Destroy(); gunEspHL = nil end
         if gunEspBB then gunEspBB:Destroy(); gunEspBB = nil end
     end
+    if Shared.AddCleanup then Shared.AddCleanup(clearGunDropESP) end
 
     MkToggle(rightCol, "Dropped Gun Beacon ESP", "GunESP", 12, function(state)
         clearGunDropESP()
@@ -788,12 +782,13 @@ return function(Shared)
                 clearGunDropESP()
             end
         end)
+        if Shared.AddCleanup then Shared.AddCleanup(gunEspConn) end
     end)
 
     MkSection(rightCol, "Sheriff Tools", 20)
 
     MkToggle(rightCol, "Auto Shoot Murderer", "AutoShoot", 21, function(state) end)
-    RunService.Heartbeat:Connect(function()
+    local autoShootConn = RunService.Heartbeat:Connect(function()
         if not Shared.Flags["AutoShoot"] then return end
         if not selfAliveInRound() then return end
         if getRole(Player) ~= "Sheriff" then return end
@@ -813,9 +808,10 @@ return function(Shared)
             end
         end
     end)
+    if Shared.AddCleanup then Shared.AddCleanup(autoShootConn) end
 
     MkToggle(rightCol, "Auto Kill All (Murderer)", "AutoKillAll", 22, function(state) end)
-    RunService.Heartbeat:Connect(function()
+    local autoKillConn = RunService.Heartbeat:Connect(function()
         if not Shared.Flags["AutoKillAll"] then return end
         if not selfAliveInRound() then return end
         if getRole(Player) ~= "Murderer" then return end
@@ -834,6 +830,7 @@ return function(Shared)
             end
         end
     end)
+    if Shared.AddCleanup then Shared.AddCleanup(autoKillConn) end
 
     print("[MM2_Functions] Loaded -- Persistent Chams/ESP & Smooth Tween Auto-Coin Online")
 end

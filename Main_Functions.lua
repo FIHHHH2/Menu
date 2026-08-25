@@ -308,7 +308,7 @@ return function(Shared)
     end)
 
     -- Continuous jump & speed enforcement loop
-    RunService.Heartbeat:Connect(function()
+    local statsConn = RunService.Heartbeat:Connect(function()
         local hum = getHuman()
         if hum then
             if Shared.Flags["EnableWalkSpeed"] and Shared.Flags["WalkSpeed"] then
@@ -319,8 +319,9 @@ return function(Shared)
             end
         end
     end)
+    if Shared.AddCleanup then Shared.AddCleanup(statsConn) end
 
-    Player.CharacterAdded:Connect(function(char)
+    local charAddedConn = Player.CharacterAdded:Connect(function(char)
         local hum = char:WaitForChild("Humanoid", 5)
         task.wait(0.1)
         cacheDefaultStats(char)
@@ -683,7 +684,7 @@ return function(Shared)
     end
 
     -- Animate Peer Billboard Equalizers
-    RunService.RenderStepped:Connect(function()
+    local peerVisConn = RunService.RenderStepped:Connect(function()
         local t = os.clock()
         for uid, pInfo in pairs(peerUsers) do
             if pInfo.visBars and #pInfo.visBars > 0 then
@@ -704,6 +705,7 @@ return function(Shared)
             end
         end
     end)
+    if Shared.AddCleanup then Shared.AddCleanup(peerVisConn) end
 
     -- Background loop: periodic broadcast and scan every 2 seconds
     task.spawn(function()

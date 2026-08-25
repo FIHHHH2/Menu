@@ -463,7 +463,7 @@ return function(Shared)
     local prevBallPos = nil
     local prevTime = os.clock()
 
-    RunService.Heartbeat:Connect(function(dt)
+    local bbHeartbeatConn = RunService.Heartbeat:Connect(function(dt)
         local ball = findActiveBall()
         if not ball or not ball.Parent then
             if statusText and statusText.Parent and statusText.Text ~= "⚡ Ball: Idle / Searching" then
@@ -700,6 +700,7 @@ return function(Shared)
             end
         end
     end)
+    if Shared.AddCleanup then Shared.AddCleanup(bbHeartbeatConn) end
 
     print("[BladeBall_Functions] Loaded -- Predictive Auto-Parry, Clash Spam & Ball ESP Online")
 end

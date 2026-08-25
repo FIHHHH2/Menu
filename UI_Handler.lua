@@ -562,31 +562,34 @@ return function(Shared)
         local pGui = (Shared.Player and Shared.Player:FindFirstChildOfClass("PlayerGui"))
                   or game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
         if pGui then
-            pGui.DescendantAdded:Connect(function(child)
+            local daConn = pGui.DescendantAdded:Connect(function(child)
                 if disableConflictingGUIs then
                     task.wait(0.02)
                     checkAndSuppressConflictingGui(child)
                 end
             end)
+            if Shared.AddCleanup then Shared.AddCleanup(daConn) end
         end
 
-        Shared.Player.CharacterAdded:Connect(function()
+        local caConn = Shared.Player.CharacterAdded:Connect(function()
             task.wait(0.3)
             scanAndSuppressAllConflictingGUIs()
             local newPGui = Shared.Player:FindFirstChildOfClass("PlayerGui")
             if newPGui and newPGui ~= pGui then
                 pGui = newPGui
-                newPGui.DescendantAdded:Connect(function(child)
+                local newDaConn = newPGui.DescendantAdded:Connect(function(child)
                     if disableConflictingGUIs then
                         task.wait(0.02)
                         checkAndSuppressConflictingGui(child)
                     end
                 end)
+                if Shared.AddCleanup then Shared.AddCleanup(newDaConn) end
             end
         end)
+        if Shared.AddCleanup then Shared.AddCleanup(caConn) end
 
         local elapsed = 0
-        RunService.Heartbeat:Connect(function(dt)
+        local hbConn = RunService.Heartbeat:Connect(function(dt)
             elapsed = elapsed + dt
             if elapsed >= 0.5 then
                 elapsed = 0
@@ -598,6 +601,7 @@ return function(Shared)
                 end
             end
         end)
+        if Shared.AddCleanup then Shared.AddCleanup(hbConn) end
 
         CoreGui.DescendantAdded:Connect(function(desc)
             if not customCoreEnabled then return end
