@@ -411,13 +411,32 @@ return function(Shared)
     -- ── PERMANENT SPOTIFY AUTO-REFRESH ENGINE ───────────────────────
     local isRefreshingToken = false
     local function refreshSpotifyToken()
+        local rawInput = cleanToken(Shared.Config.SpotifyRefreshToken)
+        if not rawInput or rawInput == "" or rawInput == "Paste Spotify Refresh Token (Permanent)" or rawInput == "Permanent Refresh Token: Set" then
+            return false, "No Refresh Token"
+        end
+
+        -- Check for multi-field paste: "token|clientId|clientSecret" or "token:::clientId:::clientSecret"
+        if rawInput:find("|") or rawInput:find(":::") then
+            local sep = rawInput:find(":::") and ":::" or "|"
+            local parts = rawInput:split(sep)
+            if parts[1] and parts[1] ~= "" then
+                Shared.Config.SpotifyRefreshToken = cleanToken(parts[1])
+                rawInput = cleanToken(parts[1])
+            end
+            if parts[2] and parts[2] ~= "" then
+                Shared.Config.SpotifyClientId = cleanToken(parts[2])
+            end
+            if parts[3] and parts[3] ~= "" then
+                Shared.Config.SpotifyClientSecret = cleanToken(parts[3])
+            end
+            if Shared.SaveConfig then Shared.SaveConfig() end
+        end
+
         local rToken   = cleanToken(Shared.Config.SpotifyRefreshToken)
         local clientId = (Shared.Config.SpotifyClientId and cleanToken(Shared.Config.SpotifyClientId) ~= "") and cleanToken(Shared.Config.SpotifyClientId) or "1842aff694404946af4ac03a457c54ab"
         local clientSec = (Shared.Config.SpotifyClientSecret and cleanToken(Shared.Config.SpotifyClientSecret) ~= "") and cleanToken(Shared.Config.SpotifyClientSecret) or "b90742dc54544188a5e2f88d5383bd3c"
 
-        if not rToken or rToken == "" or rToken == "Paste Spotify Refresh Token (Permanent)" or rToken == "Permanent Refresh Token: Set" then
-            return false, "No Refresh Token"
-        end
         if isRefreshingToken then return false, "Refresh in progress" end
         isRefreshingToken = true
 
@@ -426,7 +445,7 @@ return function(Shared)
             ["Content-Type"]  = "application/x-www-form-urlencoded",
             ["Authorization"] = authHeader,
         }
-        local body = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken) .. "&client_id=" .. clientId
+        local body = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken) .. "&client_id=" .. clientId .. "&client_secret=" .. clientSec
 
         local resp = Shared.HttpRequest({
             Url     = "https://accounts.spotify.com/api/token",
@@ -450,7 +469,7 @@ return function(Shared)
                 elseif data.error_description then
                     return false, data.error_description
                 elseif data.error then
-                    return false, data.error
+                    return false, tostring(data.error)
                 end
             end
         end
@@ -720,7 +739,7 @@ return function(Shared)
 
         billboard = Instance.new("BillboardGui")
         billboard.Name                   = "MusicBillboard"
-        billboard.Size                   = UDim2.new(0, 275, 0, 64)
+        billboard.Size                   = UDim2.new(0, 305, 0, 66)
         billboard.StudsOffsetWorldSpace  = Vector3.new(0, 4.2, 0)
         billboard.AlwaysOnTop            = (Shared.Flags and Shared.Flags["UniversalESP"]) or false
         billboard.Active                 = true
@@ -735,15 +754,16 @@ return function(Shared)
         bg.BackgroundTransparency = 0.15
         bg.BorderSizePixel      = 1
         bg.BorderColor3         = Color3.fromRGB(0, 160, 255)
-        bg.ClipsDescendants     = false
+        bg.ClipsDescendants     = true
         bg.Parent               = billboard
 
         local bbCoverContainer = Instance.new("Frame")
         bbCoverContainer.Size             = UDim2.new(0, 50, 0, 50)
-        bbCoverContainer.Position         = UDim2.new(0, 6, 0, 6)
+        bbCoverContainer.Position         = UDim2.new(0, 8, 0.5, -25)
         bbCoverContainer.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
         bbCoverContainer.BorderSizePixel  = 1
         bbCoverContainer.BorderColor3     = Color3.fromRGB(60, 80, 110)
+        bbCoverContainer.ClipsDescendants = true
         bbCoverContainer.Parent           = bg
 
         local bbNote = Instance.new("TextLabel")
@@ -766,8 +786,8 @@ return function(Shared)
         bbCoverImg = cover
 
         local songLbl = Instance.new("TextLabel")
-        songLbl.Size                  = UDim2.new(1, -140, 0, 18)
-        songLbl.Position              = UDim2.new(0, 62, 0, 8)
+        songLbl.Size                  = UDim2.new(1, -165, 0, 16)
+        songLbl.Position              = UDim2.new(0, 66, 0, 8)
         songLbl.BackgroundTransparency = 1
         songLbl.Text                  = currentTrack.name
         songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
@@ -779,8 +799,8 @@ return function(Shared)
         bbSongLbl = songLbl
 
         local artistLbl = Instance.new("TextLabel")
-        artistLbl.Size                  = UDim2.new(1, -140, 0, 16)
-        artistLbl.Position              = UDim2.new(0, 62, 0, 28)
+        artistLbl.Size                  = UDim2.new(1, -165, 0, 14)
+        artistLbl.Position              = UDim2.new(0, 66, 0, 26)
         artistLbl.BackgroundTransparency = 1
         artistLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
         artistLbl.TextColor3            = Color3.fromRGB(0, 220, 140)
@@ -794,8 +814,8 @@ return function(Shared)
         -- ── BILLBOARD AUDIO EQUALIZER VISUALIZER ──
         local bbVisualizer = Instance.new("Frame")
         bbVisualizer.Name                   = "BB_Visualizer"
-        bbVisualizer.Size                   = UDim2.new(0, 52, 0, 18)
-        bbVisualizer.Position               = UDim2.new(0, 62, 0, 43)
+        bbVisualizer.Size                   = UDim2.new(0, 48, 0, 14)
+        bbVisualizer.Position               = UDim2.new(0, 66, 0, 43)
         bbVisualizer.BackgroundTransparency = 1
         bbVisualizer.BorderSizePixel        = 0
         bbVisualizer.Parent                 = bg
@@ -812,18 +832,18 @@ return function(Shared)
             bbVisBars[i] = bar
         end
 
-        -- ── BILLBOARD PLAYBACK CONTROLS (⏮ ⏯ ⏭) ──
+        -- ── BILLBOARD PLAYBACK CONTROLS (⏮ ⏯ ⏭) (IN-BOUNDS) ──
         local ctrlBox = Instance.new("Frame")
-        ctrlBox.Size                  = UDim2.new(0, 72, 0, 22)
-        ctrlBox.Position              = UDim2.new(1, -78, 0, 20)
+        ctrlBox.Size                  = UDim2.new(0, 84, 0, 24)
+        ctrlBox.Position              = UDim2.new(1, -92, 0.5, -12)
         ctrlBox.BackgroundTransparency = 1
         ctrlBox.BorderSizePixel       = 0
         ctrlBox.Parent                = bg
 
         local function mkBBCtrlBtn(txt, posX, fn)
             local btn = Instance.new("TextButton")
-            btn.Size                  = UDim2.new(0, 22, 0, 20)
-            btn.Position              = UDim2.new(0, posX, 0, 0)
+            btn.Size                  = UDim2.new(0, 25, 0, 22)
+            btn.Position              = UDim2.new(0, posX, 0, 1)
             btn.BackgroundColor3      = Color3.fromRGB(25, 30, 42)
             btn.BackgroundTransparency = 0.1
             btn.BorderSizePixel       = 1
@@ -831,7 +851,7 @@ return function(Shared)
             btn.Text                  = txt
             btn.TextColor3            = Color3.fromRGB(255, 255, 255)
             btn.Font                  = Enum.Font.GothamBold
-            btn.TextSize              = 11
+            btn.TextSize              = 10
             btn.Active                = true
             btn.Selectable            = true
             btn.AutoButtonColor       = true
@@ -849,8 +869,8 @@ return function(Shared)
         end
 
         mkBBCtrlBtn("[|<]", 0, handleSpotifyPrevious)
-        mkBBCtrlBtn("[||]", 30, handleSpotifyPlayPause)
-        mkBBCtrlBtn("[>|]", 60, handleSpotifyNext)
+        mkBBCtrlBtn("[||]", 28, handleSpotifyPlayPause)
+        mkBBCtrlBtn("[>|]", 56, handleSpotifyNext)
 
         applyImage(bbCoverImg, currentTrack)
     end
@@ -1398,6 +1418,54 @@ return function(Shared)
     refreshBox.LayoutOrder           = 2
     refreshBox.Parent                = rightCol
 
+    -- Client ID Input (Optional - Auto Saved)
+    local cidBox = Instance.new("TextBox")
+    cidBox.Name                  = "SpotifyClientIdInput"
+    cidBox.Size                  = UDim2.new(1, 0, 0, 24)
+    cidBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
+    cidBox.BorderSizePixel       = 1
+    cidBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
+    cidBox.Text                  = (Shared.Config.SpotifyClientId and Shared.Config.SpotifyClientId ~= "") and "Client ID: " .. Shared.Config.SpotifyClientId:sub(1, 8) .. "..." or "Paste Client ID (Optional)"
+    cidBox.PlaceholderText       = "Paste Client ID (Optional)"
+    cidBox.TextColor3            = Color3.fromRGB(20, 20, 60)
+    cidBox.Font                  = Enum.Font.Code
+    cidBox.TextSize              = 10
+    cidBox.LayoutOrder           = 3
+    cidBox.Parent                = rightCol
+
+    cidBox.FocusLost:Connect(function()
+        if cidBox.Text ~= "" and not cidBox.Text:find("Client ID: ") then
+            Shared.Config.SpotifyClientId = cleanToken(cidBox.Text)
+            if Shared.SaveConfig then Shared.SaveConfig() end
+            cidBox.Text = "Client ID: " .. Shared.Config.SpotifyClientId:sub(1, 8) .. "..."
+            Shared.Notify("Spotify", "Client ID saved", true)
+        end
+    end)
+
+    -- Client Secret Input (Optional - Auto Saved)
+    local csecBox = Instance.new("TextBox")
+    csecBox.Name                  = "SpotifyClientSecretInput"
+    csecBox.Size                  = UDim2.new(1, 0, 0, 24)
+    csecBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
+    csecBox.BorderSizePixel       = 1
+    csecBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
+    csecBox.Text                  = (Shared.Config.SpotifyClientSecret and Shared.Config.SpotifyClientSecret ~= "") and "Client Secret: Set" or "Paste Client Secret (Optional)"
+    csecBox.PlaceholderText       = "Paste Client Secret (Optional)"
+    csecBox.TextColor3            = Color3.fromRGB(20, 20, 60)
+    csecBox.Font                  = Enum.Font.Code
+    csecBox.TextSize              = 10
+    csecBox.LayoutOrder           = 4
+    csecBox.Parent                = rightCol
+
+    csecBox.FocusLost:Connect(function()
+        if csecBox.Text ~= "" and not csecBox.Text:find("Client Secret: Set") then
+            Shared.Config.SpotifyClientSecret = cleanToken(csecBox.Text)
+            if Shared.SaveConfig then Shared.SaveConfig() end
+            csecBox.Text = "Client Secret: Set"
+            Shared.Notify("Spotify", "Client Secret saved", true)
+        end
+    end)
+
     refreshBox.FocusLost:Connect(function()
         if refreshBox.Text ~= "" and not refreshBox.Text:find("Permanent Refresh Token: Set") then
             Shared.Config.SpotifyRefreshToken = cleanToken(refreshBox.Text)
@@ -1409,32 +1477,8 @@ return function(Shared)
                 local trk = getSpotifyTrack()
                 if trk then updateVisuals(trk) end
             else
-                Shared.Notify("Spotify", "Refresh Token saved (Awaiting client trigger)", true)
+                Shared.Notify("Spotify", "Refresh Token saved (" .. tostring(res or "Awaiting play") .. ")", false)
             end
-        end
-    end)
-
-    -- Standard Token Input (Fallback / Manual)
-    local spotBox = Instance.new("TextBox")
-    spotBox.Name                  = "SpotifyTokenInput"
-    spotBox.Size                  = UDim2.new(1, 0, 0, 24)
-    spotBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
-    spotBox.BorderSizePixel       = 1
-    spotBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
-    spotBox.Text                  = (Shared.Config.SpotifyToken and Shared.Config.SpotifyToken ~= "") and "Access Token: Set (Click to change)" or "Paste Spotify Access Token (1-Hr)"
-    spotBox.PlaceholderText       = "Paste Spotify Access Token"
-    spotBox.TextColor3            = Color3.fromRGB(20, 20, 60)
-    spotBox.Font                  = Enum.Font.Code
-    spotBox.TextSize              = 10
-    spotBox.LayoutOrder           = 3
-    spotBox.Parent                = rightCol
-
-    spotBox.FocusLost:Connect(function()
-        if spotBox.Text ~= "" and not spotBox.Text:find("Access Token: Set") then
-            Shared.Config.SpotifyToken = cleanToken(spotBox.Text)
-            if Shared.SaveConfig then Shared.SaveConfig() end
-            spotBox.Text = "Access Token: Set (Click to change)"
-            Shared.Notify("Spotify", "Access Token saved", true)
         end
     end)
 
