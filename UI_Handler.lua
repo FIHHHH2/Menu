@@ -1603,9 +1603,25 @@ return function(Shared)
     local lbScroll = nil
     local lbResizeGrip = nil
 
+    local isLbCollapsed = false
+    local isLbOpen = true
+    local isLbAnimating = false
+
+    local function getLbTargetHeight(count, customPosY)
+        local c = count or #Players:GetPlayers()
+        local cam = workspace.CurrentCamera
+        local viewportH = (cam and cam.ViewportSize.Y) or 800
+        local posY = customPosY or (lbWindow and lbWindow.Position.Y.Offset) or 48
+        local calculatedH = 24 + 4 + (c * 31) + 4
+        -- Ensure window never extends past bottom of screen bounds (16px bottom padding)
+        local maxAllowedH = math.max(56, viewportH - posY - 16)
+        return math.clamp(calculatedH, 56, maxAllowedH)
+    end
+
+    local initialTargetH = getLbTargetHeight(#Players:GetPlayers(), 48)
     local lbWindow = Instance.new("Frame")
     lbWindow.Name = "Fih_CustomLeaderboard"
-    lbWindow.Size = UDim2.new(0, 230, 0, 360)
+    lbWindow.Size = UDim2.new(0, 230, 0, initialTargetH)
     lbWindow.Position = UDim2.new(1, -242, 0, 48)
     lbWindow.BackgroundColor3 = C.BodyBg
     lbWindow.BackgroundTransparency = 0.50
@@ -1672,19 +1688,6 @@ return function(Shared)
     lbCloseBtn.TextSize = 10
     lbCloseBtn.ZIndex = 43
     lbCloseBtn.Parent = lbTitleBar
-
-    local isLbCollapsed = false
-    local isLbOpen = true
-    local isLbAnimating = false
-
-    local function getLbTargetHeight(count)
-        local c = count or #Players:GetPlayers()
-        local cam = workspace.CurrentCamera
-        local viewportH = (cam and cam.ViewportSize.Y) or 800
-        local calculatedH = 24 + 4 + (c * 31) + 4
-        -- No arbitrary size cap: expands dynamically for every new player, bounded only by viewport bottom
-        return math.clamp(calculatedH, 56, viewportH - 60)
-    end
 
     local ContextActionService = game:GetService("ContextActionService")
 
@@ -2203,6 +2206,16 @@ return function(Shared)
     Players.PlayerAdded:Connect(renderLeaderboardPlayers)
     Players.PlayerRemoving:Connect(renderLeaderboardPlayers)
 
+    -- Auto-scale and clamp when screen/window resolution changes
+    local cam = workspace.CurrentCamera
+    if cam then
+        cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+            if isLbOpen and lbWindow.Visible and not isLbCollapsed then
+                renderLeaderboardPlayers()
+            end
+        end)
+    end
+
     -- Auto-refresh leaderboard rows on theme change
     Shared.RegisterThemeCallback(function(targetTheme, isDarkMode)
         renderLeaderboardPlayers()
@@ -2211,11 +2224,11 @@ return function(Shared)
     -- Tab Key Toggle for Leaderboard with smooth animation
     UserInput.InputBegan:Connect(function(input, gpe)
         if input.KeyCode == Enum.KeyCode.Tab and not gpe then
-            toggleLeaderboard()
+            toggleLeaderboardOpen()
         end
     end)
 
-    Shared.ToggleLeaderboard = toggleLeaderboard
+    Shared.ToggleLeaderboard = toggleLeaderboardOpen
 
 
     -- ── CUSTOM WINDOWS AERO CHAT (UNIFIED TOPBAR: ROBLOX, ≡, 🎙, DEDUP) ─
