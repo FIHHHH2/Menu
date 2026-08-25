@@ -5,6 +5,9 @@
 return function(Shared)
     Shared.Tabs         = {}
     Shared.GUI          = nil
+    Shared.Toggles      = Shared.Toggles or {}
+    Shared.Sliders      = Shared.Sliders or {}
+    Shared.Flags        = Shared.Flags or {}
     Shared.MakeSection  = function() end
     Shared.MakeToggle   = function() return Instance.new("Frame"), function() end end
     Shared.MakeSlider   = function() return Instance.new("Frame") end
@@ -583,7 +586,7 @@ return function(Shared)
         pcall(function()
             if writefile then
                 local data = {
-                    Flags               = Shared.Flags,
+                    Flags               = Shared.Flags or {},
                     SpotifyToken        = Shared.Config.SpotifyToken or "",
                     LastFMUser          = Shared.Config.LastFMUser or "",
                     DarkMode            = isDark,
@@ -611,10 +614,13 @@ return function(Shared)
     local function loadConfig()
         pcall(function()
             if isfile and readfile and isfile(CONFIG_FILE) then
-                local data = Http:JSONDecode(readfile(CONFIG_FILE))
-                if data then
-                    Shared.Config.SpotifyToken        = data.SpotifyToken or ""
-                    Shared.Config.LastFMUser          = data.LastFMUser or ""
+                local raw = readfile(CONFIG_FILE)
+                if not raw or #raw < 2 then return end
+                local ok, data = pcall(function() return Http:JSONDecode(raw) end)
+                if ok and data and type(data) == "table" then
+                    Shared.Config.SpotifyToken = data.SpotifyToken or ""
+                    Shared.Config.LastFMUser   = data.LastFMUser or ""
+
                     if data.ThemeMode == "Adaptive" then
                         themeMode = "Adaptive"
                         local pal = generateAdaptivePalette(currentAdaptiveTrack)
@@ -626,15 +632,22 @@ return function(Shared)
                         themeMode = "Dark"
                         applyThemeTransition(DarkTheme, 0.25)
                     end
-                    if data.Flags then
+
+                    if data.Flags and type(data.Flags) == "table" then
                         for k, v in pairs(data.Flags) do
                             Shared.Flags[k] = v
+                            -- Restore toggles
                             if Shared.Toggles[k] and Shared.Toggles[k].SetToggle and type(v) == "boolean" then
-                                Shared.Toggles[k].SetToggle(v, true)
+                                pcall(Shared.Toggles[k].SetToggle, v, true)
+                            end
+                            -- Restore sliders (FPSCap, MasterVolume, FieldOfView, Game Sliders, etc.)
+                            if Shared.Sliders[k] and Shared.Sliders[k].SetValue and type(v) == "number" then
+                                pcall(Shared.Sliders[k].SetValue, v, true)
                             end
                         end
                     end
-                    if data.Keybinds then
+
+                    if data.Keybinds and type(data.Keybinds) == "table" then
                         for fKey, kName in pairs(data.Keybinds) do
                             local code = Enum.KeyCode[kName]
                             if code and Shared.Toggles[fKey] then
@@ -1376,12 +1389,18 @@ return function(Shared)
             TweenService:Create(row, TweenInfo.new(0.12), { BackgroundColor3 = C.RowBg }):Play()
         end)
 
-        Shared.Flags[flagKey] = false
+        local initialState = (Shared.Flags[flagKey] ~= nil and type(Shared.Flags[flagKey]) == "boolean") and Shared.Flags[flagKey] or false
+        Shared.Flags[flagKey] = initialState
+        if initialState then
+            box.Text = "X"
+            box.BackgroundColor3 = isDark and Color3.fromRGB(30, 60, 100) or Color3.fromRGB(220, 235, 255)
+        end
+
         local function setToggle(state, suppressNotify)
             Shared.Flags[flagKey] = state
             box.Text = state and "X" or ""
             box.BackgroundColor3 = state and (isDark and Color3.fromRGB(30, 60, 100) or Color3.fromRGB(220, 235, 255)) or C.BodyBg
-            if callback then callback(state) end
+            if callback then pcall(callback, state) end
             if not suppressNotify then sendNotification(labelText, state and "ENABLED" or "DISABLED", state) end
             saveConfigDebounced()
         end
@@ -1396,6 +1415,9 @@ return function(Shared)
     end
 
     local function makeSlider(parent, labelText, flagKey, minVal, maxVal, defaultVal, order, callback)
+        local currentVal = (Shared.Flags[flagKey] ~= nil and type(Shared.Flags[flagKey]) == "number") and Shared.Flags[flagKey] or defaultVal
+        Shared.Flags[flagKey] = currentVal
+
         local row = Instance.new("Frame")
         row.Name = "Slider_"..flagKey; row.Size = UDim2.new(1,0,0,36)
         row.BackgroundColor3 = C.RowBg; row.BorderSizePixel = 1; row.BorderColor3 = C.RowBorder
@@ -1412,7 +1434,7 @@ return function(Shared)
 
         local valLbl = Instance.new("TextLabel")
         valLbl.Size = UDim2.new(0,38,0,16); valLbl.Position = UDim2.new(1,-42,0,2)
-        valLbl.BackgroundTransparency = 1; valLbl.Text = tostring(defaultVal)
+        valLbl.BackgroundTransparency = 1; valLbl.Text = tostring(currentVal)
         valLbl.TextColor3 = C.Accent; valLbl.Font = Enum.Font.Code
         valLbl.TextSize = 11; valLbl.TextXAlignment = Enum.TextXAlignment.Right; valLbl.Parent = row
         registerThemed(valLbl, { TextColor3 = "Accent" })
@@ -1422,8 +1444,9 @@ return function(Shared)
         track.BackgroundColor3 = Color3.fromRGB(180, 190, 205); track.BorderSizePixel = 1
         track.BorderColor3 = Color3.fromRGB(130, 140, 160); track.Parent = row
 
+        local initialPct = math.clamp((currentVal - minVal) / math.max(maxVal - minVal, 1), 0, 1)
         local fill = Instance.new("Frame")
-        fill.Size = UDim2.new(math.clamp((defaultVal-minVal)/(maxVal-minVal),0,1),0,1,0)
+        fill.Size = UDim2.new(initialPct, 0, 1, 0)
         fill.BackgroundColor3 = C.Accent; fill.BorderSizePixel = 0; fill.Parent = track
         registerThemed(fill, { BackgroundColor3 = "Accent" })
 
@@ -1434,14 +1457,21 @@ return function(Shared)
             TweenService:Create(row, TweenInfo.new(0.12), { BackgroundColor3 = C.RowBg }):Play()
         end)
 
-        Shared.Flags[flagKey] = defaultVal
+        local function setValue(val, silent)
+            val = math.clamp(math.floor(val), minVal, maxVal)
+            Shared.Flags[flagKey] = val
+            local pct = math.clamp((val - minVal) / math.max(maxVal - minVal, 1), 0, 1)
+            fill.Size = UDim2.new(pct, 0, 1, 0)
+            valLbl.Text = tostring(val)
+            if callback then pcall(callback, val) end
+            if not silent then saveConfigDebounced() end
+        end
+
         local dragging = false
         local function update(inputX)
-            local pct = math.clamp((inputX - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X,1), 0, 1)
-            local val = math.floor(minVal + pct*(maxVal-minVal))
-            Shared.Flags[flagKey] = val; fill.Size = UDim2.new(pct,0,1,0); valLbl.Text = tostring(val)
-            if callback then callback(val) end
-            saveConfigDebounced()
+            local pct = math.clamp((inputX - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1), 0, 1)
+            local val = math.floor(minVal + pct * (maxVal - minVal))
+            setValue(val, false)
         end
 
         local sliderBtn = Instance.new("TextButton")
@@ -1457,6 +1487,14 @@ return function(Shared)
         UserInput.InputChanged:Connect(function(i)
             if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then update(i.Position.X) end
         end)
+
+        Shared.Sliders[flagKey] = {
+            Name     = labelText,
+            Min      = minVal,
+            Max      = maxVal,
+            SetValue = setValue,
+            Row      = row
+        }
         return row
     end
 

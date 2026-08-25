@@ -118,6 +118,7 @@ local Shared = {
     Flags       = {},
     Keybinds    = {},
     Toggles     = {},
+    Sliders     = {},
     Config      = {
         SpotifyToken        = "",
         LastFMUser          = "",
@@ -129,7 +130,7 @@ local Shared = {
 }
 
 -- Config persistence (writefile / readfile if executor supports it)
-local CONFIG_FILE = "fih_config.json"
+local CONFIG_FILE = "FihUi_Config.json"
 local function saveConfig()
     if not pcall(function() writefile(CONFIG_FILE, game:GetService("HttpService"):JSONEncode(Shared.Config)) end) then end
 end
