@@ -340,9 +340,95 @@ return function(Shared)
     end
 
         -- ── ROBLOX CORE UI (TOGGLEABLE RETRO AERO & CHAT ENGINE) ──────
+    -- ── ROBLOX CORE UI (TOGGLEABLE RETRO AERO & CHAT ENGINE) ──────
     local StarterGui = game:GetService("StarterGui")
     local customCoreEnabled = true
     Shared.Flags["CustomCoreUI"] = true
+
+    -- ── GAME-SPECIFIC CUSTOM CORE UI / OVERLAP SUPPRESSOR ────────
+    local disableConflictingGUIs = true
+    Shared.Flags["DisableConflictingGUIs"] = true
+    local suppressedGameGUIs = {}
+
+    local function isOurGui(gui)
+        if not gui then return false end
+        local n = gui.Name
+        if n == "IE7_Menu" or n == "FihUi" or n == "Fih_CustomLeaderboard" or n == "Fih_CustomChat" or n == "Fih_BottomHUD" or n == "Fih_ArtworkBillboard" then
+            return true
+        end
+        if ScreenGui and (gui == ScreenGui or gui:IsDescendantOf(ScreenGui)) then return true end
+        return false
+    end
+
+    local function checkAndSuppressConflictingGui(gui)
+        if not disableConflictingGUIs then return end
+        if not gui or not gui.Parent then return end
+        if isOurGui(gui) then return end
+
+        local n = gui.Name:lower()
+        local isConflict = false
+
+        -- Check if it matches custom playerlist / leaderboard / tablist replacement
+        if n:find("playerlist") or n:find("player_list") or n:find("leaderboard") or n:find("leader_board")
+            or n:find("scoreboard") or n:find("score_board") or n:find("tablist") or n:find("tab_list")
+            or n:find("tabmenu") or n:find("tab_menu") or n:find("customplayer") or n:find("customlb")
+            or n:find("playersgui") or n:find("playerslist") or n:find("customtab") or n:find("scoreboardscreengui") then
+            isConflict = true
+        end
+
+        -- Check if it matches custom topbar replacement in PlayerGui
+        if n:find("topbargui") or n:find("customtopbar") or n:find("game_topbar") or n:find("gametopbar")
+            or n:find("topbarcontainer") or n:find("topbarframe") or (n:find("topbar") and gui.Parent ~= CoreGui and not n:find("topbarapp")) then
+            isConflict = true
+        end
+
+        if isConflict then
+            pcall(function()
+                if gui:IsA("ScreenGui") then
+                    if gui.Enabled then
+                        if suppressedGameGUIs[gui] == nil then
+                            suppressedGameGUIs[gui] = gui.Enabled
+                        end
+                        gui.Enabled = false
+                    end
+                elseif gui:IsA("GuiObject") then
+                    if gui.Visible then
+                        if suppressedGameGUIs[gui] == nil then
+                            suppressedGameGUIs[gui] = gui.Visible
+                        end
+                        gui.Visible = false
+                    end
+                end
+            end)
+        end
+    end
+
+    local function scanAndSuppressAllConflictingGUIs()
+        if not disableConflictingGUIs then return end
+        pcall(function()
+            local pGui = Shared.Player:FindFirstChildOfClass("PlayerGui")
+            if pGui then
+                for _, child in ipairs(pGui:GetChildren()) do
+                    checkAndSuppressConflictingGui(child)
+                end
+            end
+        end)
+    end
+
+    local function restoreSuppressedGameGUIs()
+        for gui, origState in pairs(suppressedGameGUIs) do
+            if gui and gui.Parent then
+                pcall(function()
+                    if gui:IsA("ScreenGui") then
+                        gui.Enabled = origState
+                    elseif gui:IsA("GuiObject") then
+                        gui.Visible = origState
+                    end
+                end)
+            end
+        end
+        suppressedGameGUIs = {}
+    end
 
     local function restoreDefaultRobloxCoreUI()
         -- Re-enable native TopBar ScreenGuis
@@ -438,18 +524,48 @@ return function(Shared)
         end)
     end
 
-    -- Persistent Watcher: Re-enforces styling when active
+    -- Persistent Watcher: Re-enforces styling and suppresses overlapping game GUIs
     task.spawn(function()
         task.wait(0.3)
         styleRobloxCoreUI(C, isDark)
+        scanAndSuppressAllConflictingGUIs()
+
+        local pGui = Shared.Player:FindFirstChildOfClass("PlayerGui")
+        if pGui then
+            pGui.ChildAdded:Connect(function(child)
+                if disableConflictingGUIs then
+                    task.wait(0.05)
+                    checkAndSuppressConflictingGui(child)
+                end
+            end)
+        end
+
+        Shared.Player.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            scanAndSuppressAllConflictingGUIs()
+            local newPGui = Shared.Player:FindFirstChildOfClass("PlayerGui")
+            if newPGui and newPGui ~= pGui then
+                pGui = newPGui
+                newPGui.ChildAdded:Connect(function(child)
+                    if disableConflictingGUIs then
+                        task.wait(0.05)
+                        checkAndSuppressConflictingGui(child)
+                    end
+                end)
+            end
+        end)
 
         local elapsed = 0
         RunService.Heartbeat:Connect(function(dt)
-            if not customCoreEnabled then return end
             elapsed = elapsed + dt
             if elapsed >= 0.8 then
                 elapsed = 0
-                styleRobloxCoreUI(C, isDark)
+                if customCoreEnabled then
+                    styleRobloxCoreUI(C, isDark)
+                end
+                if disableConflictingGUIs then
+                    scanAndSuppressAllConflictingGUIs()
+                end
             end
         end)
 
@@ -1620,7 +1736,17 @@ return function(Shared)
             sendNotification("Core UI Engine", "Default Roblox Core UI restored", false)
         end
     end)
-    makeToggle(DrawerScroll, "Semi-Translucent Adaptive UI (Song Cover Sync)", "AdaptiveTheme", 3, function(state)
+    makeToggle(DrawerScroll, "Disable Conflicting Game GUIs (Prevent Overlap)", "DisableConflictingGUIs", 3, function(state)
+        disableConflictingGUIs = state
+        if state then
+            scanAndSuppressAllConflictingGUIs()
+            sendNotification("Anti-Overlap Engine", "Conflicting game GUIs suppressed", true)
+        else
+            restoreSuppressedGameGUIs()
+            sendNotification("Anti-Overlap Engine", "Game GUIs restored", false)
+        end
+    end)
+    makeToggle(DrawerScroll, "Semi-Translucent Adaptive UI (Song Cover Sync)", "AdaptiveTheme", 4, function(state)
         if state then
             themeMode = "Adaptive"
             local pal = generateAdaptivePalette(currentAdaptiveTrack or (Shared.CurrentTrack and Shared.CurrentTrack()))
