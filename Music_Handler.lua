@@ -385,263 +385,157 @@ return function(Shared)
 
     -- SPOTIFY API
     local function cleanToken(tok)
-        if not tok or type(tok) ~= "string" then return "" end
+        if not tok then return "" end
         tok = tok:gsub("^%s+", ""):gsub("%s+$", "")
         if tok:sub(1, 7):lower() == "bearer " then
             tok = tok:sub(8)
-        end
-        if tok:find("^Paste ") or tok:find("^Client ID: ") or tok:find("^Client Secret: ") or tok:find("^Permanent Refresh Token: ") or tok:find("^Token: ") or tok:find("^Refresh Token: ") then
-            return ""
         end
         return tok
     end
 
     -- ── BASE64 ENCODER FOR SPOTIFY CLIENT AUTH ─────────────────────
+    local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
     local function toBase64(data)
-        if crypt and typeof(crypt.base64_encode) == "function" then
-            return crypt.base64_encode(data)
-        elseif crypt and typeof(crypt.base64encode) == "function" then
-            return crypt.base64encode(data)
-        elseif syn and syn.crypt and typeof(syn.crypt.base64.encode) == "function" then
-            return syn.crypt.base64.encode(data)
-        elseif typeof(base64_encode) == "function" then
-            return base64_encode(data)
-        end
-
-        local b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-        local out = {}
-        local length = #data
-        local i = 1
-        while i <= length do
-            local b1 = string.byte(data, i)
-            local b2 = (i + 1 <= length) and string.byte(data, i + 1) or nil
-            local b3 = (i + 2 <= length) and string.byte(data, i + 2) or nil
-
-            local n1 = math.floor(b1 / 4)
-            local n2 = (b1 % 4) * 16 + (b2 and math.floor(b2 / 16) or 0)
-            local n3 = b2 and ((b2 % 16) * 4 + (b3 and math.floor(b3 / 64) or 0)) or nil
-            local n4 = b3 and (b3 % 64) or nil
-
-            table.insert(out, b64chars:sub(n1 + 1, n1 + 1))
-            table.insert(out, b64chars:sub(n2 + 1, n2 + 1))
-            table.insert(out, n3 and b64chars:sub(n3 + 1, n3 + 1) or "=")
-            table.insert(out, n4 and b64chars:sub(n4 + 1, n4 + 1) or "=")
-            i = i + 3
-        end
-        return table.concat(out)
+        return ((data:gsub('.', function(x) 
+            local r,b='',x:byte()
+            for i=8,1,-1 do r=r..(b%2^i-b%2^(i-1)>0 and '1' or '0') end
+            return r;
+        end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
+            if (#x < 6) then return '' end
+            local c=0
+            for i=1,6 do c=c+(x:sub(i,i)=='1' and 2^(6-i) or 0) end
+            return b64chars:sub(c+1,c+1)
+        end)..({ '', '==', '=' })[#data%3+1])
     end
 
     -- ── PERMANENT SPOTIFY AUTO-REFRESH ENGINE ───────────────────────
     local isRefreshingToken = false
     local function refreshSpotifyToken()
-        if isRefreshingToken then return false, "Refresh already in progress" end
+        local rToken   = cleanToken(Shared.Config.SpotifyRefreshToken)
+        local clientId = (Shared.Config.SpotifyClientId and cleanToken(Shared.Config.SpotifyClientId) ~= "") and cleanToken(Shared.Config.SpotifyClientId) or "1842aff694404946af4ac03a457c54ab"
+        local clientSec = (Shared.Config.SpotifyClientSecret and cleanToken(Shared.Config.SpotifyClientSecret) ~= "") and cleanToken(Shared.Config.SpotifyClientSecret) or "b90742dc54544188a5e2f88d5383bd3c"
 
-        local rToken = cleanToken(Shared.Config.SpotifyRefreshToken or "")
-        local aToken = cleanToken(Shared.Config.SpotifyToken or "")
-
-        -- If user pasted a direct access token (starts with BQ or long length)
-        if (rToken:sub(1, 2) == "BQ" or (#rToken > 160 and rToken:sub(1, 2) ~= "AQ")) then
-            Shared.Config.SpotifyToken = rToken
-            return true, rToken
+        if not rToken or rToken == "" or rToken == "Paste Spotify Refresh Token (Permanent)" or rToken == "Permanent Refresh Token: Set" then
+            return false, "No Refresh Token"
         end
-
-        if rToken == "" then
-            if aToken ~= "" then
-                return true, aToken
-            end
-            return false, "No Token — paste your Refresh or Access Token"
-        end
-
-        -- Multi-field paste check
-        if rToken:find("|") or rToken:find(":::") then
-            local sep = rToken:find(":::") and ":::" or "|"
-            local parts = rToken:split(sep)
-            if parts[1] and parts[1] ~= "" then Shared.Config.SpotifyRefreshToken = cleanToken(parts[1]) end
-            if parts[2] and parts[2] ~= "" then Shared.Config.SpotifyClientId     = cleanToken(parts[2]) end
-            if parts[3] and parts[3] ~= "" then Shared.Config.SpotifyClientSecret = cleanToken(parts[3]) end
-            if Shared.SaveConfig then Shared.SaveConfig() end
-            rToken = cleanToken(Shared.Config.SpotifyRefreshToken)
-        end
-
-        local clientId  = cleanToken(Shared.Config.SpotifyClientId  or "")
-        local clientSec = cleanToken(Shared.Config.SpotifyClientSecret or "")
-
-        -- Default fallback app credentials
-        if clientId == "" then
-            clientId = "1842aff694404946af4ac03a457c54ab"
-        end
-        if clientSec == "" then
-            clientSec = "b90742dc54544188a5e2f88d5383bd3c"
-        end
-
+        if isRefreshingToken then return false, "Refresh in progress" end
         isRefreshingToken = true
-        local result_ok  = false
-        local result_msg = "Network error — no response from Spotify"
 
-        local function tryRequest(headers, body)
-            if result_ok then return end
-            local ok, resp = pcall(Shared.SpotifyHTTP, {
-                Url     = "https://accounts.spotify.com/api/token",
-                Method  = "POST",
-                Headers = headers,
-                Body    = body,
-            })
-            if not ok or not resp or not resp.Body or resp.Body == "" then return end
+        local authHeader = "Basic " .. toBase64(clientId .. ":" .. clientSec)
+        local headers = {
+            ["Content-Type"]  = "application/x-www-form-urlencoded",
+            ["Authorization"] = authHeader,
+        }
+        local body = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken) .. "&client_id=" .. clientId
 
-            local ok2, data = pcall(function() return Http:JSONDecode(resp.Body) end)
-            if not ok2 or not data then return end
+        local resp = Shared.HttpRequest({
+            Url     = "https://accounts.spotify.com/api/token",
+            Method  = "POST",
+            Headers = headers,
+            Body    = body,
+        })
 
-            if data.access_token then
-                Shared.Config.SpotifyToken = data.access_token
-                if data.refresh_token and data.refresh_token ~= "" then
-                    Shared.Config.SpotifyRefreshToken = data.refresh_token
+        isRefreshingToken = false
+
+        if resp and resp.Body then
+            local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
+            if ok and data then
+                if data.access_token then
+                    Shared.Config.SpotifyToken = data.access_token
+                    if data.refresh_token then
+                        Shared.Config.SpotifyRefreshToken = data.refresh_token
+                    end
+                    if Shared.SaveConfig then Shared.SaveConfig() end
+                    return true, data.access_token
+                elseif data.error_description then
+                    return false, data.error_description
+                elseif data.error then
+                    return false, data.error
                 end
-                if Shared.SaveConfig then Shared.SaveConfig() end
-                result_ok  = true
-                result_msg = data.access_token
-            elseif data.error then
-                result_msg = (data.error_description or tostring(data.error))
             end
         end
-
-        -- Strategy 1: Basic Auth header (RFC standard)
-        local authHeader = "Basic " .. toBase64(clientId .. ":" .. clientSec)
-        tryRequest(
-            { ["Content-Type"] = "application/x-www-form-urlencoded", ["Authorization"] = authHeader },
-            "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken)
-        )
-
-        -- Strategy 2: Credentials in body
-        if not result_ok then
-            tryRequest(
-                { ["Content-Type"] = "application/x-www-form-urlencoded" },
-                "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken)
-                .. "&client_id=" .. Http:UrlEncode(clientId)
-                .. "&client_secret=" .. Http:UrlEncode(clientSec)
-            )
-        end
-
-        -- Strategy 3: PKCE / public client
-        if not result_ok then
-            tryRequest(
-                { ["Content-Type"] = "application/x-www-form-urlencoded" },
-                "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken)
-                .. "&client_id=" .. Http:UrlEncode(clientId)
-            )
-        end
-
-        isRefreshingToken = false  -- ALWAYS unlock
-        return result_ok, result_msg
+        return false, (resp and resp.Body) or "Network/auth failed"
     end
 
-    -- Core Spotify API request (always uses SpotifyHTTP for header guarantee)
     local function spotifyRequest(endpoint, method, body, hasRetried)
-        local token = cleanToken(Shared.Config.SpotifyToken or "")
-        if token == "" then
-            if Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "" and not hasRetried then
+        local token = cleanToken(Shared.Config.SpotifyToken)
+        if not token or token == "" then
+            if Shared.Config.SpotifyRefreshToken and not hasRetried then
                 local ok = refreshSpotifyToken()
                 if ok then return spotifyRequest(endpoint, method, body, true) end
             end
-            return nil
+            return nil, "No Token"
         end
 
-        local payload = body and Http:JSONEncode(body) or nil
-        local resp = Shared.SpotifyHTTP({
+        local payload = body and Http:JSONEncode(body) or ""
+        local resp = Shared.HttpRequest({
             Url     = "https://api.spotify.com/v1/me/player" .. endpoint,
             Method  = method or "GET",
             Headers = {
                 ["Authorization"]  = "Bearer " .. token,
                 ["Content-Type"]   = "application/json",
-                ["Accept"]         = "application/json",
-                ["Content-Length"] = payload and tostring(#payload) or "0",
+                ["Content-Length"] = tostring(#payload),
             },
-            Body = payload,
+            Body    = payload ~= "" and payload or nil,
         })
 
-        if resp and resp.StatusCode == 401 and not hasRetried then
+        if resp and resp.StatusCode == 401 and not hasRetried and Shared.Config.SpotifyRefreshToken then
             local ok = refreshSpotifyToken()
-            if ok then return spotifyRequest(endpoint, method, body, true) end
+            if ok then
+                return spotifyRequest(endpoint, method, body, true)
+            end
         end
 
         return resp
     end
 
     local function getSpotifyTrack(hasRetried)
-        local token = cleanToken(Shared.Config.SpotifyToken or "")
-        if token == "" then
-            if Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "" and not hasRetried then
+        local token = cleanToken(Shared.Config.SpotifyToken)
+        if not token or token == "" then
+            if Shared.Config.SpotifyRefreshToken and not hasRetried then
                 local ok = refreshSpotifyToken()
                 if ok then return getSpotifyTrack(true) end
             end
-            return nil, "No Token (paste your Refresh Token and click Test)"
+            return nil, "No Token"
         end
 
-        -- Endpoint 1: Currently Playing
-        local resp = Shared.SpotifyHTTP({
-            Url     = "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track,episode",
+        local resp = Shared.HttpRequest({
+            Url     = "https://api.spotify.com/v1/me/player/currently-playing",
             Method  = "GET",
             Headers = {
                 ["Authorization"] = "Bearer " .. token,
-                ["Accept"]        = "application/json",
                 ["Content-Type"]  = "application/json",
             },
         })
 
-        if resp and resp.StatusCode == 401 and not hasRetried then
+        if resp and resp.StatusCode == 401 and not hasRetried and Shared.Config.SpotifyRefreshToken then
             local ok = refreshSpotifyToken()
-            if ok then return getSpotifyTrack(true) end
-            return nil, "Expired Token (401) — click Test & Refresh"
-        end
-
-        local item = nil
-        local isPlaying = false
-        local progress_ms = 0
-        local duration_ms = 0
-
-        if resp and resp.Body and #resp.Body > 5 then
-            local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
-            if ok and data and data.item then
-                item       = data.item
-                isPlaying  = (data.is_playing == true)
-                progress_ms = data.progress_ms or 0
+            if ok then
+                return getSpotifyTrack(true)
             end
+            return nil, "Expired/Invalid Token (401)"
         end
 
-        -- Endpoint 2: Recently Played fallback (catches paused state)
-        if not item then
-            local recentResp = Shared.SpotifyHTTP({
-                Url     = "https://api.spotify.com/v1/me/player/recently-played?limit=1",
-                Method  = "GET",
-                Headers = {
-                    ["Authorization"] = "Bearer " .. token,
-                    ["Accept"]        = "application/json",
-                    ["Content-Type"]  = "application/json",
-                },
-            })
-            if recentResp and recentResp.Body and #recentResp.Body > 5 then
-                local ok, data = pcall(function() return Http:JSONDecode(recentResp.Body) end)
-                if ok and data and data.items and data.items[1] and data.items[1].track then
-                    item       = data.items[1].track
-                    isPlaying  = false
-                    progress_ms = 0
-                end
-            end
+        if not resp or (resp.StatusCode and resp.StatusCode == 401) then
+            return nil, "Expired/Invalid Token (401)"
+        end
+        if resp.StatusCode == 204 or not resp.Body or #resp.Body == 0 then
+            return nil, "No Active Playback"
         end
 
-        if not item then
-            return nil, "No Active Playback — open Spotify and play a song"
-        end
+        local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
+        if not ok or not data or not data.item then return nil, "No Track Found" end
+        local item = data.item
 
         local trackName  = item.name or "Unknown"
         local artistName = item.artists and item.artists[1] and item.artists[1].name or "Unknown"
-        duration_ms      = item.duration_ms or 0
 
         local coverUrl = ""
         if item.album and item.album.images and #item.album.images > 0 then
             coverUrl = item.album.images[1].url or ""
-        elseif item.images and #item.images > 0 then
-            coverUrl = item.images[1].url or ""
         end
+
+        -- Multi-source fallback if cover is missing
         if not coverUrl or coverUrl == "" then
             coverUrl = fetchArtworkFallback(artistName, trackName)
         end
@@ -651,9 +545,9 @@ return function(Shared)
             name        = trackName,
             artist      = artistName,
             cover       = coverUrl,
-            isPlaying   = isPlaying,
-            progress_ms = progress_ms,
-            duration_ms = duration_ms,
+            isPlaying   = data.is_playing or false,
+            progress_ms = data.progress_ms or 0,
+            duration_ms = item.duration_ms or 0,
             pollTime    = os.clock(),
             source      = "Spotify"
         }
@@ -745,13 +639,10 @@ return function(Shared)
                 return
             end
             -- Check live playback state from /v1/me/player
-            local statusResp = Shared.SpotifyHTTP({
+            local statusResp = Shared.HttpRequest({
                 Url     = "https://api.spotify.com/v1/me/player",
                 Method  = "GET",
-                Headers = {
-                    ["Authorization"] = "Bearer " .. token,
-                    ["Accept"]        = "application/json",
-                }
+                Headers = { ["Authorization"] = "Bearer " .. token }
             })
             local isCurrentlyPlaying = false
             if statusResp and statusResp.Body and #statusResp.Body > 0 then
@@ -849,11 +740,10 @@ return function(Shared)
 
         local bbCoverContainer = Instance.new("Frame")
         bbCoverContainer.Size             = UDim2.new(0, 50, 0, 50)
-        bbCoverContainer.Position         = UDim2.new(0, 8, 0.5, -25)
+        bbCoverContainer.Position         = UDim2.new(0, 6, 0, 6)
         bbCoverContainer.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
         bbCoverContainer.BorderSizePixel  = 1
         bbCoverContainer.BorderColor3     = Color3.fromRGB(60, 80, 110)
-        bbCoverContainer.ClipsDescendants = true
         bbCoverContainer.Parent           = bg
 
         local bbNote = Instance.new("TextLabel")
@@ -876,8 +766,8 @@ return function(Shared)
         bbCoverImg = cover
 
         local songLbl = Instance.new("TextLabel")
-        songLbl.Size                  = UDim2.new(1, -165, 0, 16)
-        songLbl.Position              = UDim2.new(0, 66, 0, 8)
+        songLbl.Size                  = UDim2.new(1, -140, 0, 18)
+        songLbl.Position              = UDim2.new(0, 62, 0, 8)
         songLbl.BackgroundTransparency = 1
         songLbl.Text                  = currentTrack.name
         songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
@@ -889,8 +779,8 @@ return function(Shared)
         bbSongLbl = songLbl
 
         local artistLbl = Instance.new("TextLabel")
-        artistLbl.Size                  = UDim2.new(1, -165, 0, 14)
-        artistLbl.Position              = UDim2.new(0, 66, 0, 26)
+        artistLbl.Size                  = UDim2.new(1, -140, 0, 16)
+        artistLbl.Position              = UDim2.new(0, 62, 0, 28)
         artistLbl.BackgroundTransparency = 1
         artistLbl.Text                  = currentTrack.artist .. " [" .. currentTrack.source .. "]"
         artistLbl.TextColor3            = Color3.fromRGB(0, 220, 140)
@@ -904,8 +794,8 @@ return function(Shared)
         -- ── BILLBOARD AUDIO EQUALIZER VISUALIZER ──
         local bbVisualizer = Instance.new("Frame")
         bbVisualizer.Name                   = "BB_Visualizer"
-        bbVisualizer.Size                   = UDim2.new(0, 48, 0, 14)
-        bbVisualizer.Position               = UDim2.new(0, 66, 0, 43)
+        bbVisualizer.Size                   = UDim2.new(0, 52, 0, 18)
+        bbVisualizer.Position               = UDim2.new(0, 62, 0, 43)
         bbVisualizer.BackgroundTransparency = 1
         bbVisualizer.BorderSizePixel        = 0
         bbVisualizer.Parent                 = bg
@@ -1392,102 +1282,19 @@ return function(Shared)
     Shared.CurrentTrack = function() return currentTrack end
 
     -- Persistent Polling Engine
-    local pollActive   = false
-    local pollStarted  = 0
-    local POLL_TIMEOUT = 6  -- force-unlock if request hangs > 6s
-
     local function startPolling()
         if pollConn then pollConn:Disconnect() end
         local elapsed = 0
         pollConn = RunSvc.Heartbeat:Connect(function(dt)
             elapsed = elapsed + dt
-
-            -- Timeout guard: unstick a hung poll after 6 seconds
-            if pollActive and (os.clock() - pollStarted) > POLL_TIMEOUT then
-                pollActive = false
-            end
-
-            if elapsed >= 1.5 and not pollActive then
-                elapsed   = 0
-                pollActive  = true
-                pollStarted = os.clock()
-
-                task.spawn(function()
-                    local ok, track = pcall(function()
-                        local token = cleanToken(Shared.Config.SpotifyToken or "")
-
-                        -- Auto-refresh expired token
-                        if token == "" and Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "" then
-                            refreshSpotifyToken()
-                            token = cleanToken(Shared.Config.SpotifyToken or "")
-                        end
-
-                        if token == "" then return nil end
-
-                        local resp = Shared.SpotifyHTTP({
-                            Url     = "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track",
-                            Method  = "GET",
-                            Headers = {
-                                ["Authorization"] = "Bearer " .. token,
-                                ["Accept"]        = "application/json",
-                            },
-                        })
-
-                        -- 401: token expired mid-session
-                        if resp and resp.StatusCode == 401 then
-                            local ok2 = refreshSpotifyToken()
-                            if ok2 then
-                                token = cleanToken(Shared.Config.SpotifyToken or "")
-                                resp = Shared.SpotifyHTTP({
-                                    Url     = "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track",
-                                    Method  = "GET",
-                                    Headers = {
-                                        ["Authorization"] = "Bearer " .. token,
-                                        ["Accept"]        = "application/json",
-                                    },
-                                })
-                            end
-                        end
-
-                        -- 204 = Spotify knows no currently-playing (paused/no device)
-                        if not resp or not resp.Body or #resp.Body < 5 then
-                            return nil
-                        end
-
-                        local ok2, data = pcall(function() return Http:JSONDecode(resp.Body) end)
-                        if not ok2 or not data or not data.item then return nil end
-
-                        local item     = data.item
-                        local coverUrl = ""
-                        if item.album and item.album.images and #item.album.images > 0 then
-                            coverUrl = item.album.images[1].url or ""
-                        end
-
-                        return {
-                            id          = item.id or "",
-                            name        = item.name or "Unknown",
-                            artist      = item.artists and item.artists[1] and item.artists[1].name or "Unknown",
-                            cover       = coverUrl,
-                            isPlaying   = (data.is_playing == true),
-                            progress_ms = data.progress_ms or 0,
-                            duration_ms = item.duration_ms or 0,
-                            pollTime    = os.clock(),
-                            source      = "Spotify"
-                        }
-                    end)
-
-                    if ok and track then
-                        -- Use track ID for precise change detection (not just name)
-                        local idChanged     = (track.id ~= "" and track.id ~= currentTrack.id)
-                        local nameChanged   = (track.name ~= currentTrack.name)
-                        local stateChanged  = (track.isPlaying ~= currentTrack.isPlaying)
-                        if idChanged or nameChanged or stateChanged then
-                            updateVisuals(track)
-                        end
+            if elapsed >= 3 then
+                elapsed = 0
+                local track = getSpotifyTrack() or getLastFMTrack()
+                if track then
+                    if track.name ~= currentTrack.name or track.cover ~= currentTrack.cover or track.isPlaying ~= currentTrack.isPlaying then
+                        updateVisuals(track)
                     end
-
-                    pollActive = false
-                end)
+                end
             end
         end)
     end
@@ -1583,143 +1390,80 @@ return function(Shared)
     refreshBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
     refreshBox.BorderSizePixel       = 1
     refreshBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
-    refreshBox.Text                  = ""
-    refreshBox.PlaceholderText       = (Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "") and "Refresh Token: Saved" or "Paste Refresh or Access Token"
+    refreshBox.Text                  = (Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "") and "Permanent Refresh Token: Set" or "Paste Spotify Refresh Token (Permanent)"
+    refreshBox.PlaceholderText       = "Paste Spotify Refresh Token"
     refreshBox.TextColor3            = Color3.fromRGB(20, 20, 60)
     refreshBox.Font                  = Enum.Font.Code
     refreshBox.TextSize              = 10
-    refreshBox.ClearTextOnFocus      = false
     refreshBox.LayoutOrder           = 2
     refreshBox.Parent                = rightCol
 
-    -- Client ID Input (Optional - Auto Saved)
-    local cidBox = Instance.new("TextBox")
-    cidBox.Name                  = "SpotifyClientIdInput"
-    cidBox.Size                  = UDim2.new(1, 0, 0, 24)
-    cidBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
-    cidBox.BorderSizePixel       = 1
-    cidBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
-    cidBox.Text                  = ""
-    cidBox.PlaceholderText       = (Shared.Config.SpotifyClientId and Shared.Config.SpotifyClientId ~= "") and "Client ID: " .. Shared.Config.SpotifyClientId:sub(1, 8) .. "..." or "Client ID (Optional)"
-    cidBox.TextColor3            = Color3.fromRGB(20, 20, 60)
-    cidBox.Font                  = Enum.Font.Code
-    cidBox.TextSize              = 10
-    cidBox.ClearTextOnFocus      = false
-    cidBox.LayoutOrder           = 3
-    cidBox.Parent                = rightCol
-
-    cidBox.FocusLost:Connect(function()
-        local text = cleanToken(cidBox.Text)
-        if text ~= "" then
-            Shared.Config.SpotifyClientId = text
-            if Shared.SaveConfig then Shared.SaveConfig() end
-            cidBox.PlaceholderText = "Client ID: " .. text:sub(1, 8) .. "..."
-            cidBox.Text = ""
-            Shared.Notify("Spotify", "Client ID saved", true)
-        end
-    end)
-
-    -- Client Secret Input (Optional - Auto Saved)
-    local csecBox = Instance.new("TextBox")
-    csecBox.Name                  = "SpotifyClientSecretInput"
-    csecBox.Size                  = UDim2.new(1, 0, 0, 24)
-    csecBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
-    csecBox.BorderSizePixel       = 1
-    csecBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
-    csecBox.Text                  = ""
-    csecBox.PlaceholderText       = (Shared.Config.SpotifyClientSecret and Shared.Config.SpotifyClientSecret ~= "") and "Client Secret: Saved" or "Client Secret (Optional)"
-    csecBox.TextColor3            = Color3.fromRGB(20, 20, 60)
-    csecBox.Font                  = Enum.Font.Code
-    csecBox.TextSize              = 10
-    csecBox.ClearTextOnFocus      = false
-    csecBox.LayoutOrder           = 4
-    csecBox.Parent                = rightCol
-
-    csecBox.FocusLost:Connect(function()
-        local text = cleanToken(csecBox.Text)
-        if text ~= "" then
-            Shared.Config.SpotifyClientSecret = text
-            if Shared.SaveConfig then Shared.SaveConfig() end
-            csecBox.PlaceholderText = "Client Secret: Saved"
-            csecBox.Text = ""
-            Shared.Notify("Spotify", "Client Secret saved", true)
-        end
-    end)
-
     refreshBox.FocusLost:Connect(function()
-        local raw = cleanToken(refreshBox.Text)
-        if raw == "" then return end
-
-        -- Handle combined paste "token|clientId|clientSecret"
-        if raw:find("|") or raw:find(":::") then
-            local sep = raw:find(":::") and ":::" or "|"
-            local parts = raw:split(sep)
-            if parts[1] and parts[1] ~= "" then
-                Shared.Config.SpotifyRefreshToken = cleanToken(parts[1])
-            end
-            if parts[2] and parts[2] ~= "" then
-                Shared.Config.SpotifyClientId = cleanToken(parts[2])
-                cidBox.PlaceholderText = "Client ID: " .. Shared.Config.SpotifyClientId:sub(1, 8) .. "..."
-                cidBox.Text = ""
-            end
-            if parts[3] and parts[3] ~= "" then
-                Shared.Config.SpotifyClientSecret = cleanToken(parts[3])
-                csecBox.PlaceholderText = "Client Secret: Saved"
-                csecBox.Text = ""
-            end
-        elseif raw:sub(1, 2) == "BQ" or (#raw > 160 and raw:sub(1, 2) ~= "AQ") then
-            -- Access Token directly pasted
-            Shared.Config.SpotifyToken = raw
-        else
-            Shared.Config.SpotifyRefreshToken = raw
-        end
-
-        if Shared.SaveConfig then Shared.SaveConfig() end
-        refreshBox.PlaceholderText = "Token: Saved"
-        refreshBox.Text = ""
-
-        task.spawn(function()
+        if refreshBox.Text ~= "" and not refreshBox.Text:find("Permanent Refresh Token: Set") then
+            Shared.Config.SpotifyRefreshToken = cleanToken(refreshBox.Text)
+            if Shared.SaveConfig then Shared.SaveConfig() end
+            refreshBox.Text = "Permanent Refresh Token: Set"
             local ok, res = refreshSpotifyToken()
             if ok then
-                Shared.Notify("Spotify", "✓ OAuth connected! Fetching track...", true)
+                Shared.Notify("Spotify", "Permanent OAuth connected & refreshed!", true)
                 local trk = getSpotifyTrack()
-                if trk then
-                    updateVisuals(trk)
-                    Shared.Notify("Spotify", "▶ " .. trk.name .. " — " .. trk.artist, true)
-                else
-                    Shared.Notify("Spotify", "✓ Token valid. Play a song in Spotify.", true)
-                end
-                startPolling()
+                if trk then updateVisuals(trk) end
             else
-                local trk, err = getSpotifyTrack()
-                if trk then
-                    updateVisuals(trk)
-                    Shared.Notify("Spotify", "▶ " .. trk.name .. " — " .. trk.artist, true)
-                    startPolling()
-                else
-                    Shared.Notify("Spotify", "✗ " .. tostring(res or err or "Auth failed"), false)
-                end
+                Shared.Notify("Spotify", "Refresh Token saved (Awaiting client trigger)", true)
             end
-        end)
+        end
+    end)
+
+    -- Standard Token Input (Fallback / Manual)
+    local spotBox = Instance.new("TextBox")
+    spotBox.Name                  = "SpotifyTokenInput"
+    spotBox.Size                  = UDim2.new(1, 0, 0, 24)
+    spotBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
+    spotBox.BorderSizePixel       = 1
+    spotBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
+    spotBox.Text                  = (Shared.Config.SpotifyToken and Shared.Config.SpotifyToken ~= "") and "Access Token: Set (Click to change)" or "Paste Spotify Access Token (1-Hr)"
+    spotBox.PlaceholderText       = "Paste Spotify Access Token"
+    spotBox.TextColor3            = Color3.fromRGB(20, 20, 60)
+    spotBox.Font                  = Enum.Font.Code
+    spotBox.TextSize              = 10
+    spotBox.LayoutOrder           = 3
+    spotBox.Parent                = rightCol
+
+    spotBox.FocusLost:Connect(function()
+        if spotBox.Text ~= "" and not spotBox.Text:find("Access Token: Set") then
+            Shared.Config.SpotifyToken = cleanToken(spotBox.Text)
+            if Shared.SaveConfig then Shared.SaveConfig() end
+            spotBox.Text = "Access Token: Set (Click to change)"
+            Shared.Notify("Spotify", "Access Token saved", true)
+        end
     end)
 
     MkButton(rightCol, "[ Test & Auto-Refresh Token ]", 4, function()
-        task.spawn(function()
+        if Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "" then
             local ok, err = refreshSpotifyToken()
-            local trk, terr = getSpotifyTrack()
-            if trk then
-                updateVisuals(trk)
-                Shared.Notify("Spotify", "✓ " .. trk.name .. " — " .. trk.artist, true)
+            if ok then
+                Shared.Notify("Spotify", "Token refreshed successfully!", true)
+            else
+                Shared.Notify("Spotify", "Auth: " .. tostring(err or "Failed"), false)
+            end
+        end
+        local trk, err = getSpotifyTrack()
+        if trk then
+            updateVisuals(trk)
+            Shared.Notify("Spotify", "Playing: " .. trk.name .. " - " .. trk.artist, true)
+            if Shared.Flags["MusicBillboard"] then buildBillboard() end
+            if not hudWidget then buildHUD() end
+            startPolling()
+        else
+            if err == "No Active Playback" then
+                Shared.Notify("Spotify", "Token Valid! (Play a song in Spotify app)", true)
                 if Shared.Flags["MusicBillboard"] then buildBillboard() end
                 if not hudWidget then buildHUD() end
                 startPolling()
-            elseif ok then
-                Shared.Notify("Spotify", "✓ Token Valid! Play a song in Spotify.", true)
-                startPolling()
             else
-                Shared.Notify("Spotify", "✗ " .. tostring(err or terr or "Auth failed"), false)
+                Shared.Notify("Spotify", "Status: " .. tostring(err or "Failed"), false)
             end
-        end)
+        end
     end)
 
     MkSection(rightCol, "Playback Controls", 10)
