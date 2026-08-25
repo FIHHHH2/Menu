@@ -431,12 +431,15 @@ return function(Shared)
     -- ── PERMANENT SPOTIFY AUTO-REFRESH ENGINE ───────────────────────
     local isRefreshingToken = false
     local function refreshSpotifyToken()
+        -- Guard: never double-enter
+        if isRefreshingToken then return false, "Refresh already in progress" end
+
         local rawInput = cleanToken(Shared.Config.SpotifyRefreshToken or "")
         if rawInput == "" or rawInput == "Paste Spotify Refresh Token (Permanent)" or rawInput == "Permanent Refresh Token: Set" then
-            return false, "No Refresh Token set"
+            return false, "No Refresh Token — paste your token first"
         end
 
-        -- Multi-field paste: "token|clientId|clientSecret"
+        -- Multi-field paste: "refreshToken|clientId|clientSecret"
         if rawInput:find("|") or rawInput:find(":::") then
             local sep = rawInput:find(":::") and ":::" or "|"
             local parts = rawInput:split(sep)
@@ -448,65 +451,71 @@ return function(Shared)
         end
 
         local rToken    = rawInput
-        local clientId  = (Shared.Config.SpotifyClientId  and cleanToken(Shared.Config.SpotifyClientId)  ~= "") and cleanToken(Shared.Config.SpotifyClientId)  or "1842aff694404946af4ac03a457c54ab"
-        local clientSec = (Shared.Config.SpotifyClientSecret and cleanToken(Shared.Config.SpotifyClientSecret) ~= "") and cleanToken(Shared.Config.SpotifyClientSecret) or "b90742dc54544188a5e2f88d5383bd3c"
+        local clientId  = cleanToken(Shared.Config.SpotifyClientId  or "")
+        local clientSec = cleanToken(Shared.Config.SpotifyClientSecret or "")
 
-        if isRefreshingToken then return false, "Refresh already in progress" end
+        if clientId == "" then
+            return false, "No Client ID — paste Client ID and Client Secret in the boxes above"
+        end
+
         isRefreshingToken = true
+        local result_ok  = false
+        local result_msg = "Network error — no response from Spotify"
 
-        local authHeader = "Basic " .. toBase64(clientId .. ":" .. clientSec)
-
-        -- Strategy 1: Basic Auth header (RFC standard)
-        local resp = Shared.SpotifyHTTP({
-            Url     = "https://accounts.spotify.com/api/token",
-            Method  = "POST",
-            Headers = {
-                ["Content-Type"]  = "application/x-www-form-urlencoded",
-                ["Authorization"] = authHeader,
-            },
-            Body = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken),
-        })
-
-        -- Strategy 2: Body credentials if Basic header failed
-        if not resp or not resp.Body or resp.Body:find("invalid_client") or resp.Body:find("invalid_grant") then
-            resp = Shared.SpotifyHTTP({
+        local function tryRequest(headers, body)
+            if result_ok then return end
+            local ok, resp = pcall(Shared.SpotifyHTTP, {
                 Url     = "https://accounts.spotify.com/api/token",
                 Method  = "POST",
-                Headers = { ["Content-Type"] = "application/x-www-form-urlencoded" },
-                Body    = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken) .. "&client_id=" .. Http:UrlEncode(clientId) .. "&client_secret=" .. Http:UrlEncode(clientSec),
+                Headers = headers,
+                Body    = body,
             })
-        end
+            if not ok or not resp or not resp.Body or resp.Body == "" then return end
 
-        -- Strategy 3: PKCE public client (no secret)
-        if not resp or not resp.Body or resp.Body:find("invalid_client") then
-            resp = Shared.SpotifyHTTP({
-                Url     = "https://accounts.spotify.com/api/token",
-                Method  = "POST",
-                Headers = { ["Content-Type"] = "application/x-www-form-urlencoded" },
-                Body    = "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken) .. "&client_id=" .. Http:UrlEncode(clientId),
-            })
-        end
+            local ok2, data = pcall(function() return Http:JSONDecode(resp.Body) end)
+            if not ok2 or not data then return end
 
-        isRefreshingToken = false
-
-        if resp and resp.Body then
-            local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
-            if ok and data then
-                if data.access_token then
-                    Shared.Config.SpotifyToken = data.access_token
-                    if data.refresh_token and data.refresh_token ~= "" then
-                        Shared.Config.SpotifyRefreshToken = data.refresh_token
-                    end
-                    if Shared.SaveConfig then Shared.SaveConfig() end
-                    return true, data.access_token
-                elseif data.error_description then
-                    return false, data.error_description
-                elseif data.error then
-                    return false, tostring(data.error)
+            if data.access_token then
+                Shared.Config.SpotifyToken = data.access_token
+                if data.refresh_token and data.refresh_token ~= "" then
+                    Shared.Config.SpotifyRefreshToken = data.refresh_token
                 end
+                if Shared.SaveConfig then Shared.SaveConfig() end
+                result_ok  = true
+                result_msg = data.access_token
+            elseif data.error then
+                result_msg = (data.error_description or data.error) .. " — check your Client ID/Secret match the app that made your refresh token"
             end
         end
-        return false, (resp and resp.Body) or "Network error / no response"
+
+        -- Strategy 1: Basic Auth header (RFC standard, most common)
+        local authHeader = "Basic " .. toBase64(clientId .. ":" .. clientSec)
+        tryRequest(
+            { ["Content-Type"] = "application/x-www-form-urlencoded", ["Authorization"] = authHeader },
+            "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken)
+        )
+
+        -- Strategy 2: Credentials in body
+        if not result_ok then
+            tryRequest(
+                { ["Content-Type"] = "application/x-www-form-urlencoded" },
+                "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken)
+                .. "&client_id=" .. Http:UrlEncode(clientId)
+                .. "&client_secret=" .. Http:UrlEncode(clientSec)
+            )
+        end
+
+        -- Strategy 3: PKCE / public client (no secret needed)
+        if not result_ok and clientSec == "" then
+            tryRequest(
+                { ["Content-Type"] = "application/x-www-form-urlencoded" },
+                "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken)
+                .. "&client_id=" .. Http:UrlEncode(clientId)
+            )
+        end
+
+        isRefreshingToken = false  -- ALWAYS unlock
+        return result_ok, result_msg
     end
 
     -- Core Spotify API request (always uses SpotifyHTTP for header guarantee)
@@ -1615,47 +1624,66 @@ return function(Shared)
     end)
 
     refreshBox.FocusLost:Connect(function()
-        if refreshBox.Text ~= "" and not refreshBox.Text:find("Permanent Refresh Token: Set") then
-            Shared.Config.SpotifyRefreshToken = cleanToken(refreshBox.Text)
-            if Shared.SaveConfig then Shared.SaveConfig() end
-            refreshBox.Text = "Permanent Refresh Token: Set"
+        local raw = refreshBox.Text
+        if raw == "" or raw == "Paste Spotify Refresh Token (Permanent)" or raw == "Permanent Refresh Token: Set" then return end
+
+        -- Handle combined paste "token|clientId|clientSecret" right in the box
+        local cleaned = cleanToken(raw)
+        if cleaned:find("|") then
+            local parts = cleaned:split("|")
+            if parts[1] and parts[1] ~= "" then Shared.Config.SpotifyRefreshToken = cleanToken(parts[1]) end
+            if parts[2] and parts[2] ~= "" then
+                Shared.Config.SpotifyClientId = cleanToken(parts[2])
+                cidBox.Text = "Client ID: " .. Shared.Config.SpotifyClientId:sub(1, 8) .. "..."
+            end
+            if parts[3] and parts[3] ~= "" then
+                Shared.Config.SpotifyClientSecret = cleanToken(parts[3])
+                csecBox.Text = "Client Secret: Set"
+            end
+        else
+            Shared.Config.SpotifyRefreshToken = cleaned
+        end
+
+        if Shared.SaveConfig then Shared.SaveConfig() end
+        refreshBox.Text = "Permanent Refresh Token: Set"
+
+        task.spawn(function()
             local ok, res = refreshSpotifyToken()
             if ok then
-                Shared.Notify("Spotify", "Permanent OAuth connected & refreshed!", true)
+                Shared.Notify("Spotify", "✓ OAuth connected! Fetching track...", true)
                 local trk = getSpotifyTrack()
-                if trk then updateVisuals(trk) end
+                if trk then
+                    updateVisuals(trk)
+                    Shared.Notify("Spotify", "▶ " .. trk.name .. " — " .. trk.artist, true)
+                else
+                    Shared.Notify("Spotify", "✓ Token valid. Play a song in Spotify.", true)
+                end
+                startPolling()
             else
-                Shared.Notify("Spotify", "Refresh Token saved (" .. tostring(res or "Awaiting play") .. ")", false)
+                Shared.Notify("Spotify", "✗ " .. tostring(res or "Auth failed"), false)
             end
-        end
+        end)
     end)
 
     MkButton(rightCol, "[ Test & Auto-Refresh Token ]", 4, function()
-        if Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "" then
+        task.spawn(function()
             local ok, err = refreshSpotifyToken()
             if ok then
-                Shared.Notify("Spotify", "Token refreshed successfully!", true)
+                local trk, terr = getSpotifyTrack()
+                if trk then
+                    updateVisuals(trk)
+                    Shared.Notify("Spotify", "✓ " .. trk.name .. " — " .. trk.artist, true)
+                    if Shared.Flags["MusicBillboard"] then buildBillboard() end
+                    if not hudWidget then buildHUD() end
+                    startPolling()
+                else
+                    Shared.Notify("Spotify", "✓ Token OK. " .. tostring(terr or "Play something in Spotify"), true)
+                    startPolling()
+                end
             else
-                Shared.Notify("Spotify", "Auth: " .. tostring(err or "Failed"), false)
+                Shared.Notify("Spotify", "✗ " .. tostring(err or "Auth failed"), false)
             end
-        end
-        local trk, err = getSpotifyTrack()
-        if trk then
-            updateVisuals(trk)
-            Shared.Notify("Spotify", "Playing: " .. trk.name .. " - " .. trk.artist, true)
-            if Shared.Flags["MusicBillboard"] then buildBillboard() end
-            if not hudWidget then buildHUD() end
-            startPolling()
-        else
-            if err == "No Active Playback" then
-                Shared.Notify("Spotify", "Token Valid! (Play a song in Spotify app)", true)
-                if Shared.Flags["MusicBillboard"] then buildBillboard() end
-                if not hudWidget then buildHUD() end
-                startPolling()
-            else
-                Shared.Notify("Spotify", "Status: " .. tostring(err or "Failed"), false)
-            end
-        end
+        end)
     end)
 
     MkSection(rightCol, "Playback Controls", 10)
