@@ -588,11 +588,11 @@ return function(Shared)
         if plr == Shared.Player then saveConfigDirect() end
     end)
 
-    -- ── NOTIFICATION STACK ──────────────────────────────────────
+    -- ── NOTIFICATION STACK (DYNAMIC HORIZONTAL AUTO-SCALE) ────────
     local NotifyHolder = Instance.new("Frame")
     NotifyHolder.Name                   = "NotifyHolder"
-    NotifyHolder.Size                   = UDim2.new(0, 240, 1, -20)
-    NotifyHolder.Position               = UDim2.new(1, -250, 0, 10)
+    NotifyHolder.Size                   = UDim2.new(0, 480, 1, -20)
+    NotifyHolder.Position               = UDim2.new(1, -490, 0, 10)
     NotifyHolder.BackgroundTransparency = 1
     NotifyHolder.ZIndex                 = 100
     NotifyHolder.Parent                 = ScreenGui
@@ -604,13 +604,22 @@ return function(Shared)
     NotifyLayout.Padding             = UDim.new(0, 6)
     NotifyLayout.Parent              = NotifyHolder
 
+    local TextService = game:GetService("TextService")
     local notifyCounter = 0
     local function sendNotification(title, message, isEnabled)
         notifyCounter = notifyCounter + 1
         local order = notifyCounter
+
+        local titleStr = (isEnabled == true and "[✔] " or (isEnabled == false and "[✖] " or "[i] ")) .. tostring(title)
+        local msgStr   = tostring(message or "")
+
+        local titleBounds = TextService:GetTextSize(titleStr, 11, Enum.Font.Code, Vector2.new(2000, 20))
+        local msgBounds   = TextService:GetTextSize(msgStr, 11, Enum.Font.Code, Vector2.new(2000, 24))
+        local targetW     = math.clamp(math.max(titleBounds.X + 32, msgBounds.X + 24, 240), 240, 460)
+
         local toast = Instance.new("Frame")
         toast.Name             = "Toast_" .. tostring(order)
-        toast.Size             = UDim2.new(1, 0, 0, 46)
+        toast.Size             = UDim2.new(0, targetW, 0, 46)
         toast.BackgroundColor3 = C.NotifyBg
         toast.BorderSizePixel  = 2
         toast.BorderColor3     = isEnabled == true and Color3.fromRGB(0,160,60) or (isEnabled == false and Color3.fromRGB(200,40,40) or C.NotifyBorder)
@@ -627,14 +636,14 @@ return function(Shared)
         local tLbl = Instance.new("TextLabel")
         tLbl.Size                   = UDim2.new(1,-8,1,0); tLbl.Position = UDim2.new(0,6,0,0)
         tLbl.BackgroundTransparency = 1
-        tLbl.Text                   = (isEnabled == true and "[✔] " or (isEnabled == false and "[✖] " or "[i] ")) .. title
+        tLbl.Text                   = titleStr
         tLbl.TextColor3             = isEnabled == true and Color3.fromRGB(0,120,40) or (isEnabled == false and Color3.fromRGB(180,20,20) or C.SectionText)
         tLbl.Font                   = Enum.Font.Code; tLbl.TextSize = 11
         tLbl.TextXAlignment         = Enum.TextXAlignment.Left; tLbl.ZIndex = 103; tLbl.Parent = hBar
 
         local dLbl = Instance.new("TextLabel")
         dLbl.Size                   = UDim2.new(1,-12,0,24); dLbl.Position = UDim2.new(0,6,0,20)
-        dLbl.BackgroundTransparency = 1; dLbl.Text = message
+        dLbl.BackgroundTransparency = 1; dLbl.Text = msgStr
         dLbl.TextColor3             = isDark and Color3.fromRGB(210,220,240) or Color3.fromRGB(30,30,50)
         dLbl.Font                   = Enum.Font.Code; dLbl.TextSize = 11
         dLbl.TextXAlignment         = Enum.TextXAlignment.Left; dLbl.ZIndex = 102; dLbl.Parent = toast
@@ -642,7 +651,7 @@ return function(Shared)
         TweenService:Create(toast, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundTransparency = 0}):Play()
         task.delay(2.8, function()
             if toast and toast.Parent then
-                local f = TweenService:Create(toast, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {Size = UDim2.new(1,0,0,0), BackgroundTransparency = 1})
+                local f = TweenService:Create(toast, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {Size = UDim2.new(0, targetW, 0, 0), BackgroundTransparency = 1})
                 f:Play(); f.Completed:Connect(function() toast:Destroy() end)
             end
         end)
@@ -1679,25 +1688,22 @@ return function(Shared)
         local targetH = getLbTargetHeight(#Players:GetPlayers())
         if isLbCollapsed then
             lbMinBtn.Text = "+"
+            if lbScroll then lbScroll.Visible = false end
             if lbResizeGrip then lbResizeGrip.Visible = false end
             pcall(function()
-                TweenSvc:Create(lbWindow, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                TweenSvc:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, curW, 0, 24)
                 }):Play()
             end)
         else
             lbMinBtn.Text = "-"
             lbWindow.Visible = true
+            if lbScroll then lbScroll.Visible = true end
+            if lbResizeGrip then lbResizeGrip.Visible = true end
             pcall(function()
-                TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                TweenSvc:Create(lbWindow, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, curW, 0, targetH)
                 }):Play()
-            end)
-            task.delay(0.12, function()
-                if not isLbCollapsed then
-                    if lbScroll then lbScroll.Visible = true end
-                    if lbResizeGrip then lbResizeGrip.Visible = true end
-                end
             end)
         end
     end
@@ -1711,7 +1717,15 @@ return function(Shared)
     end
 
     lbCloseBtn.MouseButton1Click:Connect(function()
-        toggleLeaderboardCollapse(true)
+        isLbCollapsed = true
+        lbMinBtn.Text = "+"
+        if lbScroll then lbScroll.Visible = false end
+        if lbResizeGrip then lbResizeGrip.Visible = false end
+        pcall(function()
+            TweenSvc:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, math.max(lbWindow.AbsoluteSize.X, 230), 0, 24)
+            }):Play()
+        end)
     end)
 
     -- ContextActionService ensures Tab key is captured before Roblox CoreGui can swallow it
