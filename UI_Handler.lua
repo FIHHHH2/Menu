@@ -1796,6 +1796,22 @@ return function(Shared)
     makeSection(DrawerScroll, "Performance & FPS Boost", 10)
 
     local originalMaterials = {}
+    local function isProtectedMapGeometry(obj)
+        if not obj then return true end
+        if obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:FindFirstChildOfClass("SpecialMesh") then
+            return true
+        end
+        local p = obj.Parent
+        while p and p ~= workspace do
+            local n = p.Name:lower()
+            if n == "map" or n == "maps" or n == "lobby" or n == "environment" or n == "buildings" or n == "normal" or n == "spawns" then
+                return true
+            end
+            p = p.Parent
+        end
+        return false
+    end
+
     makeToggle(DrawerScroll, "FPS Boost (Low Graphics)", "FPSBoost", 11, function(state)
         if state then
             Lighting.GlobalShadows = false
@@ -1807,7 +1823,7 @@ return function(Shared)
                 workspace.Terrain.WaterTransparency = 0
             end)
             for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("BasePart") then
+                if (obj:IsA("Part") or obj:IsA("WedgePart") or obj:IsA("CornerWedgePart") or obj:IsA("TrussPart")) and not isProtectedMapGeometry(obj) then
                     if not originalMaterials[obj] then originalMaterials[obj] = { mat = obj.Material, shadow = obj.CastShadow } end
                     obj.Material = Enum.Material.SmoothPlastic
                     obj.CastShadow = false
@@ -1832,7 +1848,7 @@ return function(Shared)
         if state then
             for _, obj in ipairs(workspace:GetDescendants()) do
                 if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-                    if obj.Enabled then
+                    if not isProtectedMapGeometry(obj) and obj.Enabled then
                         disabledEmitters[obj] = true
                         obj.Enabled = false
                     end
@@ -1869,7 +1885,7 @@ return function(Shared)
     makeToggle(DrawerScroll, "Disable 3D Textures & Decals", "NoTextures", 14, function(state)
         if state then
             for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("Decal") or obj:IsA("Texture") then
+                if (obj:IsA("Decal") or obj:IsA("Texture")) and not isProtectedMapGeometry(obj) then
                     if obj.Transparency < 1 then
                         disabledTextures[obj] = obj.Transparency
                         obj.Transparency = 1
