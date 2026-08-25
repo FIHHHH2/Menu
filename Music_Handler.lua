@@ -385,10 +385,13 @@ return function(Shared)
 
     -- SPOTIFY API
     local function cleanToken(tok)
-        if not tok then return "" end
+        if not tok or type(tok) ~= "string" then return "" end
         tok = tok:gsub("^%s+", ""):gsub("%s+$", "")
         if tok:sub(1, 7):lower() == "bearer " then
             tok = tok:sub(8)
+        end
+        if tok:find("^Paste ") or tok:find("^Client ID: ") or tok:find("^Client Secret: ") or tok:find("^Permanent Refresh Token: ") or tok:find("^Token: ") or tok:find("^Refresh Token: ") then
+            return ""
         end
         return tok
     end
@@ -431,31 +434,44 @@ return function(Shared)
     -- ── PERMANENT SPOTIFY AUTO-REFRESH ENGINE ───────────────────────
     local isRefreshingToken = false
     local function refreshSpotifyToken()
-        -- Guard: never double-enter
         if isRefreshingToken then return false, "Refresh already in progress" end
 
-        local rawInput = cleanToken(Shared.Config.SpotifyRefreshToken or "")
-        if rawInput == "" or rawInput == "Paste Spotify Refresh Token (Permanent)" or rawInput == "Permanent Refresh Token: Set" then
-            return false, "No Refresh Token — paste your token first"
+        local rToken = cleanToken(Shared.Config.SpotifyRefreshToken or "")
+        local aToken = cleanToken(Shared.Config.SpotifyToken or "")
+
+        -- If user pasted a direct access token (starts with BQ or long length)
+        if (rToken:sub(1, 2) == "BQ" or (#rToken > 160 and rToken:sub(1, 2) ~= "AQ")) then
+            Shared.Config.SpotifyToken = rToken
+            return true, rToken
         end
 
-        -- Multi-field paste: "refreshToken|clientId|clientSecret"
-        if rawInput:find("|") or rawInput:find(":::") then
-            local sep = rawInput:find(":::") and ":::" or "|"
-            local parts = rawInput:split(sep)
+        if rToken == "" then
+            if aToken ~= "" then
+                return true, aToken
+            end
+            return false, "No Token — paste your Refresh or Access Token"
+        end
+
+        -- Multi-field paste check
+        if rToken:find("|") or rToken:find(":::") then
+            local sep = rToken:find(":::") and ":::" or "|"
+            local parts = rToken:split(sep)
             if parts[1] and parts[1] ~= "" then Shared.Config.SpotifyRefreshToken = cleanToken(parts[1]) end
             if parts[2] and parts[2] ~= "" then Shared.Config.SpotifyClientId     = cleanToken(parts[2]) end
             if parts[3] and parts[3] ~= "" then Shared.Config.SpotifyClientSecret = cleanToken(parts[3]) end
             if Shared.SaveConfig then Shared.SaveConfig() end
-            rawInput = cleanToken(Shared.Config.SpotifyRefreshToken)
+            rToken = cleanToken(Shared.Config.SpotifyRefreshToken)
         end
 
-        local rToken    = rawInput
         local clientId  = cleanToken(Shared.Config.SpotifyClientId  or "")
         local clientSec = cleanToken(Shared.Config.SpotifyClientSecret or "")
 
+        -- Default fallback app credentials
         if clientId == "" then
-            return false, "No Client ID — paste Client ID and Client Secret in the boxes above"
+            clientId = "1842aff694404946af4ac03a457c54ab"
+        end
+        if clientSec == "" then
+            clientSec = "b90742dc54544188a5e2f88d5383bd3c"
         end
 
         isRefreshingToken = true
@@ -484,11 +500,11 @@ return function(Shared)
                 result_ok  = true
                 result_msg = data.access_token
             elseif data.error then
-                result_msg = (data.error_description or data.error) .. " — check your Client ID/Secret match the app that made your refresh token"
+                result_msg = (data.error_description or tostring(data.error))
             end
         end
 
-        -- Strategy 1: Basic Auth header (RFC standard, most common)
+        -- Strategy 1: Basic Auth header (RFC standard)
         local authHeader = "Basic " .. toBase64(clientId .. ":" .. clientSec)
         tryRequest(
             { ["Content-Type"] = "application/x-www-form-urlencoded", ["Authorization"] = authHeader },
@@ -505,8 +521,8 @@ return function(Shared)
             )
         end
 
-        -- Strategy 3: PKCE / public client (no secret needed)
-        if not result_ok and clientSec == "" then
+        -- Strategy 3: PKCE / public client
+        if not result_ok then
             tryRequest(
                 { ["Content-Type"] = "application/x-www-form-urlencoded" },
                 "grant_type=refresh_token&refresh_token=" .. Http:UrlEncode(rToken)
@@ -1567,11 +1583,12 @@ return function(Shared)
     refreshBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
     refreshBox.BorderSizePixel       = 1
     refreshBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
-    refreshBox.Text                  = (Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "") and "Permanent Refresh Token: Set" or "Paste Spotify Refresh Token (Permanent)"
-    refreshBox.PlaceholderText       = "Paste Spotify Refresh Token"
+    refreshBox.Text                  = ""
+    refreshBox.PlaceholderText       = (Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "") and "Refresh Token: Saved" or "Paste Refresh or Access Token"
     refreshBox.TextColor3            = Color3.fromRGB(20, 20, 60)
     refreshBox.Font                  = Enum.Font.Code
     refreshBox.TextSize              = 10
+    refreshBox.ClearTextOnFocus      = false
     refreshBox.LayoutOrder           = 2
     refreshBox.Parent                = rightCol
 
@@ -1582,19 +1599,22 @@ return function(Shared)
     cidBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
     cidBox.BorderSizePixel       = 1
     cidBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
-    cidBox.Text                  = (Shared.Config.SpotifyClientId and Shared.Config.SpotifyClientId ~= "") and "Client ID: " .. Shared.Config.SpotifyClientId:sub(1, 8) .. "..." or "Paste Client ID (Optional)"
-    cidBox.PlaceholderText       = "Paste Client ID (Optional)"
+    cidBox.Text                  = ""
+    cidBox.PlaceholderText       = (Shared.Config.SpotifyClientId and Shared.Config.SpotifyClientId ~= "") and "Client ID: " .. Shared.Config.SpotifyClientId:sub(1, 8) .. "..." or "Client ID (Optional)"
     cidBox.TextColor3            = Color3.fromRGB(20, 20, 60)
     cidBox.Font                  = Enum.Font.Code
     cidBox.TextSize              = 10
+    cidBox.ClearTextOnFocus      = false
     cidBox.LayoutOrder           = 3
     cidBox.Parent                = rightCol
 
     cidBox.FocusLost:Connect(function()
-        if cidBox.Text ~= "" and not cidBox.Text:find("Client ID: ") then
-            Shared.Config.SpotifyClientId = cleanToken(cidBox.Text)
+        local text = cleanToken(cidBox.Text)
+        if text ~= "" then
+            Shared.Config.SpotifyClientId = text
             if Shared.SaveConfig then Shared.SaveConfig() end
-            cidBox.Text = "Client ID: " .. Shared.Config.SpotifyClientId:sub(1, 8) .. "..."
+            cidBox.PlaceholderText = "Client ID: " .. text:sub(1, 8) .. "..."
+            cidBox.Text = ""
             Shared.Notify("Spotify", "Client ID saved", true)
         end
     end)
@@ -1606,46 +1626,57 @@ return function(Shared)
     csecBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
     csecBox.BorderSizePixel       = 1
     csecBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
-    csecBox.Text                  = (Shared.Config.SpotifyClientSecret and Shared.Config.SpotifyClientSecret ~= "") and "Client Secret: Set" or "Paste Client Secret (Optional)"
-    csecBox.PlaceholderText       = "Paste Client Secret (Optional)"
+    csecBox.Text                  = ""
+    csecBox.PlaceholderText       = (Shared.Config.SpotifyClientSecret and Shared.Config.SpotifyClientSecret ~= "") and "Client Secret: Saved" or "Client Secret (Optional)"
     csecBox.TextColor3            = Color3.fromRGB(20, 20, 60)
     csecBox.Font                  = Enum.Font.Code
     csecBox.TextSize              = 10
+    csecBox.ClearTextOnFocus      = false
     csecBox.LayoutOrder           = 4
     csecBox.Parent                = rightCol
 
     csecBox.FocusLost:Connect(function()
-        if csecBox.Text ~= "" and not csecBox.Text:find("Client Secret: Set") then
-            Shared.Config.SpotifyClientSecret = cleanToken(csecBox.Text)
+        local text = cleanToken(csecBox.Text)
+        if text ~= "" then
+            Shared.Config.SpotifyClientSecret = text
             if Shared.SaveConfig then Shared.SaveConfig() end
-            csecBox.Text = "Client Secret: Set"
+            csecBox.PlaceholderText = "Client Secret: Saved"
+            csecBox.Text = ""
             Shared.Notify("Spotify", "Client Secret saved", true)
         end
     end)
 
     refreshBox.FocusLost:Connect(function()
-        local raw = refreshBox.Text
-        if raw == "" or raw == "Paste Spotify Refresh Token (Permanent)" or raw == "Permanent Refresh Token: Set" then return end
+        local raw = cleanToken(refreshBox.Text)
+        if raw == "" then return end
 
-        -- Handle combined paste "token|clientId|clientSecret" right in the box
-        local cleaned = cleanToken(raw)
-        if cleaned:find("|") then
-            local parts = cleaned:split("|")
-            if parts[1] and parts[1] ~= "" then Shared.Config.SpotifyRefreshToken = cleanToken(parts[1]) end
+        -- Handle combined paste "token|clientId|clientSecret"
+        if raw:find("|") or raw:find(":::") then
+            local sep = raw:find(":::") and ":::" or "|"
+            local parts = raw:split(sep)
+            if parts[1] and parts[1] ~= "" then
+                Shared.Config.SpotifyRefreshToken = cleanToken(parts[1])
+            end
             if parts[2] and parts[2] ~= "" then
                 Shared.Config.SpotifyClientId = cleanToken(parts[2])
-                cidBox.Text = "Client ID: " .. Shared.Config.SpotifyClientId:sub(1, 8) .. "..."
+                cidBox.PlaceholderText = "Client ID: " .. Shared.Config.SpotifyClientId:sub(1, 8) .. "..."
+                cidBox.Text = ""
             end
             if parts[3] and parts[3] ~= "" then
                 Shared.Config.SpotifyClientSecret = cleanToken(parts[3])
-                csecBox.Text = "Client Secret: Set"
+                csecBox.PlaceholderText = "Client Secret: Saved"
+                csecBox.Text = ""
             end
+        elseif raw:sub(1, 2) == "BQ" or (#raw > 160 and raw:sub(1, 2) ~= "AQ") then
+            -- Access Token directly pasted
+            Shared.Config.SpotifyToken = raw
         else
-            Shared.Config.SpotifyRefreshToken = cleaned
+            Shared.Config.SpotifyRefreshToken = raw
         end
 
         if Shared.SaveConfig then Shared.SaveConfig() end
-        refreshBox.Text = "Permanent Refresh Token: Set"
+        refreshBox.PlaceholderText = "Token: Saved"
+        refreshBox.Text = ""
 
         task.spawn(function()
             local ok, res = refreshSpotifyToken()
@@ -1660,7 +1691,14 @@ return function(Shared)
                 end
                 startPolling()
             else
-                Shared.Notify("Spotify", "✗ " .. tostring(res or "Auth failed"), false)
+                local trk, err = getSpotifyTrack()
+                if trk then
+                    updateVisuals(trk)
+                    Shared.Notify("Spotify", "▶ " .. trk.name .. " — " .. trk.artist, true)
+                    startPolling()
+                else
+                    Shared.Notify("Spotify", "✗ " .. tostring(res or err or "Auth failed"), false)
+                end
             end
         end)
     end)
@@ -1668,20 +1706,18 @@ return function(Shared)
     MkButton(rightCol, "[ Test & Auto-Refresh Token ]", 4, function()
         task.spawn(function()
             local ok, err = refreshSpotifyToken()
-            if ok then
-                local trk, terr = getSpotifyTrack()
-                if trk then
-                    updateVisuals(trk)
-                    Shared.Notify("Spotify", "✓ " .. trk.name .. " — " .. trk.artist, true)
-                    if Shared.Flags["MusicBillboard"] then buildBillboard() end
-                    if not hudWidget then buildHUD() end
-                    startPolling()
-                else
-                    Shared.Notify("Spotify", "✓ Token OK. " .. tostring(terr or "Play something in Spotify"), true)
-                    startPolling()
-                end
+            local trk, terr = getSpotifyTrack()
+            if trk then
+                updateVisuals(trk)
+                Shared.Notify("Spotify", "✓ " .. trk.name .. " — " .. trk.artist, true)
+                if Shared.Flags["MusicBillboard"] then buildBillboard() end
+                if not hudWidget then buildHUD() end
+                startPolling()
+            elseif ok then
+                Shared.Notify("Spotify", "✓ Token Valid! Play a song in Spotify.", true)
+                startPolling()
             else
-                Shared.Notify("Spotify", "✗ " .. tostring(err or "Auth failed"), false)
+                Shared.Notify("Spotify", "✗ " .. tostring(err or terr or "Auth failed"), false)
             end
         end)
     end)
