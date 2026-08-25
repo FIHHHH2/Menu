@@ -317,8 +317,13 @@ return function(Shared)
         if isRefreshingToken then return false, "Refresh in progress" end
         isRefreshingToken = true
 
-        local clientId  = (Shared.Config.SpotifyClientId and cleanToken(Shared.Config.SpotifyClientId) ~= "") and cleanToken(Shared.Config.SpotifyClientId) or "1842aff694404946af4ac03a457c54ab"
-        local clientSec = (Shared.Config.SpotifyClientSecret and cleanToken(Shared.Config.SpotifyClientSecret) ~= "") and cleanToken(Shared.Config.SpotifyClientSecret) or "b90742dc54544188a5e2f88d5383bd3c"
+        local clientId  = (Shared.Config.SpotifyClientId and cleanToken(Shared.Config.SpotifyClientId) ~= "") and cleanToken(Shared.Config.SpotifyClientId) or ""
+        local clientSec = (Shared.Config.SpotifyClientSecret and cleanToken(Shared.Config.SpotifyClientSecret) ~= "") and cleanToken(Shared.Config.SpotifyClientSecret) or ""
+
+        if clientId == "" or clientSec == "" then
+            isRefreshingToken = false
+            return false, "Missing Spotify Client ID/Secret. Paste as: refreshToken|clientId|clientSecret"
+        end
 
         local authHeader = "Basic " .. toBase64(clientId .. ":" .. clientSec)
         local resp = Shared.HttpRequest({
