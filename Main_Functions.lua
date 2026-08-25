@@ -216,41 +216,112 @@ return function(Shared)
     -- ── RIGHT COLUMN: STAT MULTIPLIERS & WORLD ───────────────────
     MkSection(rightCol, "Stat Multipliers", 10)
 
-    MkSlider(rightCol, "Walk Speed", "WalkSpeed", 16, 250, 16, 11, function(val)
-        local hum = getHuman(); if hum then hum.WalkSpeed = val end
-    end)
+    local defaultWalkSpeed = 16
+    local defaultJumpHeight = 7.2
+    local defaultJumpPower = 50
+
+    local function cacheDefaultStats(char)
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            if hum.WalkSpeed > 0 and not Shared.Flags["EnableWalkSpeed"] then
+                defaultWalkSpeed = hum.WalkSpeed
+            end
+            if hum.JumpHeight > 0 and not Shared.Flags["EnableJump"] then
+                defaultJumpHeight = hum.JumpHeight
+            end
+            if hum.JumpPower > 0 and not Shared.Flags["EnableJump"] then
+                defaultJumpPower = hum.JumpPower
+            end
+        end
+    end
+    cacheDefaultStats(getChar())
+
     local function applyJumpStats(hum, val)
         if not hum then return end
         pcall(function()
             hum.UseJumpPower = false
             hum.JumpHeight   = val
-            -- Scale JumpPower for games enforcing UseJumpPower (50 power ~ 7.2 height)
             hum.JumpPower    = math.clamp(val * 7, 50, 1000)
         end)
     end
 
-    MkSlider(rightCol, "Jump Height", "JumpHeight", 7, 250, 7, 12, function(val)
+    local function restoreJumpStats(hum)
+        if not hum then return end
+        pcall(function()
+            hum.JumpHeight = defaultJumpHeight
+            hum.JumpPower  = defaultJumpPower
+        end)
+    end
+
+    MkToggle(rightCol, "Enable Custom Walk Speed", "EnableWalkSpeed", 11, function(state)
+        local hum = getHuman()
+        if hum then
+            if state then
+                hum.WalkSpeed = Shared.Flags["WalkSpeed"] or defaultWalkSpeed
+            else
+                hum.WalkSpeed = defaultWalkSpeed
+            end
+        end
+    end)
+
+    MkSlider(rightCol, "Walk Speed", "WalkSpeed", 16, 250, 16, 12, function(val)
+        Shared.Flags["WalkSpeed"] = val
+        if Shared.Flags["EnableWalkSpeed"] then
+            local hum = getHuman()
+            if hum then hum.WalkSpeed = val end
+        end
+    end)
+
+    MkToggle(rightCol, "Enable Custom Jump", "EnableJump", 13, function(state)
+        local hum = getHuman()
+        if hum then
+            if state then
+                applyJumpStats(hum, Shared.Flags["JumpHeight"] or defaultJumpHeight)
+            else
+                restoreJumpStats(hum)
+            end
+        end
+    end)
+
+    MkSlider(rightCol, "Jump Height / Power", "JumpHeight", 7, 250, 7, 14, function(val)
         Shared.Flags["JumpHeight"] = val
-        local hum = getHuman(); applyJumpStats(hum, val)
+        if Shared.Flags["EnableJump"] then
+            local hum = getHuman()
+            if hum then applyJumpStats(hum, val) end
+        end
     end)
 
     -- Continuous jump & speed enforcement loop
     RunService.Heartbeat:Connect(function()
         local hum = getHuman()
         if hum then
-            if Shared.Flags["JumpHeight"] and Shared.Flags["JumpHeight"] > 7 then
-                applyJumpStats(hum, Shared.Flags["JumpHeight"])
-            end
-            if Shared.Flags["WalkSpeed"] and Shared.Flags["WalkSpeed"] > 16 then
+            if Shared.Flags["EnableWalkSpeed"] and Shared.Flags["WalkSpeed"] then
                 hum.WalkSpeed = Shared.Flags["WalkSpeed"]
+            end
+            if Shared.Flags["EnableJump"] and Shared.Flags["JumpHeight"] then
+                applyJumpStats(hum, Shared.Flags["JumpHeight"])
             end
         end
     end)
 
     Player.CharacterAdded:Connect(function(char)
-        local hum = char:WaitForChild("Humanoid"); task.wait(0.1)
-        hum.WalkSpeed  = Shared.Flags["WalkSpeed"]  or 16
-        applyJumpStats(hum, Shared.Flags["JumpHeight"] or 7)
+        local hum = char:WaitForChild("Humanoid", 5)
+        task.wait(0.1)
+        cacheDefaultStats(char)
+        if hum then
+            if Shared.Flags["EnableWalkSpeed"] and Shared.Flags["WalkSpeed"] then
+                hum.WalkSpeed = Shared.Flags["WalkSpeed"]
+            else
+                hum.WalkSpeed = defaultWalkSpeed
+            end
+
+            if Shared.Flags["EnableJump"] and Shared.Flags["JumpHeight"] then
+                applyJumpStats(hum, Shared.Flags["JumpHeight"])
+            else
+                restoreJumpStats(hum)
+            end
+        end
         restoreDefaultCollisions(char)
         if Shared.Flags["FragilePlayer"] then setupFragileCharacter(char) end
     end)
