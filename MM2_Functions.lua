@@ -123,29 +123,51 @@ return function(Shared)
     end
 
     -- ── Cached Gun Drop Scanner ──────────────────────────────────
-    local cachedGunDrop = nil
+    local cachedGunDropPart = nil
+    local cachedGunDropModel = nil
+
+    local function findGunDrop()
+        local drop = Workspace:FindFirstChild("GunDrop")
+        if not drop then
+            for _, obj in ipairs(Workspace:GetChildren()) do
+                if obj.Name == "GunDrop" then
+                    drop = obj
+                    break
+                elseif (obj:IsA("Tool") or obj:IsA("Model")) and (obj.Name == "Gun" or obj.Name == "Revolver" or obj.Name:find("GunDrop")) then
+                    if obj.Parent ~= Player.Backpack and (not getChar() or obj.Parent ~= getChar()) then
+                        drop = obj
+                        break
+                    end
+                end
+            end
+        end
+
+        if not drop then
+            local normal = Workspace:FindFirstChild("Normal")
+            if normal then
+                drop = normal:FindFirstChild("GunDrop")
+            end
+        end
+
+        if drop then
+            if drop:IsA("BasePart") then
+                return drop, drop
+            elseif drop:IsA("Model") or drop:IsA("Tool") then
+                local p = drop:FindFirstChild("GunDrop") or drop:FindFirstChild("Handle") or drop:FindFirstChildOfClass("BasePart") or drop:FindFirstChildOfClass("MeshPart") or drop.PrimaryPart
+                if p then return p, drop end
+            end
+        end
+        return nil, nil
+    end
+
     task.spawn(function()
         while true do
             if Shared.Flags["AutoGrabGun"] or Shared.Flags["GunESP"] then
-                local found = nil
-                for _, obj in ipairs(Workspace:GetChildren()) do
-                    if (obj.Name == "GunDrop" or (obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver")))
-                    and obj.Parent ~= Player.Backpack and (not getChar() or obj.Parent ~= getChar()) then
-                        found = obj:FindFirstChildOfClass("BasePart") or (obj:IsA("BasePart") and obj)
-                        if found then break end
-                    end
-                end
-                if not found then
-                    for _, obj in ipairs(Workspace:GetDescendants()) do
-                        if obj.Name == "GunDrop" then
-                            found = obj:FindFirstChildOfClass("BasePart") or (obj:IsA("BasePart") and obj)
-                            if found then break end
-                        end
-                    end
-                end
-                cachedGunDrop = found
+                local part, model = findGunDrop()
+                cachedGunDropPart = part
+                cachedGunDropModel = model
             end
-            task.wait(0.35)
+            task.wait(0.2)
         end
     end)
 
@@ -496,23 +518,269 @@ return function(Shared)
     MkSection(leftCol, "Auto Grab Gun (Dead Drop)", 30)
 
     local autoGrabConn
-    MkToggle(leftCol, "Auto Grab Dropped Gun", "AutoGrabGun", 31, function(state)
+    local function executeGunPickup(part, model)
+        if not part or not part.Parent then return false end
+        local myHRP = getHRP()
+        if not myHRP then return false end
+
+        -- 1. Fire touch interest on the target part
+        pcall(function()
+            firetouchinterest(myHRP, part, 0)
+            firetouchinterest(myHRP, part, 1)
+        end)
+
+        -- 2. Fire touch interest on all BaseParts in model if it's a model
+        if model and model:IsA("Model") then
+            for _, p in ipairs(model:GetChildren()) do
+                if p:IsA("BasePart") then
+                    pcall(function()
+                        firetouchinterest(myHRP, p, 0)
+                        firetouchinterest(myHRP, p, 1)
+                    end)
+                end
+            end
+        end
+
+        -- 3. Trigger proximity prompt if present
+        pcall(function()
+            local prompt = part:FindFirstChildOfClass("ProximityPrompt") or (model and model:FindFirstChildOfClass("ProximityPrompt"))
+            if prompt and fireproximityprompt then
+                fireproximityprompt(prompt)
+            end
+        end)
+        return true
+    end
+
+    MkToggle(leftCol, "Auto Grab Dropped Gun (Any Distance)", "AutoGrabGun", 31, function(state)
         if autoGrabConn then autoGrabConn:Disconnect(); autoGrabConn = nil end
         if state then
             autoGrabConn = RunService.Heartbeat:Connect(function()
                 if not selfAliveInRound() then return end
                 if getMyGun() then return end
-                local myHRP = getHRP(); if not myHRP then return end
-                local part = cachedGunDrop
+                local part, model = cachedGunDropPart, cachedGunDropModel
+                if not part or not part.Parent then
+                    part, model = findGunDrop()
+                end
                 if part and part.Parent then
-                    local dist = (part.Position - myHRP.Position).Magnitude
-                    if dist < 40 then
-                        pcall(function() firetouchinterest(myHRP, part, 0) end)
-                        pcall(function() firetouchinterest(myHRP, part, 1) end)
+                    executeGunPickup(part, model)
+                end
+            end)
+            if Shared.AddCleanup then Shared.AddCleanup(autoGrabConn) end
+        end
+    end)
+
+    MkButton(leftCol, "[ Instant Teleport & Grab Gun ]", 32, function()
+        local part, model = findGunDrop()
+        if not part or not part.Parent then
+            Shared.Notify("Gun Grabber", "No dropped gun found on map", false)
+            return
+        end
+        local myHRP = getHRP()
+        if not myHRP then return end
+        local origCF = myHRP.CFrame
+        pcall(function()
+            myHRP.CFrame = part.CFrame + Vector3.new(0, 1.5, 0)
+            task.wait(0.05)
+            executeGunPickup(part, model)
+            task.wait(0.08)
+            myHRP.CFrame = origCF
+            Shared.Notify("Gun Grabber", "Grabbed gun and returned to spot!", true)
+        end)
+    end)
+
+    -- ── RIGHT COLUMN: KNIFE, ESP & SHERIFF TOOLS ──────────────────
+    MkSection(rightCol, "Knife Controls", 1)
+
+    local knifeThrowConn
+    MkToggle(rightCol, "Knife Velocity Prediction", "KnifePrediction", 2, function(state)
+        if knifeThrowConn then knifeThrowConn:Disconnect(); knifeThrowConn = nil end
+        if state then
+            knifeThrowConn = Workspace.ChildAdded:Connect(function(obj)
+                if not Shared.Flags["KnifePrediction"] then return end
+                if obj.Name:find("Knife") or obj.Name:find("knife") then
+                    task.wait()
+                    local myHRP = getHRP(); if not myHRP then return end
+                    local target, bestDist = nil, math.huge
+                    for _, plr in ipairs(Players:GetPlayers()) do
+                        if plr ~= Player and isAlive(plr) then
+                            local tHRP = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+                            if tHRP then
+                                local d = (tHRP.Position - myHRP.Position).Magnitude
+                                if d < bestDist then bestDist = d; target = tHRP end
+                            end
+                        end
+                    end
+                    if not target then return end
+                    local vel = target.AssemblyLinearVelocity
+                    local dist = (target.Position - myHRP.Position).Magnitude
+                    local travelTime = dist / 80
+                    local predictedPos = target.Position + vel * travelTime
+                    local knifeBase = obj:FindFirstChildOfClass("BasePart") or (obj:IsA("BasePart") and obj)
+                    if knifeBase then
+                        pcall(function()
+                            local dir = (predictedPos - knifeBase.Position).Unit
+                            knifeBase.CFrame = CFrame.new(knifeBase.Position, predictedPos)
+                            if not knifeBase.Anchored then
+                                knifeBase.AssemblyLinearVelocity = dir * 120
+                            end
+                        end)
                     end
                 end
             end)
+            if Shared.AddCleanup then Shared.AddCleanup(knifeThrowConn) end
         end
+    end)
+
+    MkToggle(rightCol, "Auto Throw Knife at Nearest", "AutoThrow", 3, function(state) end)
+
+    local autoThrowConn = RunService.Heartbeat:Connect(function()
+        if not Shared.Flags["AutoThrow"] then return end
+        if not selfAliveInRound() then return end
+        if getRole(Player) ~= "Murderer" then return end
+        local myHRP = getHRP(); if not myHRP then return end
+        local target, bestDist = nil, math.huge
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= Player and isAlive(plr) then
+                local tHRP = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+                if tHRP then
+                    local d = (tHRP.Position - myHRP.Position).Magnitude
+                    if d < bestDist then bestDist = d; target = tHRP end
+                end
+            end
+        end
+        if target and bestDist < 60 then
+            local knife = getMyKnife()
+            if knife then
+                local handle = knife:FindFirstChild("Handle") or knife:FindFirstChildOfClass("BasePart")
+                if handle then
+                    pcall(function()
+                        firetouchinterest(target, handle, 0)
+                        firetouchinterest(target, handle, 1)
+                    end)
+                end
+            end
+        end
+    end)
+    if Shared.AddCleanup then Shared.AddCleanup(autoThrowConn) end
+
+    MkSection(rightCol, "ESP & Visuals", 10)
+
+    local espEntries = {}
+    local espConn = nil
+
+    local function cleanupPlayerESP(plr)
+        local entry = espEntries[plr]
+        if entry then
+            pcall(function() if entry.gui then entry.gui:Destroy() end end)
+            pcall(function() if entry.hl then entry.hl:Destroy() end end)
+            espEntries[plr] = nil
+        end
+    end
+
+    local function clearAllESP()
+        for plr in pairs(espEntries) do cleanupPlayerESP(plr) end
+        espEntries = {}
+    end
+    if Shared.AddCleanup then Shared.AddCleanup(clearAllESP) end
+
+    MkToggle(rightCol, "Role ESP & Highlight Chams", "RoleESP", 11, function(state)
+        clearAllESP()
+        if espConn then espConn:Disconnect(); espConn = nil end
+        if not state then return end
+
+        espConn = RunService.RenderStepped:Connect(function()
+            local myHRP = getHRP()
+            for plr, entry in pairs(espEntries) do
+                if not plr.Parent or not plr.Character or not isAlive(plr) then
+                    cleanupPlayerESP(plr)
+                end
+            end
+
+            local livingPlayers = {}
+            for _, plr in ipairs(Players:GetPlayers()) do
+                end
+            end
+
+            for c, bb in pairs(coinESPObjects) do
+                if not activeCoinsMap[c] or not c.Parent then
+                    pcall(function() bb:Destroy() end)
+                    coinESPObjects[c] = nil
+                end
+            end
+        end)
+    end)
+
+    MkSection(leftCol, "Auto Grab Gun (Dead Drop)", 30)
+
+    local autoGrabConn
+    local function executeGunPickup(part, model)
+        if not part or not part.Parent then return false end
+        local myHRP = getHRP()
+        if not myHRP then return false end
+
+        -- 1. Fire touch interest on the target part
+        pcall(function()
+            firetouchinterest(myHRP, part, 0)
+            firetouchinterest(myHRP, part, 1)
+        end)
+
+        -- 2. Fire touch interest on all BaseParts in model if it's a model
+        if model and model:IsA("Model") then
+            for _, p in ipairs(model:GetChildren()) do
+                if p:IsA("BasePart") then
+                    pcall(function()
+                        firetouchinterest(myHRP, p, 0)
+                        firetouchinterest(myHRP, p, 1)
+                    end)
+                end
+            end
+        end
+
+        -- 3. Trigger proximity prompt if present
+        pcall(function()
+            local prompt = part:FindFirstChildOfClass("ProximityPrompt") or (model and model:FindFirstChildOfClass("ProximityPrompt"))
+            if prompt and fireproximityprompt then
+                fireproximityprompt(prompt)
+            end
+        end)
+        return true
+    end
+
+    MkToggle(leftCol, "Auto Grab Dropped Gun (Any Distance)", "AutoGrabGun", 31, function(state)
+        if autoGrabConn then autoGrabConn:Disconnect(); autoGrabConn = nil end
+        if state then
+            autoGrabConn = RunService.Heartbeat:Connect(function()
+                if not selfAliveInRound() then return end
+                if getMyGun() then return end
+                local part, model = cachedGunDropPart, cachedGunDropModel
+                if not part or not part.Parent then
+                    part, model = findGunDrop()
+                end
+                if part and part.Parent then
+                    executeGunPickup(part, model)
+                end
+            end)
+            if Shared.AddCleanup then Shared.AddCleanup(autoGrabConn) end
+        end
+    end)
+
+    MkButton(leftCol, "[ Instant Teleport & Grab Gun ]", 32, function()
+        local part, model = findGunDrop()
+        if not part or not part.Parent then
+            Shared.Notify("Gun Grabber", "No dropped gun found on map", false)
+            return
+        end
+        local myHRP = getHRP()
+        if not myHRP then return end
+        local origCF = myHRP.CFrame
+        pcall(function()
+            myHRP.CFrame = part.CFrame + Vector3.new(0, 1.5, 0)
+            task.wait(0.05)
+            executeGunPickup(part, model)
+            task.wait(0.08)
+            myHRP.CFrame = origCF
+            Shared.Notify("Gun Grabber", "Grabbed gun and returned to spot!", true)
+        end)
     end)
 
     -- ── RIGHT COLUMN: KNIFE, ESP & SHERIFF TOOLS ──────────────────
@@ -712,7 +980,7 @@ return function(Shared)
 
     local gunEspHL = nil
     local gunEspBB = nil
-    local gunEspConn
+    local gunEspConn = nil
 
     local function clearGunDropESP()
         if gunEspHL then gunEspHL:Destroy(); gunEspHL = nil end
@@ -727,7 +995,7 @@ return function(Shared)
 
         gunEspConn = RunService.RenderStepped:Connect(function()
             local myHRP = getHRP()
-            local foundDrop = cachedGunDrop
+            local foundDrop = cachedGunDropPart or cachedGunDropModel
 
             if foundDrop and foundDrop.Parent then
                 if not gunEspHL or not gunEspHL.Parent or not gunEspBB or not gunEspBB.Parent then
