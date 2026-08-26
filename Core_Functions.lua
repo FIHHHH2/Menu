@@ -60,7 +60,7 @@ return function(Shared)
         local cam = workspace.CurrentCamera
         local viewportH = (cam and cam.ViewportSize.Y) or 800
         local posY = customPosY or 48
-        local calculatedH = 24 + 4 + (c * 31) + 4
+        local calculatedH = 26 + 6 + (c * (30 + 5)) + 6
         local maxAllowedH = math.max(56, viewportH - posY - 16)
         return math.clamp(calculatedH, 56, maxAllowedH)
     end
@@ -71,30 +71,22 @@ return function(Shared)
     lbWindow.Size = UDim2.new(0, 230, 0, initialTargetH)
     lbWindow.Position = UDim2.new(1, -242, 0, 48)
     lbWindow.BackgroundColor3 = C.BodyBg
-    lbWindow.BackgroundTransparency = 0.50
-    lbWindow.BorderSizePixel = 1
-    lbWindow.BorderColor3 = C.WinBorder
-    lbWindow.ClipsDescendants = true
+    lbWindow.BackgroundTransparency = 1
+    lbWindow.BorderSizePixel = 0
+    lbWindow.ClipsDescendants = false
     lbWindow.ZIndex = 40
     lbWindow.Parent = ScreenGui
-    registerThemed(lbWindow, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
-    local lbWinCorner = Instance.new("UICorner")
-    lbWinCorner.CornerRadius = UDim.new(0, 0)
-    lbWinCorner.Parent = lbWindow
 
-    -- TitleBar (Movable / Draggable)
+    -- TitleBar (Movable / Draggable Header Tab)
     local lbTitleBar = Instance.new("Frame")
     lbTitleBar.Size = UDim2.new(1, 0, 0, 24)
     lbTitleBar.BackgroundColor3 = C.TitleBar
-    lbTitleBar.BackgroundTransparency = 0.40
+    lbTitleBar.BackgroundTransparency = 0.25
     lbTitleBar.BorderSizePixel = 1
     lbTitleBar.BorderColor3 = C.WinBorder
     lbTitleBar.ZIndex = 41
     lbTitleBar.Parent = lbWindow
     registerThemed(lbTitleBar, { BackgroundColor3 = "TitleBar", BorderColor3 = "WinBorder" })
-    local lbTitleCorner = Instance.new("UICorner")
-    lbTitleCorner.CornerRadius = UDim.new(0, 0)
-    lbTitleCorner.Parent = lbTitleBar
 
     local lbTitleText = Instance.new("TextLabel")
     lbTitleText.Size = UDim2.new(1, -52, 1, 0)
@@ -359,11 +351,14 @@ return function(Shared)
 
     -- Scroll Area
     lbScroll = Instance.new("ScrollingFrame")
-    lbScroll.Size = UDim2.new(1, 0, 1, -24)
-    lbScroll.Position = UDim2.new(0, 0, 0, 24)
+    -- Scroll Area (Spaced Out Player Tabs)
+    lbScroll = Instance.new("ScrollingFrame")
+    lbScroll.Size = UDim2.new(1, 0, 1, -30)
+    lbScroll.Position = UDim2.new(0, 0, 0, 30)
     lbScroll.BackgroundTransparency = 1
     lbScroll.BorderSizePixel = 0
     lbScroll.ScrollBarThickness = 0
+    lbScroll.ClipsDescendants = false
     lbScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
     lbScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     lbScroll.ZIndex = 41
@@ -371,13 +366,14 @@ return function(Shared)
 
     local lbLayout = Instance.new("UIListLayout")
     lbLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    lbLayout.Padding = UDim.new(0, 3)
+    lbLayout.Padding = UDim.new(0, 5)
     lbLayout.Parent = lbScroll
 
     local lbPad = Instance.new("UIPadding")
-    lbPad.PaddingTop = UDim.new(0, 4)
-    lbPad.PaddingLeft = UDim.new(0, 4)
-    lbPad.PaddingRight = UDim.new(0, 4)
+    lbPad.PaddingTop = UDim.new(0, 2)
+    lbPad.PaddingBottom = UDim.new(0, 4)
+    lbPad.PaddingLeft = UDim.new(0, 0)
+    lbPad.PaddingRight = UDim.new(0, 0)
     lbPad.Parent = lbScroll
 
     -- ── THEMED PLAYER PROFILE POPUP CARD ────────────────────────
@@ -586,20 +582,20 @@ return function(Shared)
         end
 
         local row = Instance.new("Frame")
-        row.Name = "Row_" .. plr.Name
-        row.Size = UDim2.new(1, 0, 0, 28)
-        row.Position = UDim2.new(1, 60, 0, 0)
+        row.Name = "TabCard_" .. plr.Name
+        row.Size = UDim2.new(1, 0, 0, 30)
+        row.Position = UDim2.new(0, 240, 0, 0)
         row.BackgroundColor3 = C.RowBg
         row.BackgroundTransparency = 1
         row.BorderSizePixel = 1
-        row.BorderColor3 = C.RowBorder
+        row.BorderColor3 = C.WinBorder
         row.LayoutOrder = layoutOrder or 1
         row.ZIndex = 42
         row.Parent = lbScroll
-        registerThemed(row, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder" })
+        registerThemed(row, { BackgroundColor3 = "RowBg", BorderColor3 = "WinBorder" })
 
         local avatar = Instance.new("ImageLabel")
-        avatar.Size = UDim2.new(0, 22, 0, 22)
+        avatar.Size = UDim2.new(0, 24, 0, 24)
         avatar.Position = UDim2.new(0, 3, 0, 3)
         avatar.BackgroundTransparency = 1
         avatar.ImageTransparency = 1
@@ -607,13 +603,10 @@ return function(Shared)
         avatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. tostring(plr.UserId) .. "&width=48&height=48&format=png"
         avatar.ZIndex = 43
         avatar.Parent = row
-        local avatarCorner = Instance.new("UICorner")
-        avatarCorner.CornerRadius = UDim.new(0, 0)
-        avatarCorner.Parent = avatar
 
         local dName = Instance.new("TextLabel")
-        dName.Size = UDim2.new(1, -32, 0, 13)
-        dName.Position = UDim2.new(0, 28, 0, 2)
+        dName.Size = UDim2.new(1, -34, 0, 13)
+        dName.Position = UDim2.new(0, 32, 0, 2)
         dName.BackgroundTransparency = 1
         dName.TextTransparency = 1
         dName.Text = plr.DisplayName
@@ -627,8 +620,8 @@ return function(Shared)
         registerThemed(dName, { TextColor3 = "BtnText" })
 
         local uName = Instance.new("TextLabel")
-        uName.Size = UDim2.new(1, -32, 0, 12)
-        uName.Position = UDim2.new(0, 28, 0, 14)
+        uName.Size = UDim2.new(1, -34, 0, 12)
+        uName.Position = UDim2.new(0, 32, 0, 15)
         uName.BackgroundTransparency = 1
         uName.TextTransparency = 1
         uName.Text = "@" .. plr.Name
@@ -648,10 +641,10 @@ return function(Shared)
         rowBtn.Parent = row
 
         rowBtn.MouseEnter:Connect(function()
-            TweenSvc:Create(row, TweenInfo.new(0.12), { BackgroundTransparency = 0.25, BackgroundColor3 = C.RowHover }):Play()
+            TweenSvc:Create(row, TweenInfo.new(0.12), { BackgroundTransparency = 0.15, BackgroundColor3 = C.RowHover }):Play()
         end)
         rowBtn.MouseLeave:Connect(function()
-            TweenSvc:Create(row, TweenInfo.new(0.12), { BackgroundTransparency = 0.55, BackgroundColor3 = C.RowBg }):Play()
+            TweenSvc:Create(row, TweenInfo.new(0.12), { BackgroundTransparency = 0.35, BackgroundColor3 = C.RowBg }):Play()
         end)
         rowBtn.MouseButton1Click:Connect(function()
             openPlayerProfile(plr, row)
@@ -669,7 +662,7 @@ return function(Shared)
             if row and row.Parent then
                 TweenSvc:Create(row, TweenInfo.new(0.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Position = UDim2.new(0, 0, 0, 0),
-                    BackgroundTransparency = 0.55
+                    BackgroundTransparency = 0.35
                 }):Play()
                 TweenSvc:Create(avatar, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     ImageTransparency = 0
@@ -739,7 +732,7 @@ return function(Shared)
             playerRows[plr] = nil
 
             local slideOut = TweenSvc:Create(row, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-                Position = UDim2.new(1, 80, 0, 0),
+                Position = UDim2.new(0, 280, 0, 0),
                 BackgroundTransparency = 1
             })
             if entry.avatar then
