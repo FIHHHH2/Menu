@@ -4,10 +4,11 @@
 
 -- Terminate and disconnect all connections and objects from previous executions
 pcall(function()
-    if getgenv and type(getgenv().FihUI_Cleanup) == "function" then
-        getgenv().FihUI_Cleanup()
-    elseif type(_G.FihUI_Cleanup) == "function" then
-        _G.FihUI_Cleanup()
+    local prev = (getgenv and getgenv().FihUI_Cleanup) or (rawget(_G, "FihUI_Cleanup"))
+    if type(prev) == "function" then
+        if getgenv then getgenv().FihUI_Cleanup = nil end
+        _G.FihUI_Cleanup = nil
+        prev()
     end
 end)
 
@@ -98,13 +99,6 @@ end
 
 -- Comprehensive Cleanup & Residual Purge Engine (Instantaneous, non-blocking)
 local function purgeAllResiduals()
-    pcall(function()
-        local prevCleanup = (getgenv and getgenv().FihUI_Cleanup) or (rawget(_G, "FihUI_Cleanup"))
-        if type(prevCleanup) == "function" then
-            prevCleanup()
-        end
-    end)
-
     local containers = {}
     pcall(function() table.insert(containers, game:GetService("CoreGui")) end)
     pcall(function()

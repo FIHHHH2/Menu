@@ -413,7 +413,7 @@ return function(Shared)
         local pName = (gui.Parent and gui.Parent.Name:lower()) or ""
         local ppName = (gui.Parent and gui.Parent.Parent and gui.Parent.Parent.Name:lower()) or ""
         if pName:find("maingui") or ppName:find("maingui") or pName:find("game") or pName:find("lobby") then
-            if n == "topbar" or n == "tabbar" or n == "tab" or n == "scoreboard" or n == "leaderboard" or n == "playerlist" or n == "roleselector" then
+            if n == "topbar" or n == "tabbar" or n == "scoreboard" or n == "leaderboard" or n == "playerlist" then
                 isConflict = true
             end
         end
