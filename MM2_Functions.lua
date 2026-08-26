@@ -800,25 +800,6 @@ return function(Shared)
         espEntries = {}
     end
     if Shared.AddCleanup then Shared.AddCleanup(clearAllESP) end
-    MkSection(rightCol, "ESP & Visuals", 10)
-
-    local espEntries = {}
-    local espConn = nil
-
-    local function cleanupPlayerESP(plr)
-        local entry = espEntries[plr]
-        if entry then
-            pcall(function() if entry.gui then entry.gui:Destroy() end end)
-            pcall(function() if entry.hl then entry.hl:Destroy() end end)
-            espEntries[plr] = nil
-        end
-    end
-
-    local function clearAllESP()
-        for plr in pairs(espEntries) do cleanupPlayerESP(plr) end
-        espEntries = {}
-    end
-    if Shared.AddCleanup then Shared.AddCleanup(clearAllESP) end
 
     MkToggle(rightCol, "Role ESP & Highlight Chams", "RoleESP", 11, function(state)
         clearAllESP()

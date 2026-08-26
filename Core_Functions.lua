@@ -210,7 +210,30 @@ return function(Shared)
         if isLbCollapsed then
             lbMinBtn.Text = "+"
             if lbResizeGrip then lbResizeGrip.Visible = false end
-            local t = TweenService:Create(lbWindow, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+
+            -- Animate all player tabs sliding out to the right when collapsed
+            local sortedPlrs = {}
+            for plr, entry in pairs(playerRows) do
+                if entry and entry.row and entry.row.Parent then
+                    table.insert(sortedPlrs, entry)
+                end
+            end
+            table.sort(sortedPlrs, function(a, b) return (a.row.LayoutOrder or 0) < (b.row.LayoutOrder or 0) end)
+            for i, entry in ipairs(sortedPlrs) do
+                task.delay((i - 1) * 0.025, function()
+                    if entry and entry.row and entry.row.Parent then
+                        TweenService:Create(entry.row, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                            Position = UDim2.new(0, 300, 0, 0),
+                            BackgroundTransparency = 1
+                        }):Play()
+                        if entry.avatar then TweenService:Create(entry.avatar, TweenInfo.new(0.18), { ImageTransparency = 1 }):Play() end
+                        if entry.dName then TweenService:Create(entry.dName, TweenInfo.new(0.18), { TextTransparency = 1 }):Play() end
+                        if entry.uName then TweenService:Create(entry.uName, TweenInfo.new(0.18), { TextTransparency = 1 }):Play() end
+                    end
+                end)
+            end
+
+            local t = TweenService:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                 Size = UDim2.new(0, curW, 0, 24)
             })
             currentLbCollapseTween = t
@@ -223,11 +246,14 @@ return function(Shared)
         else
             lbMinBtn.Text = "-"
             if lbScroll then lbScroll.Visible = true end
-            local t = TweenService:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+            local t = TweenService:Create(lbWindow, TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                 Size = UDim2.new(0, curW, 0, targetH)
             })
             currentLbCollapseTween = t
             t:Play()
+            if renderLeaderboardPlayers then
+                renderLeaderboardPlayers(true)
+            end
             t.Completed:Connect(function()
                 if not isLbCollapsed and lbResizeGrip then
                     lbResizeGrip.Visible = true
@@ -1347,8 +1373,8 @@ return function(Shared)
     boxPad.Parent = chatBox
 
     local sendBtn = Instance.new("TextButton")
-    sendBtn.Size = UDim2.new(0, 62, 1, 0)
-    sendBtn.Position = UDim2.new(1, -62, 0, 0)
+    sendBtn.Size = UDim2.new(0, 54, 1, 0)
+    sendBtn.Position = UDim2.new(1, -76, 0, 0)
     sendBtn.BackgroundColor3 = C.BtnBg
     sendBtn.BackgroundTransparency = 0.25
     sendBtn.BorderSizePixel = 1
@@ -1480,15 +1506,16 @@ return function(Shared)
         end
     end)
 
-    chatResizeGrip = Instance.new("TextLabel")
-    chatResizeGrip.Size = UDim2.new(0, 14, 0, 14)
-    chatResizeGrip.Position = UDim2.new(1, -14, 1, -14)
+    chatResizeGrip = Instance.new("TextButton")
+    chatResizeGrip.Name = "ChatResizeGrip"
+    chatResizeGrip.Size = UDim2.new(0, 18, 0, 18)
+    chatResizeGrip.Position = UDim2.new(1, -18, 1, -18)
     chatResizeGrip.BackgroundTransparency = 1
     chatResizeGrip.Text = "◢"
     chatResizeGrip.TextColor3 = C.WinBorder
     chatResizeGrip.Font = Enum.Font.Code
-    chatResizeGrip.TextSize = 11
-    chatResizeGrip.ZIndex = 43
+    chatResizeGrip.TextSize = 13
+    chatResizeGrip.ZIndex = 60
     chatResizeGrip.Parent = chatWindow
     registerThemed(chatResizeGrip, { TextColor3 = "WinBorder" })
 
@@ -1514,8 +1541,8 @@ return function(Shared)
         UserInput.InputChanged:Connect(function(input)
             if isChatResizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                 local cur = UserInput:GetMouseLocation()
-                local dx  = cur.X - chatDragStart.X
-                local dy  = cur.Y - chatDragStart.Y
+                local dx  = cur.X - chatResizeStart.X
+                local dy  = cur.Y - chatResizeStart.Y
                 local newW = math.clamp(chatSizeStart.X + dx, 260, 750)
                 local newH = math.clamp(chatSizeStart.Y + dy, 160, 600)
                 chatWindow.Size = UDim2.new(0, newW, 0, newH)
