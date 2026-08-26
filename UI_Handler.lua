@@ -449,8 +449,16 @@ return function(Shared)
                 for _, child in ipairs(pGui:GetChildren()) do
                     checkAndSuppressConflictingGui(child)
                 end
-                for _, desc in ipairs(pGui:GetDescendants()) do
-                    checkAndSuppressConflictingGui(desc)
+                local mainGui = pGui:FindFirstChild("MainGUI") or pGui:FindFirstChild("MainGui") or pGui:FindFirstChild("Main")
+                if mainGui then
+                    for _, d in ipairs(mainGui:GetChildren()) do
+                        checkAndSuppressConflictingGui(d)
+                        if d.Name == "Game" or d.Name == "Lobby" then
+                            for _, sub in ipairs(d:GetChildren()) do
+                                checkAndSuppressConflictingGui(sub)
+                            end
+                        end
+                    end
                 end
             end
         end)

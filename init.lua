@@ -11,16 +11,7 @@ pcall(function()
     end
 end)
 
-local commitSha = nil
-pcall(function()
-    local res = game:HttpGet("https://api.github.com/repos/FIHHHH2/Menu/commits/main?t=" .. tostring(os.time()) .. tostring(math.random(1000, 9999)))
-    local data = game:GetService("HttpService"):JSONDecode(res)
-    if data and data.sha then
-        commitSha = data.sha
-    end
-end)
-
-local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/" .. (commitSha or "main")
+local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/main"
 
 local function loadModule(name)
     -- Cache busting prevents GitHub CDN from serving stale code
@@ -80,11 +71,9 @@ local function httpRequest(opt)
     end
 
     if req then
-        -- 1. Try standard uppercase option keys
         local ok1, res1 = pcall(function() return req(opt) end)
         if ok1 and res1 then return normalize(res1) end
 
-        -- 2. Try lowercase option keys (Fluxus, Delta, Solara variants)
         local lowerOpt = {
             url     = opt.Url or opt.url,
             method  = opt.Method or opt.method or "GET",
@@ -95,7 +84,6 @@ local function httpRequest(opt)
         if ok2 and res2 then return normalize(res2) end
     end
 
-    -- Fallback to game:HttpGet ONLY for unauthenticated public GET requests
     local hasAuth = (opt.Headers and (opt.Headers["Authorization"] or opt.Headers["authorization"]))
                  or (opt.headers and (opt.headers["Authorization"] or opt.headers["authorization"]))
     if not hasAuth and (opt.Method == "GET" or not opt.Method) and (opt.Url or opt.url) then
@@ -108,7 +96,7 @@ local function httpRequest(opt)
     return nil
 end
 
--- Comprehensive Cleanup & Residual Purge Engine (reduces duplicates on reload)
+-- Comprehensive Cleanup & Residual Purge Engine (Instantaneous, non-blocking)
 local function purgeAllResiduals()
     pcall(function()
         local prevCleanup = (getgenv and getgenv().FihUI_Cleanup) or (rawget(_G, "FihUI_Cleanup"))
@@ -169,7 +157,7 @@ local function purgeAllResiduals()
         local Players = game:GetService("Players")
         for _, p in ipairs(Players:GetPlayers()) do
             if p.Character then
-                for _, d in ipairs(p.Character:GetDescendants()) do
+                for _, d in ipairs(p.Character:GetChildren()) do
                     if d:IsA("Highlight") or d:IsA("BillboardGui") or d:IsA("SurfaceGui") or d:IsA("SelectionBox") or d:IsA("BoxHandleAdornment") or d:IsA("CylinderHandleAdornment") then
                         if d.Name:find("^Fih_") or d.Name:find("^ESP_") or d.Name:find("^Chams_") or d.Name:find("^AeroChams") or d.Name:find("^BB_") or d.Name:find("^NDS_") then
                             pcall(function() d:Destroy() end)
@@ -180,14 +168,6 @@ local function purgeAllResiduals()
                         end
                     end
                 end
-            end
-        end
-    end)
-
-    pcall(function()
-        for _, d in ipairs(workspace:GetDescendants()) do
-            if (d:IsA("Highlight") or d:IsA("BillboardGui") or d:IsA("SelectionBox") or d:IsA("BoxHandleAdornment")) and (d.Name:find("^Fih_") or d.Name:find("^ESP_") or d.Name:find("^Chams_") or d.Name:find("^AeroChams") or d.Name:find("^BB_") or d.Name:find("^NDS_")) then
-                pcall(function() d:Destroy() end)
             end
         end
     end)
