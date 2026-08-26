@@ -53,6 +53,7 @@ return function(Shared)
     -- ── CUSTOM WINDOWS AERO LEADERBOARD (PLAYERLIST) ─────────────
     local lbScroll = nil
     local lbResizeGrip = nil
+    local renderLeaderboardPlayers = nil
 
     local function getLbTargetHeight(count, customPosY)
         local c = count or #Players:GetPlayers()
@@ -164,6 +165,10 @@ return function(Shared)
 
             local targetH = isLbCollapsed and 24 or getLbTargetHeight(#Players:GetPlayers())
             lbWindow.Size = UDim2.new(0, curW, 0, targetH)
+
+            if renderLeaderboardPlayers and not isLbCollapsed then
+                renderLeaderboardPlayers(true)
+            end
 
             local tweenIn = TweenService:Create(lbWindow, TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                 Position = UDim2.new(1, -(curW + 12), 0, curY),
@@ -572,112 +577,204 @@ return function(Shared)
         end
     end)
 
-    local function renderLeaderboardPlayers()
-        for _, child in ipairs(lbScroll:GetChildren()) do
-            if child:IsA("Frame") then child:Destroy() end
+    local playerRows = {}
+
+    local function createPlayerRow(plr, layoutOrder, staggerDelay)
+        if playerRows[plr] and playerRows[plr].row and playerRows[plr].row.Parent then
+            playerRows[plr].row.LayoutOrder = layoutOrder or 1
+            return playerRows[plr].row
         end
 
-        local allPlrs = Players:GetPlayers()
-        lbTitleText.Text = "Players (" .. tostring(#allPlrs) .. ")"
+        local row = Instance.new("Frame")
+        row.Name = "Row_" .. plr.Name
+        row.Size = UDim2.new(1, 0, 0, 28)
+        row.Position = UDim2.new(1, 60, 0, 0)
+        row.BackgroundColor3 = C.RowBg
+        row.BackgroundTransparency = 1
+        row.BorderSizePixel = 1
+        row.BorderColor3 = C.RowBorder
+        row.LayoutOrder = layoutOrder or 1
+        row.ZIndex = 42
+        row.Parent = lbScroll
+        registerThemed(row, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder" })
 
-        local targetH = getLbTargetHeight(#allPlrs)
+        local avatar = Instance.new("ImageLabel")
+        avatar.Size = UDim2.new(0, 22, 0, 22)
+        avatar.Position = UDim2.new(0, 3, 0, 3)
+        avatar.BackgroundTransparency = 1
+        avatar.ImageTransparency = 1
+        avatar.BorderSizePixel = 0
+        avatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. tostring(plr.UserId) .. "&width=48&height=48&format=png"
+        avatar.ZIndex = 43
+        avatar.Parent = row
+        local avatarCorner = Instance.new("UICorner")
+        avatarCorner.CornerRadius = UDim.new(0, 0)
+        avatarCorner.Parent = avatar
+
+        local dName = Instance.new("TextLabel")
+        dName.Size = UDim2.new(1, -32, 0, 13)
+        dName.Position = UDim2.new(0, 28, 0, 2)
+        dName.BackgroundTransparency = 1
+        dName.TextTransparency = 1
+        dName.Text = plr.DisplayName
+        dName.TextColor3 = C.BtnText
+        dName.Font = Enum.Font.ArimoBold
+        dName.TextSize = 11
+        dName.TextXAlignment = Enum.TextXAlignment.Left
+        dName.TextTruncate = Enum.TextTruncate.AtEnd
+        dName.ZIndex = 43
+        dName.Parent = row
+        registerThemed(dName, { TextColor3 = "BtnText" })
+
+        local uName = Instance.new("TextLabel")
+        uName.Size = UDim2.new(1, -32, 0, 12)
+        uName.Position = UDim2.new(0, 28, 0, 14)
+        uName.BackgroundTransparency = 1
+        uName.TextTransparency = 1
+        uName.Text = "@" .. plr.Name
+        uName.TextColor3 = (plr == Players.LocalPlayer) and Color3.fromRGB(0, 220, 140) or (isDark and Color3.fromRGB(120, 150, 190) or Color3.fromRGB(70, 90, 120))
+        uName.Font = Enum.Font.Code
+        uName.TextSize = 9
+        uName.TextXAlignment = Enum.TextXAlignment.Left
+        uName.TextTruncate = Enum.TextTruncate.AtEnd
+        uName.ZIndex = 43
+        uName.Parent = row
+
+        local rowBtn = Instance.new("TextButton")
+        rowBtn.Size = UDim2.new(1, 0, 1, 0)
+        rowBtn.BackgroundTransparency = 1
+        rowBtn.Text = ""
+        rowBtn.ZIndex = 44
+        rowBtn.Parent = row
+
+        rowBtn.MouseEnter:Connect(function()
+            TweenSvc:Create(row, TweenInfo.new(0.12), { BackgroundTransparency = 0.25, BackgroundColor3 = C.RowHover }):Play()
+        end)
+        rowBtn.MouseLeave:Connect(function()
+            TweenSvc:Create(row, TweenInfo.new(0.12), { BackgroundTransparency = 0.55, BackgroundColor3 = C.RowBg }):Play()
+        end)
+        rowBtn.MouseButton1Click:Connect(function()
+            openPlayerProfile(plr, row)
+        end)
+
+        playerRows[plr] = {
+            row = row,
+            avatar = avatar,
+            dName = dName,
+            uName = uName
+        }
+
+        -- Domino Entrance Transition (0.075s stagger delay)
+        task.delay(staggerDelay or 0, function()
+            if row and row.Parent then
+                TweenSvc:Create(row, TweenInfo.new(0.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Position = UDim2.new(0, 0, 0, 0),
+                    BackgroundTransparency = 0.55
+                }):Play()
+                TweenSvc:Create(avatar, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    ImageTransparency = 0
+                }):Play()
+                TweenSvc:Create(dName, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    TextTransparency = 0
+                }):Play()
+                TweenSvc:Create(uName, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    TextTransparency = 0
+                }):Play()
+            end
+        end)
+
+        return row
+    end
+
+    local function updateLeaderboardHeight(count)
+        local allPlrs = Players:GetPlayers()
+        local c = count or #allPlrs
+        lbTitleText.Text = "Players (" .. tostring(c) .. ")"
+        local targetH = getLbTargetHeight(c)
         local curW = math.max(lbWindow.AbsoluteSize.X, 230)
         if isLbOpen and lbWindow.Visible and not isLbCollapsed then
             pcall(function()
-                TweenSvc:Create(lbWindow, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                TweenSvc:Create(lbWindow, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, curW, 0, targetH)
                 }):Play()
             end)
         end
+    end
+
+    renderLeaderboardPlayers = function(animateDomino)
+        for plr, entry in pairs(playerRows) do
+            if entry.row then
+                pcall(function() entry.row:Destroy() end)
+            end
+        end
+        playerRows = {}
+
+        local allPlrs = Players:GetPlayers()
+        updateLeaderboardHeight(#allPlrs)
 
         for i, plr in ipairs(allPlrs) do
-            local row = Instance.new("Frame")
-            row.Size = UDim2.new(1, 0, 0, 28)
-            row.BackgroundColor3 = C.RowBg
-            row.BackgroundTransparency = 0.55
-            row.BorderSizePixel = 1
-            row.BorderColor3 = C.RowBorder
-            row.LayoutOrder = i
-            row.ZIndex = 42
-            row.Parent = lbScroll
-            registerThemed(row, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder" })
-
-            local avatar = Instance.new("ImageLabel")
-            avatar.Size = UDim2.new(0, 22, 0, 22)
-            avatar.Position = UDim2.new(0, 3, 0, 3)
-            avatar.BackgroundTransparency = 1
-            avatar.BorderSizePixel = 0
-            avatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. tostring(plr.UserId) .. "&width=48&height=48&format=png"
-            avatar.ZIndex = 43
-            avatar.Parent = row
-            local avatarCorner = Instance.new("UICorner")
-            avatarCorner.CornerRadius = UDim.new(0, 0)
-            avatarCorner.Parent = avatar
-
-            local dName = Instance.new("TextLabel")
-            dName.Size = UDim2.new(1, -32, 0, 13)
-            dName.Position = UDim2.new(0, 28, 0, 2)
-            dName.BackgroundTransparency = 1
-            dName.Text = plr.DisplayName
-            dName.TextColor3 = C.BtnText
-            dName.Font = Enum.Font.ArimoBold
-            dName.TextSize = 11
-            dName.TextXAlignment = Enum.TextXAlignment.Left
-            dName.TextTruncate = Enum.TextTruncate.AtEnd
-            dName.ZIndex = 43
-            dName.Parent = row
-            registerThemed(dName, { TextColor3 = "BtnText" })
-
-            local uName = Instance.new("TextLabel")
-            uName.Size = UDim2.new(1, -32, 0, 12)
-            uName.Position = UDim2.new(0, 28, 0, 14)
-            uName.BackgroundTransparency = 1
-            uName.Text = "@" .. plr.Name
-            uName.TextColor3 = (plr == Players.LocalPlayer) and Color3.fromRGB(0, 220, 140) or (isDark and Color3.fromRGB(120, 150, 190) or Color3.fromRGB(70, 90, 120))
-            uName.Font = Enum.Font.Code
-            uName.TextSize = 9
-            uName.TextXAlignment = Enum.TextXAlignment.Left
-            uName.TextTruncate = Enum.TextTruncate.AtEnd
-            uName.ZIndex = 43
-            uName.Parent = row
-
-            local rowBtn = Instance.new("TextButton")
-            rowBtn.Size = UDim2.new(1, 0, 1, 0)
-            rowBtn.BackgroundTransparency = 1
-            rowBtn.Text = ""
-            rowBtn.ZIndex = 44
-            rowBtn.Parent = row
-
-            rowBtn.MouseEnter:Connect(function()
-                TweenSvc:Create(row, TweenInfo.new(0.12), { BackgroundTransparency = 0.25, BackgroundColor3 = C.RowHover }):Play()
-            end)
-            rowBtn.MouseLeave:Connect(function()
-                TweenSvc:Create(row, TweenInfo.new(0.12), { BackgroundTransparency = 0.55, BackgroundColor3 = C.RowBg }):Play()
-            end)
-            rowBtn.MouseButton1Click:Connect(function()
-                openPlayerProfile(plr, row)
-            end)
+            local delay = animateDomino and ((i - 1) * 0.075) or 0
+            createPlayerRow(plr, i, delay)
         end
     end
 
-    renderLeaderboardPlayers()
-    Players.PlayerAdded:Connect(renderLeaderboardPlayers)
-    Players.PlayerRemoving:Connect(renderLeaderboardPlayers)
+    -- Initial domino cascade on script execution
+    renderLeaderboardPlayers(true)
+
+    -- New Player Joined (Single slide-in from right edge)
+    local pAddedConn = Players.PlayerAdded:Connect(function(plr)
+        updateLeaderboardHeight(#Players:GetPlayers())
+        createPlayerRow(plr, #Players:GetPlayers(), 0)
+    end)
+    if Shared.AddCleanup then Shared.AddCleanup(pAddedConn) end
+
+    -- Player Leaving (Smooth exit out right side + destruction)
+    local pRemovingConn = Players.PlayerRemoving:Connect(function(plr)
+        local countAfter = math.max(0, #Players:GetPlayers() - 1)
+        updateLeaderboardHeight(countAfter)
+
+        local entry = playerRows[plr]
+        if entry and entry.row and entry.row.Parent then
+            local row = entry.row
+            playerRows[plr] = nil
+
+            local slideOut = TweenSvc:Create(row, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                Position = UDim2.new(1, 80, 0, 0),
+                BackgroundTransparency = 1
+            })
+            if entry.avatar then
+                TweenSvc:Create(entry.avatar, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.In), { ImageTransparency = 1 }):Play()
+            end
+            if entry.dName then
+                TweenSvc:Create(entry.dName, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.In), { TextTransparency = 1 }):Play()
+            end
+            if entry.uName then
+                TweenSvc:Create(entry.uName, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.In), { TextTransparency = 1 }):Play()
+            end
+
+            slideOut:Play()
+            slideOut.Completed:Connect(function()
+                pcall(function() row:Destroy() end)
+            end)
+        end
+    end)
+    if Shared.AddCleanup then Shared.AddCleanup(pRemovingConn) end
 
     local cam = workspace.CurrentCamera
     if cam then
-        cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+        local camConn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
             if isLbOpen and lbWindow.Visible and not isLbCollapsed then
-                renderLeaderboardPlayers()
+                updateLeaderboardHeight(#Players:GetPlayers())
             end
         end)
+        if Shared.AddCleanup then Shared.AddCleanup(camConn) end
     end
 
     if Shared.RegisterThemeCallback then
         Shared.RegisterThemeCallback(function(targetTheme, isDarkMode)
             C = targetTheme
             isDark = isDarkMode
-            renderLeaderboardPlayers()
+            renderLeaderboardPlayers(false)
         end)
     end
 
