@@ -443,9 +443,22 @@ return function(Shared)
 
     local silentAimInputConn = nil
     MkToggle(leftCol, "Silent Aim (Auto Hit Murderer)", "SilentAim", 11, function(state)
+        if silentAimInputConn then silentAimInputConn:Disconnect(); silentAimInputConn = nil end
         if state then
             installSilentAimHooks()
-            Shared.Notify("Silent Aim", "Hooks Active -- Auto Targeting Murderer", true)
+
+            silentAimInputConn = UserInput.InputBegan:Connect(function(input, gpe)
+                if not Shared.Flags["SilentAim"] then return end
+                if gpe then return end
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    local gun = getMyGun()
+                    if gun and gun.Parent == getChar() then
+                        executeSilentAimShot()
+                    end
+                end
+            end)
+            if Shared.AddCleanup then Shared.AddCleanup(silentAimInputConn) end
+            Shared.Notify("Silent Aim", "Active -- Clicking with Gun Auto-Hits Murderer", true)
         end
     end)
 
