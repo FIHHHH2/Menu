@@ -1356,9 +1356,10 @@ return function(Shared)
     local activeTab = nil
 
     local isMM2 = (game.PlaceId == 142823291 or game.GameId == 66654135 or game.PlaceId == 335132309 or game.PlaceId == 63518381)
-    if Shared.IsMM2 ~= nil then
-        isMM2 = Shared.IsMM2
-    else
+    if Shared.IsMM2 == true then
+        isMM2 = true
+    end
+    if not isMM2 then
         pcall(function()
             local rep = game:GetService("ReplicatedStorage")
             if rep:FindFirstChild("Remotes") and rep.Remotes:FindFirstChild("Gameplay") then
@@ -1372,6 +1373,10 @@ return function(Shared)
             end
         end)
     end
+    -- Always show MM2 tab as a fallback if we couldn't detect it (user can just not use it)
+    -- Uncomment the line below if you want MM2 tab visible in all games for debugging:
+    -- isMM2 = true
+
 
     local isNDS = (game.PlaceId == 189707 or game.GameId == 65241)
     if Shared.IsNDS ~= nil then isNDS = Shared.IsNDS end
