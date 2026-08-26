@@ -384,9 +384,57 @@ return function(Shared)
         return tok
     end
 
+    -- ── SPOTIFY PKCE PERMANENT TOKEN AUTO-RENEWER ─────────────────
+    local isRefreshingToken = false
+    local function refreshSpotifyAccessToken()
+        if isRefreshingToken then return false, "Already refreshing" end
+        isRefreshingToken = true
+
+        local rToken = cleanToken(Shared.Config.SpotifyRefreshToken)
+        local cId    = cleanToken(Shared.Config.SpotifyClientID)
+
+        if not rToken or rToken == "" or not cId or cId == "" then
+            isRefreshingToken = false
+            return false, "Missing Refresh Token or Client ID"
+        end
+
+        local postBody = string.format("grant_type=refresh_token&refresh_token=%s&client_id=%s",
+            Http:UrlEncode(rToken), Http:UrlEncode(cId))
+
+        local resp = Shared.HttpRequest({
+            Url     = "https://accounts.spotify.com/api/token",
+            Method  = "POST",
+            Headers = {
+                ["Content-Type"]   = "application/x-www-form-urlencoded",
+                ["Content-Length"] = tostring(#postBody),
+            },
+            Body    = postBody,
+        })
+
+        isRefreshingToken = false
+
+        if resp and resp.Body and #resp.Body > 5 then
+            local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
+            if ok and data and data.access_token then
+                Shared.Config.SpotifyToken = data.access_token
+                if data.refresh_token and data.refresh_token ~= "" then
+                    Shared.Config.SpotifyRefreshToken = data.refresh_token
+                end
+                if Shared.SaveConfig then Shared.SaveConfig() end
+                return true, data.access_token
+            end
+        end
+        return false, "Token refresh request failed"
+    end
+    Shared.RefreshSpotifyToken = refreshSpotifyAccessToken
+
     -- ── OPTION 2: SPOTIFY API ENGINE (DIRECT BEARER AUTH) ────────
     spotifyRequest = function(endpoint, method, body)
         local token = cleanToken(Shared.Config.SpotifyToken)
+        if not token or token == "" then
+            local okRef, _ = refreshSpotifyAccessToken()
+            if okRef then token = cleanToken(Shared.Config.SpotifyToken) end
+        end
         if not token or token == "" then
             return nil, "No Token"
         end
@@ -402,11 +450,33 @@ return function(Shared)
             },
             Body    = payload ~= "" and payload or nil,
         })
+
+        if resp and resp.StatusCode == 401 then
+            local okRef, _ = refreshSpotifyAccessToken()
+            if okRef then
+                token = cleanToken(Shared.Config.SpotifyToken)
+                resp = Shared.HttpRequest({
+                    Url     = "https://api.spotify.com/v1/me/player" .. endpoint,
+                    Method  = method or "GET",
+                    Headers = {
+                        ["Authorization"]  = "Bearer " .. token,
+                        ["Content-Type"]   = "application/json",
+                        ["Content-Length"] = tostring(#payload),
+                    },
+                    Body    = payload ~= "" and payload or nil,
+                })
+            end
+        end
+
         return resp
     end
 
     getSpotifyTrack = function()
         local token = cleanToken(Shared.Config.SpotifyToken)
+        if not token or token == "" then
+            local okRef, _ = refreshSpotifyAccessToken()
+            if okRef then token = cleanToken(Shared.Config.SpotifyToken) end
+        end
         if not token or token == "" then
             return nil, "No Token"
         end
@@ -421,7 +491,20 @@ return function(Shared)
         })
 
         if resp and resp.StatusCode == 401 then
-            return nil, "Expired or Invalid Spotify Token (401)"
+            local okRef, _ = refreshSpotifyAccessToken()
+            if okRef then
+                token = cleanToken(Shared.Config.SpotifyToken)
+                resp = Shared.HttpRequest({
+                    Url     = "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track,episode",
+                    Method  = "GET",
+                    Headers = {
+                        ["Authorization"] = "Bearer " .. token,
+                        ["Content-Type"]  = "application/json",
+                    },
+                })
+            else
+                return nil, "Expired or Invalid Spotify Token (401)"
+            end
         end
 
         local item = nil
@@ -1279,9 +1362,80 @@ return function(Shared)
     end)
 
     -- ══════════════════════════════════════════════════════════════
-    -- OPTION 2: RIGHT COLUMN — SPOTIFY ACCESS TOKEN (1-HOUR KEY)
+    -- OPTION 2: RIGHT COLUMN — SPOTIFY PERMANENT PKCE & ACCESS KEY
     -- ══════════════════════════════════════════════════════════════
-    MkSection(rightCol, "Option 2: Spotify (Access Token)", 1)
+    MkSection(rightCol, "Option 2: Spotify (Permanent PKCE Auth)", 1)
+
+    -- Client ID input box
+    local cIdBox = Instance.new("TextBox")
+    cIdBox.Name                  = "SpotifyClientIdInput"
+    cIdBox.Size                  = UDim2.new(1, 0, 0, 24)
+    cIdBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
+    cIdBox.BorderSizePixel       = 1
+    cIdBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
+    cIdBox.Text                  = (Shared.Config.SpotifyClientID and Shared.Config.SpotifyClientID ~= "") and Shared.Config.SpotifyClientID or ""
+    cIdBox.PlaceholderText       = "Spotify Client ID (From App Dashboard)"
+    cIdBox.TextColor3            = Color3.fromRGB(20, 20, 60)
+    cIdBox.Font                  = Enum.Font.Code
+    cIdBox.TextSize              = 10
+    cIdBox.LayoutOrder           = 2
+    cIdBox.Parent                = rightCol
+
+    cIdBox.FocusLost:Connect(function()
+        if cIdBox.Text ~= "" then
+            Shared.Config.SpotifyClientID = cleanToken(cIdBox.Text)
+            if Shared.SaveConfig then Shared.SaveConfig() end
+        end
+    end)
+
+    -- Refresh Token input box (Permanent)
+    local rTokBox = Instance.new("TextBox")
+    rTokBox.Name                  = "SpotifyRefreshTokenInput"
+    rTokBox.Size                  = UDim2.new(1, 0, 0, 24)
+    rTokBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
+    rTokBox.BorderSizePixel       = 1
+    rTokBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
+    rTokBox.Text                  = (Shared.Config.SpotifyRefreshToken and Shared.Config.SpotifyRefreshToken ~= "") and "Permanent Refresh Token: Set" or ""
+    rTokBox.PlaceholderText       = "Permanent Refresh Token (Auto-Renews)"
+    rTokBox.TextColor3            = Color3.fromRGB(20, 20, 60)
+    rTokBox.Font                  = Enum.Font.Code
+    rTokBox.TextSize              = 10
+    rTokBox.LayoutOrder           = 3
+    rTokBox.Parent                = rightCol
+
+    rTokBox.FocusLost:Connect(function()
+        if rTokBox.Text ~= "" and not rTokBox.Text:find("Permanent Refresh Token: Set") then
+            -- Support combined ClientID:RefreshToken if pasted all at once
+            if rTokBox.Text:find(":") then
+                local parts = string.split(rTokBox.Text, ":")
+                if #parts >= 2 then
+                    Shared.Config.SpotifyClientID     = cleanToken(parts[1])
+                    Shared.Config.SpotifyRefreshToken = cleanToken(parts[2])
+                    cIdBox.Text = Shared.Config.SpotifyClientID
+                end
+            else
+                Shared.Config.SpotifyRefreshToken = cleanToken(rTokBox.Text)
+            end
+
+            if Shared.SaveConfig then Shared.SaveConfig() end
+            rTokBox.Text = "Permanent Refresh Token: Set"
+            Shared.Notify("Spotify", "Permanent Refresh Token saved! Auto-renew active.", true)
+
+            task.spawn(function()
+                local okRef, _ = refreshSpotifyAccessToken()
+                if okRef then
+                    local trk, _ = getSpotifyTrack()
+                    if trk then
+                        updateVisuals(trk)
+                        Shared.Notify("Spotify", "Connected: " .. trk.name, true)
+                        if Shared.Flags["MusicBillboard"] then buildBillboard() end
+                        if not hudWidget then buildHUD() end
+                        startPolling()
+                    end
+                end
+            end)
+        end
+    end)
 
     local spotBox = Instance.new("TextBox")
     spotBox.Name                  = "SpotifyTokenInput"
@@ -1290,11 +1444,11 @@ return function(Shared)
     spotBox.BorderSizePixel       = 1
     spotBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
     spotBox.Text                  = (Shared.Config.SpotifyToken and Shared.Config.SpotifyToken ~= "") and "Access Token: Set (Click to change)" or "Paste Spotify Access Token (1-Hr)"
-    spotBox.PlaceholderText       = "Paste Spotify Access Token"
+    spotBox.PlaceholderText       = "Paste Spotify Access Token (Fallback)"
     spotBox.TextColor3            = Color3.fromRGB(20, 20, 60)
     spotBox.Font                  = Enum.Font.Code
     spotBox.TextSize              = 10
-    spotBox.LayoutOrder           = 2
+    spotBox.LayoutOrder           = 4
     spotBox.Parent                = rightCol
 
     spotBox.FocusLost:Connect(function()
@@ -1314,7 +1468,8 @@ return function(Shared)
         end
     end)
 
-    MkButton(rightCol, "[ Test & Connect Spotify ]", 3, function()
+    MkButton(rightCol, "[ Test & Connect Spotify (Permanent) ]", 5, function()
+        local okRef, _ = refreshSpotifyAccessToken()
         local trk, err = getSpotifyTrack()
         if trk then
             updateVisuals(trk)
@@ -1323,7 +1478,7 @@ return function(Shared)
             if not hudWidget then buildHUD() end
             startPolling()
         else
-            if err == "No Active Playback" then
+            if err == "No Active Playback" or okRef then
                 Shared.Notify("Spotify", "Token Valid! (Play a song in Spotify app)", true)
                 if Shared.Flags["MusicBillboard"] then buildBillboard() end
                 if not hudWidget then buildHUD() end

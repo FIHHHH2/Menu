@@ -738,6 +738,8 @@ return function(Shared)
                 local data = {
                     Flags               = Shared.Flags or {},
                     SpotifyToken        = Shared.Config.SpotifyToken or "",
+                    SpotifyRefreshToken = Shared.Config.SpotifyRefreshToken or "",
+                    SpotifyClientID     = Shared.Config.SpotifyClientID or "",
                     LastFMUser          = Shared.Config.LastFMUser or "",
                     DarkMode            = isDark,
                     ThemeMode           = themeMode,
@@ -768,8 +770,10 @@ return function(Shared)
                 if not raw or #raw < 2 then return end
                 local ok, data = pcall(function() return Http:JSONDecode(raw) end)
                 if ok and data and type(data) == "table" then
-                    Shared.Config.SpotifyToken = data.SpotifyToken or ""
-                    Shared.Config.LastFMUser   = data.LastFMUser or ""
+                    Shared.Config.SpotifyToken        = data.SpotifyToken or ""
+                    Shared.Config.SpotifyRefreshToken = data.SpotifyRefreshToken or ""
+                    Shared.Config.SpotifyClientID     = data.SpotifyClientID or ""
+                    Shared.Config.LastFMUser          = data.LastFMUser or ""
 
                     if data.ThemeMode == "Adaptive" then
                         themeMode = "Adaptive"
