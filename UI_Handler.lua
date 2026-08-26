@@ -1356,7 +1356,22 @@ return function(Shared)
     local activeTab = nil
 
     local isMM2 = (game.PlaceId == 142823291 or game.GameId == 66654135 or game.PlaceId == 335132309 or game.PlaceId == 63518381)
-    if Shared.IsMM2 ~= nil then isMM2 = Shared.IsMM2 end
+    if Shared.IsMM2 ~= nil then
+        isMM2 = Shared.IsMM2
+    else
+        pcall(function()
+            local rep = game:GetService("ReplicatedStorage")
+            if rep:FindFirstChild("Remotes") and rep.Remotes:FindFirstChild("Gameplay") then
+                isMM2 = true
+            elseif rep:FindFirstChild("WeaponEvents") and rep.WeaponEvents:FindFirstChild("GunBeam") then
+                isMM2 = true
+            end
+            local lp = game:GetService("Players").LocalPlayer
+            if lp and lp:FindFirstChild("PlayerGui") and (lp.PlayerGui:FindFirstChild("MainGUI") or lp.PlayerGui:FindFirstChild("MainGui")) then
+                isMM2 = true
+            end
+        end)
+    end
 
     local isNDS = (game.PlaceId == 189707 or game.GameId == 65241)
     if Shared.IsNDS ~= nil then isNDS = Shared.IsNDS end

@@ -62,9 +62,18 @@ return function(Shared)
         if not plr then return "Innocent" end
         local bp   = plr:FindFirstChild("Backpack")
         local char = plr.Character
-        if (bp and bp:FindFirstChild("Knife")) or (char and char:FindFirstChild("Knife")) then return "Murderer" end
-        if (bp and (bp:FindFirstChild("Gun") or bp:FindFirstChild("Revolver")))
-        or (char and (char:FindFirstChild("Gun") or char:FindFirstChild("Revolver"))) then return "Sheriff" end
+        local items = {}
+        if bp then for _, t in ipairs(bp:GetChildren()) do if t:IsA("Tool") then table.insert(items, t) end end end
+        if char then for _, t in ipairs(char:GetChildren()) do if t:IsA("Tool") then table.insert(items, t) end end end
+
+        for _, item in ipairs(items) do
+            local name = item.Name:lower()
+            if name == "knife" or name:find("knife") or name == "bat" or name == "scythe" or name == "harvester" or name == "corrupt" or name == "dagger" or item:FindFirstChild("KnifeServer") or item:FindFirstChild("Slash") or item:FindFirstChild("Stab") then
+                return "Murderer"
+            elseif name == "gun" or name == "revolver" or name:find("gun") or name:find("revolver") or name == "pistol" or name == "bow" or item:FindFirstChild("GunServer") or item:FindFirstChild("Shoot") or item:FindFirstChild("CreateBeam") then
+                return "Sheriff"
+            end
+        end
         return "Innocent"
     end
 
@@ -88,12 +97,30 @@ return function(Shared)
 
     local function getMyKnife()
         local c = getChar(); local bp = Player:FindFirstChild("Backpack")
-        return (c and c:FindFirstChild("Knife")) or (bp and bp:FindFirstChild("Knife"))
+        local items = {}
+        if c then for _, t in ipairs(c:GetChildren()) do if t:IsA("Tool") then table.insert(items, t) end end end
+        if bp then for _, t in ipairs(bp:GetChildren()) do if t:IsA("Tool") then table.insert(items, t) end end end
+        for _, item in ipairs(items) do
+            local name = item.Name:lower()
+            if name == "knife" or name:find("knife") or name == "bat" or name == "scythe" or name == "harvester" or name == "corrupt" or name == "dagger" or item:FindFirstChild("KnifeServer") or item:FindFirstChild("Slash") then
+                return item
+            end
+        end
+        return nil
     end
+
     local function getMyGun()
         local c = getChar(); local bp = Player:FindFirstChild("Backpack")
-        return (c and (c:FindFirstChild("Gun") or c:FindFirstChild("Revolver")))
-            or (bp and (bp:FindFirstChild("Gun") or bp:FindFirstChild("Revolver")))
+        local items = {}
+        if c then for _, t in ipairs(c:GetChildren()) do if t:IsA("Tool") then table.insert(items, t) end end end
+        if bp then for _, t in ipairs(bp:GetChildren()) do if t:IsA("Tool") then table.insert(items, t) end end end
+        for _, item in ipairs(items) do
+            local name = item.Name:lower()
+            if name == "gun" or name == "revolver" or name:find("gun") or name:find("revolver") or name == "pistol" or name == "bow" or item:FindFirstChild("GunServer") or item:FindFirstChild("Shoot") or item:FindFirstChild("CreateBeam") then
+                return item
+            end
+        end
+        return nil
     end
 
     local function getSilentAimTarget()
@@ -266,77 +293,155 @@ return function(Shared)
     -- ── SILENT AIM ENGINE ─────────────────────────────────────────
     MkSection(leftCol, "Silent Aim (Bullet Redirection)", 10)
 
-    local GUN_BEAM_REMOTE = nil
-    pcall(function() GUN_BEAM_REMOTE = game:GetService("ReplicatedStorage").WeaponEvents.GunBeam end)
+    local function getShootRemote()
+        local rem = nil
+        pcall(function()
+            local rep = game:GetService("ReplicatedStorage")
+            rem = (rep:FindFirstChild("Remotes") and rep.Remotes:FindFirstChild("Gameplay") and rep.Remotes.Gameplay:FindFirstChild("ShootGun"))
+               or (rep:FindFirstChild("WeaponEvents") and rep.WeaponEvents:FindFirstChild("GunBeam"))
+               or (rep:FindFirstChild("ShootGun", true))
+        end)
+        return rem
+    end
+
+    local function fireBulletAtTarget(targetPos)
+        if not targetPos then return end
+        local myHRP = getHRP()
+        if not myHRP then return end
+        local rem = getShootRemote()
+        if rem then
+            pcall(function()
+                if rem:IsA("RemoteFunction") then
+                    rem:InvokeServer(1, targetPos, Vector3.new(0, 0, 0))
+                elseif rem:IsA("RemoteEvent") then
+                    rem:FireServer(1, targetPos, Vector3.new(0, 0, 0))
+                    rem:FireServer(CFrame.new(myHRP.Position, targetPos), targetPos)
+                end
+            end)
+        end
+    end
+
+    local lastShotTime = 0
+    local function executeSilentAimShot()
+        if not Shared.Flags["SilentAim"] then return end
+        local now = tick()
+        if now - lastShotTime < 0.20 then return end
+
+        local gun = getMyGun()
+        if not gun then return end
+        local char = getChar()
+        if not char or not gun:IsDescendantOf(char) then
+            pcall(function()
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if hum then hum:EquipTool(gun) end
+            end)
+        end
+
+        local target = getSilentAimTarget()
+        if not target then return end
+
+        lastShotTime = now
+        local targetPos = target.Position + (target.AssemblyLinearVelocity * 0.04)
+        fireBulletAtTarget(targetPos)
+    end
 
     local hooksInstalled = false
     local function installSilentAimHooks()
         if hooksInstalled then return end
         hooksInstalled = true
 
-        local mt = getrawmetatable and getrawmetatable(game)
-        if not mt then return end
-
-        local oldIndex    = rawget(mt, "__index")
-        local oldNamecall = rawget(mt, "__namecall")
-
-        setreadonly(mt, false)
-
-        -- Clean Non-Intrusive Mouse Redirection (Direct to Murderer)
-        rawset(mt, "__index", function(self, key)
-            if Shared.Flags["SilentAim"] and typeof(self) == "Instance" and self:IsA("Mouse") then
-                local target = getSilentAimTarget()
-                if target then
-                    if key == "Hit" or key == "hit" then
-                        return target.CFrame
-                    elseif key == "Target" or key == "target" then
-                        return target
-                    elseif key == "UnitRay" then
-                        local cam = Workspace.CurrentCamera
-                        if cam then
-                            local dir = (target.Position - cam.CFrame.Position).Unit
-                            return Ray.new(cam.CFrame.Position, dir)
-                        end
-                    end
-                end
-            end
-            return oldIndex(self, key)
-        end)
-
-        -- GunBeam FireServer Intercept only (Leaves Camera & Workspace Raycasts untouched)
-        rawset(mt, "__namecall", function(self, ...)
-            local method = getnamecallmethod()
-            if Shared.Flags["SilentAim"] and (method == "FireServer" or method == "InvokeServer") then
-                local isGun = false
-                if GUN_BEAM_REMOTE and self == GUN_BEAM_REMOTE then
-                    isGun = true
-                elseif self.Name == "GunBeam" or self.Name == "GunFired" then
-                    isGun = true
-                end
-
-                if isGun then
-                    local target = getSilentAimTarget()
-                    if target then
-                        local args = {...}
-                        for i, v in ipairs(args) do
-                            if typeof(v) == "Vector3" then
-                                args[i] = target.Position
-                            elseif typeof(v) == "CFrame" then
-                                args[i] = target.CFrame
-                            elseif typeof(v) == "Instance" and v:IsA("BasePart") then
-                                args[i] = target
+        pcall(function()
+            if typeof(hookmetamethod) == "function" then
+                local oldNamecall
+                oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+                    local method = getnamecallmethod()
+                    if Shared.Flags["SilentAim"] and not checkcaller() and (method == "FireServer" or method == "InvokeServer") then
+                        local n = tostring(self.Name)
+                        if n == "ShootGun" or n == "GunBeam" or n == "GunFired" or n:find("Shoot") then
+                            local target = getSilentAimTarget()
+                            if target then
+                                local targetPos = target.Position + (target.AssemblyLinearVelocity * 0.04)
+                                local args = {...}
+                                for i, v in ipairs(args) do
+                                    if typeof(v) == "Vector3" then
+                                        args[i] = targetPos
+                                    elseif typeof(v) == "CFrame" then
+                                        args[i] = CFrame.new(args[i].Position, targetPos)
+                                    end
+                                end
+                                if #args == 0 then
+                                    return oldNamecall(self, 1, targetPos, Vector3.new(0, 0, 0))
+                                end
+                                return oldNamecall(self, table.unpack(args))
                             end
                         end
-                        return oldNamecall(self, table.unpack(args))
                     end
+                    return oldNamecall(self, ...)
+                end)
+
+                local oldIndex
+                oldIndex = hookmetamethod(game, "__index", function(self, key)
+                    if Shared.Flags["SilentAim"] and not checkcaller() and typeof(self) == "Instance" and self:IsA("Mouse") then
+                        local target = getSilentAimTarget()
+                        if target then
+                            local targetPos = target.Position + (target.AssemblyLinearVelocity * 0.04)
+                            if key == "Hit" or key == "hit" then
+                                return CFrame.new(targetPos)
+                            elseif key == "Target" or key == "target" then
+                                return target
+                            elseif key == "UnitRay" then
+                                local cam = Workspace.CurrentCamera
+                                if cam then
+                                    return Ray.new(cam.CFrame.Position, (targetPos - cam.CFrame.Position).Unit)
+                                end
+                            end
+                        end
+                    end
+                    return oldIndex(self, key)
+                end)
+            else
+                local mt = getrawmetatable and getrawmetatable(game)
+                if mt then
+                    local oldIndex = rawget(mt, "__index")
+                    local oldNamecall = rawget(mt, "__namecall")
+                    setreadonly(mt, false)
+
+                    rawset(mt, "__index", function(self, key)
+                        if Shared.Flags["SilentAim"] and typeof(self) == "Instance" and self:IsA("Mouse") then
+                            local target = getSilentAimTarget()
+                            if target then
+                                local targetPos = target.Position + (target.AssemblyLinearVelocity * 0.04)
+                                if key == "Hit" or key == "hit" then
+                                    return CFrame.new(targetPos)
+                                elseif key == "Target" or key == "target" then
+                                    return target
+                                end
+                            end
+                        end
+                        return oldIndex(self, key)
+                    end)
+
+                    rawset(mt, "__namecall", function(self, ...)
+                        local method = getnamecallmethod()
+                        if Shared.Flags["SilentAim"] and (method == "FireServer" or method == "InvokeServer") then
+                            local n = tostring(self.Name)
+                            if n == "ShootGun" or n == "GunBeam" or n == "GunFired" or n:find("Shoot") then
+                                local target = getSilentAimTarget()
+                                if target then
+                                    local targetPos = target.Position + (target.AssemblyLinearVelocity * 0.04)
+                                    return oldNamecall(self, 1, targetPos, Vector3.new(0, 0, 0))
+                                end
+                            end
+                        end
+                        return oldNamecall(self, ...)
+                    end)
+                    setreadonly(mt, true)
                 end
             end
-            return oldNamecall(self, ...)
         end)
-
-        setreadonly(mt, true)
     end
 
+    local silentAimInputConn = nil
     MkToggle(leftCol, "Silent Aim (Auto Hit Murderer)", "SilentAim", 11, function(state)
         if state then
             installSilentAimHooks()
