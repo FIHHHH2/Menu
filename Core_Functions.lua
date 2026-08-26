@@ -584,7 +584,8 @@ return function(Shared)
         local row = Instance.new("Frame")
         row.Name = "TabCard_" .. plr.Name
         row.Size = UDim2.new(1, 0, 0, 30)
-        row.Position = UDim2.new(0, 240, 0, 0)
+        -- Start position: off-screen to the right (appears from right to left)
+        row.Position = UDim2.new(0, 280, 0, 0)
         row.BackgroundColor3 = C.RowBg
         row.BackgroundTransparency = 1
         row.BorderSizePixel = 1
@@ -657,24 +658,30 @@ return function(Shared)
             uName = uName
         }
 
-        -- Domino Entrance Transition (0.075s stagger delay)
-        task.delay(staggerDelay or 0, function()
+        -- Right-to-Left Entrance Transition (0.075s stagger delay for domino on launch / immediate on join)
+        local function playEntrance()
             if row and row.Parent then
-                TweenSvc:Create(row, TweenInfo.new(0.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                TweenSvc:Create(row, TweenInfo.new(0.34, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Position = UDim2.new(0, 0, 0, 0),
                     BackgroundTransparency = 0.35
                 }):Play()
-                TweenSvc:Create(avatar, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                TweenSvc:Create(avatar, TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     ImageTransparency = 0
                 }):Play()
-                TweenSvc:Create(dName, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                TweenSvc:Create(dName, TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     TextTransparency = 0
                 }):Play()
-                TweenSvc:Create(uName, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                TweenSvc:Create(uName, TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     TextTransparency = 0
                 }):Play()
             end
-        end)
+        end
+
+        if staggerDelay and staggerDelay > 0 then
+            task.delay(staggerDelay, playEntrance)
+        else
+            task.spawn(playEntrance)
+        end
 
         return row
     end
@@ -711,17 +718,17 @@ return function(Shared)
         end
     end
 
-    -- Initial domino cascade on script execution
+    -- Initial domino cascade on script execution (Right to Left)
     renderLeaderboardPlayers(true)
 
-    -- New Player Joined (Single slide-in from right edge)
+    -- New Player Joined: Slides in smoothly from Right to Left
     local pAddedConn = Players.PlayerAdded:Connect(function(plr)
         updateLeaderboardHeight(#Players:GetPlayers())
         createPlayerRow(plr, #Players:GetPlayers(), 0)
     end)
     if Shared.AddCleanup then Shared.AddCleanup(pAddedConn) end
 
-    -- Player Leaving (Smooth exit out right side + destruction)
+    -- Player Leaving: Slides out smoothly from Left to Right and destroys
     local pRemovingConn = Players.PlayerRemoving:Connect(function(plr)
         local countAfter = math.max(0, #Players:GetPlayers() - 1)
         updateLeaderboardHeight(countAfter)
@@ -731,8 +738,8 @@ return function(Shared)
             local row = entry.row
             playerRows[plr] = nil
 
-            local slideOut = TweenSvc:Create(row, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-                Position = UDim2.new(0, 280, 0, 0),
+            local slideOut = TweenSvc:Create(row, TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                Position = UDim2.new(0, 300, 0, 0),
                 BackgroundTransparency = 1
             })
             if entry.avatar then
