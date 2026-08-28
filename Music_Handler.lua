@@ -633,19 +633,72 @@ return function(Shared)
         }
     end
 
-    -- ── PLAYBACK CONTROLS (⏮ ⏯ ⏭) ──────────────────────────────────
+    -- ── UNIVERSAL LOCAL MEDIA BRIDGE & PLAYBACK CONTROLS (⏮ ⏯ ⏭) ─────
+    local function sendBridgeCommand(action)
+        local ok, resp = pcall(function()
+            return Shared.HttpRequest({
+                Url     = "http://127.0.0.1:8974/" .. action,
+                Method  = "GET",
+                Headers = { ["User-Agent"] = "FihUI-Client" }
+            })
+        end)
+        if ok and resp and (resp.StatusCode == 200 or resp.status_code == 200) then
+            return true
+        end
+        return false
+    end
+
+    local function getBridgeTrack()
+        local ok, resp = pcall(function()
+            return Shared.HttpRequest({
+                Url     = "http://127.0.0.1:8974/current",
+                Method  = "GET",
+                Headers = { ["User-Agent"] = "FihUI-Client" }
+            })
+        end)
+        if not ok or not resp or not resp.Body or #resp.Body < 5 then return nil end
+        local ok2, data = pcall(function() return Http:JSONDecode(resp.Body) end)
+        if not ok2 or type(data) ~= "table" then return nil end
+        if not data.name or data.name == "" or data.name == "Local Audio Session" then return nil end
+
+        local coverUrl = data.cover or ""
+        if not coverUrl or coverUrl == "" then
+            coverUrl = fetchArtworkFallback(data.artist or "", data.name or "")
+        end
+
+        return {
+            id          = "bridge_" .. tostring(data.name),
+            name        = data.name or "Unknown Track",
+            artist      = data.artist or "Unknown Artist",
+            cover       = coverUrl,
+            isPlaying   = (data.isPlaying ~= false),
+            progress_ms = tonumber(data.progress_ms) or 0,
+            duration_ms = tonumber(data.duration_ms) or 0,
+            pollTime    = os.clock(),
+            source      = data.source or "SoundCloud / Web"
+        }
+    end
+
     handleSpotifyPrevious = function()
         task.spawn(function()
+            if sendBridgeCommand("prev") then
+                Shared.Notify("Media Bridge", "[|<] Previous (SoundCloud / Universal)", true)
+                task.wait(0.4)
+                local bTrk = getBridgeTrack()
+                if bTrk then updateVisuals(bTrk) end
+                return
+            end
+
             local token = cleanToken(Shared.Config.SpotifyToken)
             if not token or token == "" then
-                Shared.Notify("Spotify", "[!] No OAuth Token configured", false)
+                Shared.Notify("Music", "[!] No Bridge running & No OAuth Token", false)
                 return
             end
             local resp = spotifyRequest("/previous", "POST")
             if resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
                 Shared.Notify("Spotify", "[|<] Previous track", true)
             else
-                Shared.Notify("Spotify", "[!] Previous requires Spotify Premium & active player", false)
+                Shared.Notify("Spotify", "[!] Previous requires Spotify Premium (Run bridge.py for free skip)", false)
             end
             task.wait(0.4)
             local trk = getSpotifyTrack()
@@ -655,9 +708,18 @@ return function(Shared)
 
     handleSpotifyPlayPause = function()
         task.spawn(function()
+            if sendBridgeCommand("playpause") then
+                currentTrack.isPlaying = not currentTrack.isPlaying
+                Shared.Notify("Media Bridge", currentTrack.isPlaying and "[>] Playing (Universal)" or "[||] Paused (Universal)", true)
+                task.wait(0.4)
+                local bTrk = getBridgeTrack()
+                if bTrk then updateVisuals(bTrk) end
+                return
+            end
+
             local token = cleanToken(Shared.Config.SpotifyToken)
             if not token or token == "" then
-                Shared.Notify("Spotify", "[!] No OAuth Token configured", false)
+                Shared.Notify("Music", "[!] No Bridge running & No OAuth Token", false)
                 return
             end
             local statusResp = Shared.HttpRequest({
@@ -679,7 +741,7 @@ return function(Shared)
                 currentTrack.isPlaying = not isCurrentlyPlaying
                 Shared.Notify("Spotify", isCurrentlyPlaying and "[||] Paused" or "[>] Playing", true)
             else
-                Shared.Notify("Spotify", "[!] Remote play/pause requires Spotify Premium", false)
+                Shared.Notify("Spotify", "[!] Remote play/pause requires Spotify Premium (Run bridge.py for free skip)", false)
             end
             task.wait(0.4)
             local trk = getSpotifyTrack()
@@ -689,16 +751,24 @@ return function(Shared)
 
     handleSpotifyNext = function()
         task.spawn(function()
+            if sendBridgeCommand("next") then
+                Shared.Notify("Media Bridge", "[>|] Next track (SoundCloud / Universal)", true)
+                task.wait(0.4)
+                local bTrk = getBridgeTrack()
+                if bTrk then updateVisuals(bTrk) end
+                return
+            end
+
             local token = cleanToken(Shared.Config.SpotifyToken)
             if not token or token == "" then
-                Shared.Notify("Spotify", "[!] No OAuth Token configured", false)
+                Shared.Notify("Music", "[!] No Bridge running & No OAuth Token", false)
                 return
             end
             local resp = spotifyRequest("/next", "POST")
             if resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
                 Shared.Notify("Spotify", "[>|] Next track", true)
             else
-                Shared.Notify("Spotify", "[!] Skip requires Spotify Premium & active player", false)
+                Shared.Notify("Spotify", "[!] Skip requires Spotify Premium (Run bridge.py for free skip)", false)
             end
             task.wait(0.4)
             local trk = getSpotifyTrack()
@@ -1267,7 +1337,7 @@ return function(Shared)
             elapsed = elapsed + dt
             if elapsed >= 2 then
                 elapsed = 0
-                local track = getSpotifyTrack() or getLastFMTrack()
+                local track = getBridgeTrack() or getSpotifyTrack() or getLastFMTrack()
                 if track then
                     if track.name ~= currentTrack.name
                     or track.isPlaying ~= currentTrack.isPlaying
@@ -1295,9 +1365,45 @@ return function(Shared)
     end)
 
     -- ══════════════════════════════════════════════════════════════
-    -- OPTION 1: LEFT COLUMN — LAST.FM SCROBBLER (NO AUTH REQUIRED)
+    -- OPTION 1: LEFT COLUMN — UNIVERSAL BRIDGE (SOUNDCLOUD / WEB / FREE)
     -- ══════════════════════════════════════════════════════════════
-    MkSection(leftCol, "Option 1: Last.fm (Zero Auth)", 1)
+    MkSection(leftCol, "Universal Bridge (SoundCloud / Free)", 1)
+
+    local bridgeStatusLbl = Instance.new("TextLabel")
+    bridgeStatusLbl.Size = UDim2.new(1, 0, 0, 18)
+    bridgeStatusLbl.BackgroundTransparency = 1
+    bridgeStatusLbl.Text = "Bridge: Run bridge.py on PC"
+    bridgeStatusLbl.TextColor3 = Color3.fromRGB(130, 150, 180)
+    bridgeStatusLbl.Font = Enum.Font.Code
+    bridgeStatusLbl.TextSize = 10
+    bridgeStatusLbl.TextXAlignment = Enum.TextXAlignment.Left
+    bridgeStatusLbl.LayoutOrder = 2
+    bridgeStatusLbl.Parent = leftCol
+
+    MkButton(leftCol, "[ Check Bridge Status (Port 8974) ]", 3, function()
+        task.spawn(function()
+            local ok, res = pcall(function()
+                return Shared.HttpRequest({ Url = "http://127.0.0.1:8974/status", Method = "GET" })
+            end)
+            if ok and res and (res.StatusCode == 200 or res.status_code == 200) then
+                bridgeStatusLbl.Text = "Bridge: ● Online (SoundCloud / Universal)"
+                bridgeStatusLbl.TextColor3 = Color3.fromRGB(0, 220, 140)
+                Shared.Notify("Media Bridge", "● Connected to local bridge on port 8974", true)
+                local trk = getBridgeTrack()
+                if trk then updateVisuals(trk) end
+                startPolling()
+            else
+                bridgeStatusLbl.Text = "Bridge: ○ Offline (Launch bridge.py)"
+                bridgeStatusLbl.TextColor3 = Color3.fromRGB(220, 80, 80)
+                Shared.Notify("Media Bridge", "○ Bridge offline -- start bridge.py on desktop", false)
+            end
+        end)
+    end)
+
+    -- ══════════════════════════════════════════════════════════════
+    -- OPTION 2: LAST.FM SCROBBLER (NO AUTH REQUIRED)
+    -- ══════════════════════════════════════════════════════════════
+    MkSection(leftCol, "Option 2: Last.fm (Zero Auth)", 4)
 
     local lfmBox = Instance.new("TextBox")
     lfmBox.Name                  = "LastFMInput"
@@ -1309,7 +1415,7 @@ return function(Shared)
     lfmBox.TextColor3            = Color3.fromRGB(20, 20, 60)
     lfmBox.Font                  = Enum.Font.Code
     lfmBox.TextSize              = 11
-    lfmBox.LayoutOrder           = 2
+    lfmBox.LayoutOrder           = 5
     lfmBox.Parent                = leftCol
 
     lfmBox.FocusLost:Connect(function()
@@ -1318,7 +1424,7 @@ return function(Shared)
         Shared.Notify("Last.fm", "Saved username: " .. lfmBox.Text, true)
     end)
 
-    MkButton(leftCol, "[ Sync Last.fm Track ]", 3, function()
+    MkButton(leftCol, "[ Sync Last.fm Track ]", 6, function()
         local trk = getLastFMTrack()
         if trk then
             updateVisuals(trk)
