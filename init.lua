@@ -15,6 +15,19 @@ end)
 local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/main"
 
 local function loadModule(name)
+    -- Local Studio / ModuleScript direct require support (Bypasses Studio loadstring block)
+    local rep = game:GetService("ReplicatedStorage")
+    local localFolder = rep:FindFirstChild("FihMenu")
+    if localFolder and localFolder:FindFirstChild(name) then
+        local targetMod = localFolder:FindFirstChild(name)
+        if targetMod:IsA("ModuleScript") then
+            local okReq, mod = pcall(require, targetMod)
+            if okReq and type(mod) == "function" then
+                return mod
+            end
+        end
+    end
+
     -- Cache busting prevents GitHub CDN from serving stale code
     local url = BASE_URL .. "/" .. name .. ".lua?t=" .. tostring(os.time()) .. tostring(math.random(1000, 9999))
 
