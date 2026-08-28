@@ -422,22 +422,26 @@ return function(Shared)
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.IgnoreGuiInset = true
 
-    local gethui = rawget(getfenv and getfenv(0) or _G, "gethui") or (getgenv and getgenv().gethui)
+    local isStudio = RunService:IsStudio()
+    local gethui = not isStudio and (rawget(getfenv and getfenv(0) or _G, "gethui") or (getgenv and getgenv().gethui))
     local targetParent = nil
     if type(gethui) == "function" then
         local ok, h = pcall(gethui)
         if ok and h then targetParent = h end
     end
-    if not targetParent then
+    if not targetParent and not isStudio then
         local ok, _ = pcall(function() ScreenGui.Parent = CoreGui end)
         if ok and ScreenGui.Parent == CoreGui then
             targetParent = CoreGui
-        else
-            targetParent = (Shared.Player and Shared.Player:FindFirstChildOfClass("PlayerGui"))
-                        or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
         end
     end
+    if not targetParent then
+        local lp = Shared.Player or game:GetService("Players").LocalPlayer
+        targetParent = (lp and lp:FindFirstChildOfClass("PlayerGui"))
+                    or (lp and lp:WaitForChild("PlayerGui", 5))
+    end
     ScreenGui.Parent = targetParent
+    ScreenGui.Enabled = true
     Shared.GUI       = ScreenGui
     if Shared.AddCleanup then Shared.AddCleanup(ScreenGui) end
 
