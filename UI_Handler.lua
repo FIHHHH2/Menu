@@ -611,17 +611,22 @@ return function(Shared)
         end)
         if Shared.AddCleanup then Shared.AddCleanup(hbConn) end
 
-        CoreGui.DescendantAdded:Connect(function(desc)
-            if not customCoreEnabled then return end
-            if desc:IsA("UICorner") then
-                -- Never touch UICorners inside ExperienceChat - corrupts BuilderIcons ligatures
-                local inChat = false
-                local p = desc.Parent
-                while p and p ~= CoreGui do
-                    if p.Name == "ExperienceChat" then inChat = true break end
-                    p = p.Parent
-                end
-                if not inChat then desc.CornerRadius = UDim.new(0, 0) end
+        pcall(function()
+            if CoreGui and CoreGui:IsA("Instance") then
+                local descConn = CoreGui.DescendantAdded:Connect(function(desc)
+                    if not customCoreEnabled then return end
+                    if desc:IsA("UICorner") then
+                        -- Never touch UICorners inside ExperienceChat - corrupts BuilderIcons ligatures
+                        local inChat = false
+                        local p = desc.Parent
+                        while p and p ~= CoreGui do
+                            if p.Name == "ExperienceChat" then inChat = true break end
+                            p = p.Parent
+                        end
+                        if not inChat then desc.CornerRadius = UDim.new(0, 0) end
+                    end
+                end)
+                if Shared.AddCleanup then Shared.AddCleanup(descConn) end
             end
         end)
     end)
