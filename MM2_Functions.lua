@@ -637,7 +637,8 @@ return function(Shared)
         if state then
             knifeThrowConn = Workspace.ChildAdded:Connect(function(obj)
                 if not Shared.Flags["KnifePrediction"] then return end
-                if obj.Name:find("Knife") or obj.Name:find("knife") then
+                -- Only inspect actual thrown projectile tools/models, never map geometry
+                if (obj:IsA("Tool") or (obj:IsA("Model") and obj:FindFirstChild("Handle"))) and (obj.Name:find("Knife") or obj.Name:find("knife")) then
                     task.wait()
                     local myHRP = getHRP(); if not myHRP then return end
                     local target, bestDist = nil, math.huge
