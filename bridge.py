@@ -1,15 +1,12 @@
 """
-FihUI Universal Media Bridge (Background Daemon & System Tray App)
-Controls SoundCloud, Spotify (Free / Premium), YouTube Music, Apple Music, and any browser/desktop player.
-Exposes local REST API on http://127.0.0.1:8974 for Roblox Executor in-game HUD and controls.
+FihUI Universal Media Bridge (Native Windows SMTC & System Tray App)
+Uses native Windows Media Control (winrt.windows.media.control) to directly control and track:
+- Spotify (Free & Premium)
+- SoundCloud (Chrome / Brave / Edge / Firefox / Opera)
+- YouTube / YouTube Music
+- Apple Music & all Windows Audio sessions
 
-Features:
-- Runs silently in background / system tray (no console window needed via pythonw.exe)
-- System Tray menu (Status, Open on Startup toggle, Skip/Pause controls, Exit)
-- Auto-start on Windows boot (Registry Run Key)
-- Zero external dependencies required for core functionality (uses standard ctypes + winreg + http.server)
-- Optional tray icon with pystray/PIL or lightweight Tkinter tray/background fallback
-- Optional SMTC track metadata with winsdk
+Exposes local REST API on http://127.0.0.1:8974 for Roblox Executor in-game HUD and controls.
 """
 
 import sys
@@ -19,6 +16,7 @@ import json
 import ctypes
 import threading
 import winreg
+import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
@@ -26,53 +24,165 @@ PORT = 8974
 APP_NAME = "FihUI Media Bridge"
 REG_RUN_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
-# Windows Virtual Key Codes and App Commands
-# Windows Virtual Key Codes for Physical Media Keys
+# Windows Virtual Key Codes fallback
 VK_MEDIA_NEXT_TRACK = 0xB0
 VK_MEDIA_PREV_TRACK = 0xB1
-VK_MEDIA_STOP       = 0xB2
 VK_MEDIA_PLAY_PAUSE = 0xB3
 KEYEVENTF_EXTENDEDKEY = 0x0001
 KEYEVENTF_KEYUP       = 0x0002
 
-_last_action_time = 0
-_action_lock = threading.Lock()
+def press_physical_media_key(action):
+    try:
+        user32 = ctypes.windll.user32
+        if action == "next":
+            vk = VK_MEDIA_NEXT_TRACK
+        elif action == "prev":
+            vk = VK_MEDIA_PREV_TRACK
+        else:
+            vk = VK_MEDIA_PLAY_PAUSE
 
-def press_media_key(action_type):
-    """
-    Sends clean, physical media key events to Windows audio subsystem.
-    Works universally across Spotify, SoundCloud, Chrome, YouTube Music, Apple Music, and desktop players.
-    """
-    global _last_action_time
-    with _action_lock:
-        now = time.time()
-        # 250ms debounce
-        if (now - _last_action_time) < 0.25:
-            return True
-        _last_action_time = now
+        user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY, 0)
+        time.sleep(0.04)
+        user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
+        return True
+    except Exception:
+        return False
 
-        try:
-            user32 = ctypes.windll.user32
-            
-            if action_type in ("next", "next_track", VK_MEDIA_NEXT_TRACK):
-                vk = VK_MEDIA_NEXT_TRACK
-            elif action_type in ("prev", "previous", "prev_track", VK_MEDIA_PREV_TRACK):
-                vk = VK_MEDIA_PREV_TRACK
-            else:
-                vk = VK_MEDIA_PLAY_PAUSE
+# ── WINRT NATIVE WINDOWS MEDIA CONTROLLER ───────────────────────────
+HAS_WINRT = False
+try:
+    import winrt.windows.media.control as wmc
+    HAS_WINRT = True
+except ImportError:
+    try:
+        from winsdk.windows.media.control import GlobalSystemMediaTransportControlsSessionManager as wmc_mgr
+        class WMCWrap:
+            GlobalSystemMediaTransportControlsSessionManager = wmc_mgr
+        wmc = WMCWrap()
+        HAS_WINRT = True
+    except ImportError:
+        HAS_WINRT = False
 
-            # 1. Physical key press down with extended flag
-            user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY, 0)
-            time.sleep(0.04)
-            # 2. Physical key release up
-            user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
-            return True
-        except Exception:
-            return False
+current_track_state = {
+    "name": "Local Audio Session",
+    "artist": "SoundCloud / Spotify / Browser",
+    "album": "",
+    "cover": "",
+    "isPlaying": True,
+    "source": "Local Bridge",
+    "progress_ms": 0,
+    "duration_ms": 0,
+    "last_update": time.time()
+}
 
-# ── WINDOWS STARTUP REGISTRY HELPERS ─────────────────────────────────
+_smtc_loop = None
+
+async def _winrt_action(action):
+    if not HAS_WINRT:
+        press_physical_media_key(action)
+        return
+
+    try:
+        manager = await wmc.GlobalSystemMediaTransportControlsSessionManager.request_async()
+        if not manager:
+            press_physical_media_key(action)
+            return
+        session = manager.get_current_session()
+        if not session:
+            press_physical_media_key(action)
+            return
+
+        if action == "next":
+            ok = await session.try_skip_next_async()
+            if not ok:
+                press_physical_media_key("next")
+        elif action == "prev":
+            ok = await session.try_skip_previous_async()
+            if not ok:
+                press_physical_media_key("prev")
+        elif action in ("playpause", "play_pause", "toggle"):
+            ok = await session.try_toggle_play_pause_async()
+            if not ok:
+                press_physical_media_key("playpause")
+        elif action == "play":
+            await session.try_play_async()
+        elif action == "pause":
+            await session.try_pause_async()
+    except Exception as e:
+        press_physical_media_key(action)
+
+def dispatch_media_command(action):
+    """Executes media command on the background event loop."""
+    global _smtc_loop
+    if _smtc_loop and _smtc_loop.is_running():
+        asyncio.run_coroutine_threadsafe(_winrt_action(action), _smtc_loop)
+    else:
+        press_physical_media_key(action)
+
+async def _winrt_fetch_track():
+    global current_track_state
+    if not HAS_WINRT:
+        return
+
+    try:
+        manager = await wmc.GlobalSystemMediaTransportControlsSessionManager.request_async()
+        if not manager:
+            return
+        session = manager.get_current_session()
+        if not session:
+            return
+
+        playback_info = session.get_playback_info()
+        is_playing = False
+        if playback_info:
+            is_playing = (playback_info.playback_status == 4 or playback_info.playback_status == wmc.GlobalSystemMediaTransportControlsSessionPlaybackStatus.PLAYING)
+
+        media_props = await session.try_get_media_properties_async()
+        if media_props:
+            title = media_props.title or ""
+            artist = media_props.artist or ""
+            album = media_props.album_title or ""
+
+            if title or artist:
+                timeline = session.get_timeline_properties()
+                pos_ms = int(timeline.position.total_seconds() * 1000) if timeline and timeline.position else 0
+                dur_ms = int(timeline.end_time.total_seconds() * 1000) if timeline and timeline.end_time else 0
+
+                source_app = (session.source_app_user_model_id or "Media Player").lower()
+                if any(b in source_app for b in ["chrome", "brave", "firefox", "msedge", "opera"]):
+                    clean_source = "SoundCloud / Web"
+                elif "spotify" in source_app:
+                    clean_source = "Spotify"
+                elif "apple" in source_app:
+                    clean_source = "Apple Music"
+                else:
+                    clean_source = "Windows Media"
+
+                current_track_state["name"] = title or "Unknown Track"
+                current_track_state["artist"] = artist or "Unknown Artist"
+                current_track_state["album"] = album
+                current_track_state["isPlaying"] = is_playing
+                current_track_state["progress_ms"] = pos_ms
+                current_track_state["duration_ms"] = dur_ms
+                current_track_state["source"] = clean_source
+                current_track_state["last_update"] = time.time()
+    except Exception:
+        pass
+
+def smtc_worker():
+    global _smtc_loop
+    _smtc_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_smtc_loop)
+
+    async def poll_loop():
+        while True:
+            await _winrt_fetch_track()
+            await asyncio.sleep(0.8)
+
+    _smtc_loop.run_until_complete(poll_loop())
+
+# ── STARTUP REGISTRY ────────────────────────────────────────────────
 def is_startup_enabled():
-    """Checks if the bridge is set to run on Windows startup."""
     try:
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_RUN_PATH, 0, winreg.KEY_READ)
         value, _ = winreg.QueryValueEx(key, APP_NAME)
@@ -82,7 +192,6 @@ def is_startup_enabled():
         return False
 
 def set_startup_enabled(enable=True):
-    """Adds or removes the bridge from the Windows startup registry."""
     try:
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_RUN_PATH, 0, winreg.KEY_SET_VALUE)
         if enable:
@@ -104,87 +213,10 @@ def set_startup_enabled(enable=True):
                 pass
         winreg.CloseKey(key)
         return True
-    except Exception as e:
+    except Exception:
         return False
 
-# ── WINDOWS SMTC METADATA READER ─────────────────────────────────────
-HAS_WINSDK = False
-try:
-    import asyncio
-    from winsdk.windows.media.control import GlobalSystemMediaTransportControlsSessionManager as SMTCManager
-    HAS_WINSDK = True
-except ImportError:
-    HAS_WINSDK = False
-
-current_track_state = {
-    "name": "Local Audio Session",
-    "artist": "SoundCloud / Spotify / Browser",
-    "album": "",
-    "cover": "",
-    "isPlaying": True,
-    "source": "Local Bridge",
-    "progress_ms": 0,
-    "duration_ms": 0,
-    "last_update": time.time()
-}
-
-async def fetch_smtc_metadata():
-    global current_track_state
-    try:
-        manager = await SMTCManager.request_async()
-        if not manager:
-            return
-        session = manager.get_current_session()
-        if not session:
-            return
-
-        playback_info = session.get_playback_info()
-        is_playing = False
-        if playback_info:
-            is_playing = (playback_info.playback_status == 4)
-
-        media_props = await session.try_get_media_properties_async()
-        if media_props:
-            title = media_props.title or "Unknown Track"
-            artist = media_props.artist or "Unknown Artist"
-            album = media_props.album_title or ""
-
-            timeline = session.get_timeline_properties()
-            pos_ms = int(timeline.position.total_seconds() * 1000) if timeline else 0
-            dur_ms = int(timeline.end_time.total_seconds() * 1000) if timeline else 0
-
-            source_app = (session.source_app_user_model_id or "Media Player").lower()
-            if any(b in source_app for b in ["chrome", "brave", "firefox", "msedge", "opera"]):
-                clean_source = "SoundCloud / Web"
-            elif "spotify" in source_app:
-                clean_source = "Spotify"
-            else:
-                clean_source = "Windows Media"
-
-            current_track_state["name"] = title
-            current_track_state["artist"] = artist
-            current_track_state["album"] = album
-            current_track_state["isPlaying"] = is_playing
-            current_track_state["progress_ms"] = pos_ms
-            current_track_state["duration_ms"] = dur_ms
-            current_track_state["source"] = clean_source
-            current_track_state["last_update"] = time.time()
-    except Exception:
-        pass
-
-def smtc_polling_worker():
-    if not HAS_WINSDK:
-        return
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    while True:
-        try:
-            loop.run_until_complete(fetch_smtc_metadata())
-        except Exception:
-            pass
-        time.sleep(1.5)
-
-# ── HTTP REST SERVER ────────────────────────────────────────────────
+# ── REST API SERVER ─────────────────────────────────────────────────
 class BridgeRequestHandler(BaseHTTPRequestHandler):
     def _send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -201,21 +233,21 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path.lower()
 
         if path == '/next':
-            press_media_key(VK_MEDIA_NEXT_TRACK)
+            dispatch_media_command("next")
             self.send_response(200)
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps({"status": "ok", "action": "next"}).encode())
 
         elif path in ('/prev', '/previous'):
-            press_media_key(VK_MEDIA_PREV_TRACK)
+            dispatch_media_command("prev")
             self.send_response(200)
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps({"status": "ok", "action": "previous"}).encode())
 
         elif path in ('/playpause', '/play', '/pause'):
-            press_media_key(VK_MEDIA_PLAY_PAUSE)
+            dispatch_media_command("playpause")
             self.send_response(200)
             self._send_cors_headers()
             self.end_headers()
@@ -234,9 +266,11 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             payload = {
                 "status": "online",
                 "port": PORT,
-                "has_winsdk": HAS_WINSDK,
+                "has_winrt": HAS_WINRT,
                 "startup_enabled": is_startup_enabled(),
-                "supported": ["SoundCloud", "Spotify Free", "YouTube Music", "Apple Music", "Browser Media"]
+                "current_track": current_track_state["name"],
+                "artist": current_track_state["artist"],
+                "supported": ["Spotify Free/Premium", "SoundCloud", "YouTube Music", "Apple Music"]
             }
             self.wfile.write(json.dumps(payload).encode())
 
@@ -261,16 +295,13 @@ def run_http_server():
     server = HTTPServer(('127.0.0.1', PORT), BridgeRequestHandler)
     server.serve_forever()
 
-# ── SYSTEM TRAY ICON & BACKGROUND RUNNER ────────────────────────────
+# ── SYSTEM TRAY ICON ────────────────────────────────────────────────
 def create_tray_image():
-    """Generates a clean 64x64 musical note icon in memory using PIL or raw bitmap."""
     try:
         from PIL import Image, ImageDraw
         img = Image.new('RGBA', (64, 64), color=(0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        # Rounded background box
         draw.rounded_rectangle([4, 4, 60, 60], radius=12, fill=(20, 24, 34, 255), outline=(0, 160, 255, 255), width=2)
-        # Musical note
         draw.ellipse([16, 36, 28, 48], fill=(0, 220, 140, 255))
         draw.ellipse([36, 30, 48, 42], fill=(0, 220, 140, 255))
         draw.rectangle([26, 16, 30, 42], fill=(0, 220, 140, 255))
@@ -281,17 +312,15 @@ def create_tray_image():
         return None
 
 def start_tray_app():
-    """Runs system tray app with background daemon."""
-    # Start HTTP server thread
-    http_thread = threading.Thread(target=run_http_server, daemon=True)
-    http_thread.start()
-
     # Start SMTC polling thread
-    if HAS_WINSDK:
-        smtc_thread = threading.Thread(target=smtc_polling_worker, daemon=True)
-        smtc_thread.start()
+    if HAS_WINRT:
+        smtc_t = threading.Thread(target=smtc_worker, daemon=True)
+        smtc_t.start()
 
-    # Try loading pystray for real system tray icon in notification area
+    # Start HTTP server thread
+    http_t = threading.Thread(target=run_http_server, daemon=True)
+    http_t.start()
+
     try:
         import pystray
         from PIL import Image
@@ -301,13 +330,13 @@ def start_tray_app():
             set_startup_enabled(not cur)
 
         def play_pause_action(icon, item):
-            press_media_key(VK_MEDIA_PLAY_PAUSE)
+            dispatch_media_command("playpause")
 
         def next_action(icon, item):
-            press_media_key(VK_MEDIA_NEXT_TRACK)
+            dispatch_media_command("next")
 
         def prev_action(icon, item):
-            press_media_key(VK_MEDIA_PREV_TRACK)
+            dispatch_media_command("prev")
 
         def exit_action(icon, item):
             icon.stop()
@@ -337,22 +366,8 @@ def start_tray_app():
         icon.run()
 
     except ImportError:
-        # Fallback to headless background loop if pystray is not installed
-        print("=" * 60)
-        print(f"  ✦ {APP_NAME} Online (Headless Background Daemon) ✦")
-        print(f"  Listening on: http://127.0.0.1:{PORT}")
-        print(f"  Run on Startup: {'[✓] Enabled' if is_startup_enabled() else '[ ] Disabled'}")
-        print("  Tip: Run 'pip install pystray pillow' to enable the taskbar tray icon")
-        print("=" * 60)
         while True:
             time.sleep(1)
 
 if __name__ == '__main__':
-    # Auto-hide console window on Windows if started without pythonw
-    if "--silent" in sys.argv:
-        try:
-            ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
-        except Exception:
-            pass
-
     start_tray_app()
