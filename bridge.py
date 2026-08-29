@@ -292,7 +292,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         return
 
 def run_http_server():
-    server = HTTPServer(('127.0.0.1', PORT), BridgeRequestHandler)
+    server = HTTPServer(('0.0.0.0', PORT), BridgeRequestHandler)
     server.serve_forever()
 
 # ── SYSTEM TRAY ICON ────────────────────────────────────────────────
