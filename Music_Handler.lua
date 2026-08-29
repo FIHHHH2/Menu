@@ -1412,7 +1412,7 @@ return function(Shared)
     local bridgeStatusLbl = Instance.new("TextLabel")
     bridgeStatusLbl.Size = UDim2.new(1, 0, 0, 18)
     bridgeStatusLbl.BackgroundTransparency = 1
-    bridgeStatusLbl.Text = "Bridge: Run bridge.py on PC"
+    bridgeStatusLbl.Text = "Bridge: Run MediaBridge.exe on PC"
     bridgeStatusLbl.TextColor3 = Color3.fromRGB(130, 150, 180)
     bridgeStatusLbl.Font = Enum.Font.Code
     bridgeStatusLbl.TextSize = 10
@@ -1426,39 +1426,16 @@ return function(Shared)
                 return Shared.HttpRequest({ Url = "http://127.0.0.1:8974/status", Method = "GET" })
             end)
             if ok and res and (res.StatusCode == 200 or res.status_code == 200) then
-                local autoStartStr = ""
-                local okJ, jData = pcall(function() return Http:JSONDecode(res.Body) end)
-                if okJ and jData and jData.startup_enabled ~= nil then
-                    autoStartStr = jData.startup_enabled and " [Boot: ON]" or " [Boot: OFF]"
-                end
-                bridgeStatusLbl.Text = "Bridge: ● Online (SoundCloud / Universal)" .. autoStartStr
+                bridgeStatusLbl.Text = "Bridge: ● Online (SoundCloud / Universal)"
                 bridgeStatusLbl.TextColor3 = Color3.fromRGB(0, 220, 140)
                 Shared.Notify("Media Bridge", "● Connected to local bridge on port 8974", true)
                 local trk = getBridgeTrack()
                 if trk then updateVisuals(trk) end
                 startPolling()
             else
-                bridgeStatusLbl.Text = "Bridge: ○ Offline (Launch bridge.py)"
+                bridgeStatusLbl.Text = "Bridge: ○ Offline (Launch MediaBridge.exe)"
                 bridgeStatusLbl.TextColor3 = Color3.fromRGB(220, 80, 80)
-                Shared.Notify("Media Bridge", "○ Bridge offline -- start bridge.py on desktop", false)
-            end
-        end)
-    end)
-
-    MkButton(leftCol, "[ Toggle Run on Windows Startup ]", 4, function()
-        task.spawn(function()
-            local ok, res = pcall(function()
-                return Shared.HttpRequest({ Url = "http://127.0.0.1:8974/autostart/toggle", Method = "GET" })
-            end)
-            if ok and res and (res.StatusCode == 200 or res.status_code == 200) then
-                local okJ, jData = pcall(function() return Http:JSONDecode(res.Body) end)
-                if okJ and jData and jData.startup_enabled ~= nil then
-                    local state = jData.startup_enabled
-                    Shared.Notify("Media Bridge", state and "[✓] Auto-Start on Windows Boot: ENABLED" or "[ ] Auto-Start on Windows Boot: DISABLED", true)
-                    bridgeStatusLbl.Text = "Bridge: ● Online (SoundCloud / Universal)" .. (state and " [Boot: ON]" or " [Boot: OFF]")
-                end
-            else
-                Shared.Notify("Media Bridge", "[!] Bridge offline -- run bridge.py first", false)
+                Shared.Notify("Media Bridge", "○ Bridge offline -- start MediaBridge.exe on desktop", false)
             end
         end)
     end)
