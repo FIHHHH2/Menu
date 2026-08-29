@@ -1498,6 +1498,10 @@ return function(Shared)
         local rLayout = Instance.new("UIListLayout")
         rLayout.SortOrder = Enum.SortOrder.LayoutOrder; rLayout.Padding = UDim.new(0,6); rLayout.Parent = rightCol
 
+        if def.name == "Music" then
+            btn.Visible = (Shared.Flags["EnableMusicTab"] == true)
+        end
+
         Tabs[def.name] = tabFrame; TabBtns[def.name] = btn
         QuadCols[def.name] = {Left = leftCol, Right = rightCol}
         btn.MouseButton1Click:Connect(function() switchTab(def.name) end)
@@ -1857,7 +1861,23 @@ return function(Shared)
             sendNotification("Anti-Overlap Engine", "Game GUIs restored", false)
         end
     end)
-    makeToggle(DrawerScroll, "Music HUD & Playback Widget", "MusicHUD", 4, function(state)
+    makeToggle(DrawerScroll, "Enable Music Suite & Tab", "EnableMusicTab", 4, function(state)
+        Shared.Flags["EnableMusicTab"] = state
+        local musicBtn = TabBtns["Music"]
+        if musicBtn then
+            musicBtn.Visible = state
+        end
+        if not state and activeTab == "Music" then
+            switchTab("Main")
+        end
+        local hud = ScreenGui:FindFirstChild("Fih_BottomHUD")
+        if not state and hud then
+            hud.Visible = false
+        end
+        sendNotification("Music Engine", state and "Music Tab & Suite Enabled" or "Music Tab & Suite Hidden", state)
+        if Shared.SaveConfigDebounced then Shared.SaveConfigDebounced() end
+    end)
+    makeToggle(DrawerScroll, "Music HUD & Playback Widget", "MusicHUD", 5, function(state)
         Shared.Flags["MusicHUD"] = state
         local hud = ScreenGui:FindFirstChild("Fih_BottomHUD")
         if state then
@@ -1871,7 +1891,7 @@ return function(Shared)
         end
         if Shared.SaveConfigDebounced then Shared.SaveConfigDebounced() end
     end)
-    makeToggle(DrawerScroll, "Semi-Translucent Adaptive UI (Song Cover Sync)", "AdaptiveTheme", 5, function(state)
+    makeToggle(DrawerScroll, "Semi-Translucent Adaptive UI (Song Cover Sync)", "AdaptiveTheme", 6, function(state)
         if state then
             themeMode = "Adaptive"
             local pal = generateAdaptivePalette(currentAdaptiveTrack or (Shared.CurrentTrack and Shared.CurrentTrack()))
