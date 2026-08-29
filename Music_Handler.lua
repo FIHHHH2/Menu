@@ -635,28 +635,46 @@ return function(Shared)
 
     -- ── UNIVERSAL LOCAL MEDIA BRIDGE & PLAYBACK CONTROLS (⏮ ⏯ ⏭) ─────
     local function sendBridgeCommand(action)
-        local ok, resp = pcall(function()
-            return Shared.HttpRequest({
-                Url     = "http://127.0.0.1:8974/" .. action,
-                Method  = "GET",
-                Headers = { ["User-Agent"] = "FihUI-Client" }
-            })
-        end)
-        if ok and resp and (resp.StatusCode == 200 or resp.status_code == 200) then
-            return true
+        local urls = {
+            "http://127.0.0.1:8974/" .. action,
+            "http://lvh.me:8974/" .. action,
+            "http://localhost:8974/" .. action
+        }
+        for _, u in ipairs(urls) do
+            local ok, resp = pcall(function()
+                return Shared.HttpRequest({
+                    Url     = u,
+                    Method  = "GET",
+                    Headers = { ["User-Agent"] = "FihUI-Client" }
+                })
+            end)
+            if ok and resp and (resp.StatusCode == 200 or resp.status_code == 200) then
+                return true
+            end
         end
         return false
     end
 
     local function getBridgeTrack()
-        local ok, resp = pcall(function()
-            return Shared.HttpRequest({
-                Url     = "http://127.0.0.1:8974/current",
-                Method  = "GET",
-                Headers = { ["User-Agent"] = "FihUI-Client" }
-            })
-        end)
-        if not ok or not resp or not resp.Body or #resp.Body < 5 then return nil end
+        local urls = {
+            "http://127.0.0.1:8974/current",
+            "http://lvh.me:8974/current",
+            "http://localhost:8974/current"
+        }
+        local resp = nil
+        for _, u in ipairs(urls) do
+            local ok, r = pcall(function()
+                return Shared.HttpRequest({
+                    Url     = u,
+                    Method  = "GET",
+                    Headers = { ["User-Agent"] = "FihUI-Client" }
+                })
+            end)
+            if ok and r and r.Body and #r.Body > 5 then
+                resp = r
+                break
+            end
+        end
         local ok2, data = pcall(function() return Http:JSONDecode(resp.Body) end)
         if not ok2 or type(data) ~= "table" then return nil end
         if not data.name or data.name == "" or data.name == "Local Audio Session" then return nil end

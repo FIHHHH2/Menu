@@ -26,7 +26,7 @@ PORT = 8974
 APP_NAME = "FihUI Media Bridge"
 REG_RUN_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
-# Windows Virtual Key Codes for Media Keys
+# Windows Virtual Key Codes and App Commands
 VK_MEDIA_NEXT_TRACK = 0xB0
 VK_MEDIA_PREV_TRACK = 0xB1
 VK_MEDIA_STOP       = 0xB2
@@ -34,12 +34,40 @@ VK_MEDIA_PLAY_PAUSE = 0xB3
 KEYEVENTF_EXTENDEDKEY = 0x0001
 KEYEVENTF_KEYUP       = 0x0002
 
-def press_media_key(vk_code):
-    """Simulates physical media key press on Windows."""
+WM_APPCOMMAND = 0x0319
+APPCOMMAND_MEDIA_NEXTTRACK = 11
+APPCOMMAND_MEDIA_PREVIOUSTRACK = 12
+APPCOMMAND_MEDIA_PLAY_PAUSE = 14
+
+def press_media_key(action_type):
+    """
+    Sends universal media command across all Windows audio sessions.
+    Combines direct WM_APPCOMMAND broadcast (Spotify/SoundCloud/Browser hook)
+    with physical keyboard scan-code simulation (user32.keybd_event).
+    """
     try:
-        ctypes.windll.user32.keybd_event(vk_code, 0, KEYEVENTF_EXTENDEDKEY, 0)
+        user32 = ctypes.windll.user32
+        
+        if action_type in ("next", "next_track", VK_MEDIA_NEXT_TRACK):
+            vk = VK_MEDIA_NEXT_TRACK
+            app_cmd = APPCOMMAND_MEDIA_NEXTTRACK
+        elif action_type in ("prev", "previous", "prev_track", VK_MEDIA_PREV_TRACK):
+            vk = VK_MEDIA_PREV_TRACK
+            app_cmd = APPCOMMAND_MEDIA_PREVIOUSTRACK
+        else:
+            vk = VK_MEDIA_PLAY_PAUSE
+            app_cmd = APPCOMMAND_MEDIA_PLAY_PAUSE
+
+        # 1. Broadcast WM_APPCOMMAND to all active media windows (Spotify, Chrome, Edge, etc.)
+        lParam = app_cmd << 16
+        user32.SendMessageW(0xFFFF, WM_APPCOMMAND, 0, lParam)
+        user32.PostMessageW(0xFFFF, WM_APPCOMMAND, 0, lParam)
+
+        # 2. Hardware scan-code keyboard simulation
+        scan_code = user32.MapVirtualKeyW(vk, 0)
+        user32.keybd_event(vk, scan_code, KEYEVENTF_EXTENDEDKEY, 0)
         time.sleep(0.02)
-        ctypes.windll.user32.keybd_event(vk_code, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
+        user32.keybd_event(vk, scan_code, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
         return True
     except Exception as e:
         return False
