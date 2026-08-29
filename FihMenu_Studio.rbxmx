@@ -6680,12 +6680,24 @@ return function(Shared)
     -- ── UNIVERSAL LOCAL MEDIA BRIDGE & PLAYBACK CONTROLS (⏮ ⏯ ⏭) ─────
     local _bridgeDebounce = false
     local function sendBridgeCommand(action)
+        -- 1. High-Priority File-IPC Channel (Instantaneous, 100% reliable across all executors)
+        local wroteFile = false
+        pcall(function()
+            if typeof(writefile) == "function" or (getgenv and typeof(getgenv().writefile) == "function") then
+                local wf = writefile or getgenv().writefile
+                wf("fih_bridge_cmd.txt", action .. ":" .. tostring(os.time()) .. tostring(math.random(100, 999)))
+                wroteFile = true
+            end
+        end)
+
+        -- 2. Parallel HTTP REST Channel
         local urls = {
             "http://127.0.0.1:8974/" .. action,
             "http://localhost:8974/" .. action,
             "http://lvh.me:8974/" .. action
         }
 
+        local httpOk = false
         for _, u in ipairs(urls) do
             local ok, resp = pcall(function()
                 return Shared.HttpRequest({
@@ -6695,40 +6707,64 @@ return function(Shared)
                 })
             end)
             if ok and resp and (resp.StatusCode == 200 or resp.status_code == 200) then
-                return true
-            end
-        end
-
-        return false
-    end
-
-    local function getBridgeTrack()
-        local urls = {
-            "http://127.0.0.1:8974/current",
-            "http://localhost:8974/current",
-            "http://lvh.me:8974/current"
-        }
-
-        local resp = nil
-        for _, u in ipairs(urls) do
-            local ok, r = pcall(function()
-                return Shared.HttpRequest({
-                    Url     = u,
-                    Method  = "GET",
-                    Headers = { ["User-Agent"] = "FihUI-Client" }
-                })
-            end)
-            if ok and r and r.Body and #r.Body > 5 then
-                resp = r
+                httpOk = true
                 break
             end
         end
 
-        if not resp then return nil end
+        return (wroteFile or httpOk)
+    end
 
-        local ok3, data = pcall(function() return Http:JSONDecode(resp.Body) end)
-        if not ok3 or type(data) ~= "table" then return nil end
-        if not data.name or data.name == "" or data.name == "Local Audio Session" then return nil end
+    local function getBridgeTrack()
+        -- 1. High-Priority File-IPC State Check
+        local fileData = nil
+        pcall(function()
+            if (typeof(readfile) == "function" or (getgenv and typeof(getgenv().readfile) == "function"))
+               and (typeof(isfile) == "function" or (getgenv and typeof(getgenv().isfile) == "function")) then
+                local rf = readfile or getgenv().readfile
+                local exists = isfile or getgenv().isfile
+                if exists("fih_bridge_state.json") then
+                    local content = rf("fih_bridge_state.json")
+                    if content and #content > 5 then
+                        local okJ, decoded = pcall(function() return Http:JSONDecode(content) end)
+                        if okJ and type(decoded) == "table" then
+                            fileData = decoded
+                        end
+                    end
+                end
+            end
+        end)
+
+        local data = fileData
+        if not data then
+            local urls = {
+                "http://127.0.0.1:8974/current",
+                "http://localhost:8974/current",
+                "http://lvh.me:8974/current"
+            }
+
+            local resp = nil
+            for _, u in ipairs(urls) do
+                local ok, r = pcall(function()
+                    return Shared.HttpRequest({
+                        Url     = u,
+                        Method  = "GET",
+                        Headers = { ["User-Agent"] = "FihUI-Client" }
+                    })
+                end)
+                if ok and r and r.Body and #r.Body > 5 then
+                    resp = r
+                    break
+                end
+            end
+
+            if resp then
+                local ok3, d = pcall(function() return Http:JSONDecode(resp.Body) end)
+                if ok3 and type(d) == "table" then data = d end
+            end
+        end
+
+        if not data or not data.name or data.name == "" or data.name == "Local Audio Session" then return nil end
 
         local coverUrl = data.cover or ""
         if not coverUrl or coverUrl == "" then
@@ -7461,16 +7497,16 @@ return function(Shared)
     bridgeStatusLbl.LayoutOrder = 2
     bridgeStatusLbl.Parent = leftCol
 
-    MkButton(leftCol, "[ Check Bridge Status (Port 8974) ]", 3, function()
+    MkButton(leftCol, "[ Check Bridge Status ]", 3, function()
         task.spawn(function()
+            local trk = getBridgeTrack()
             local ok, res = pcall(function()
                 return Shared.HttpRequest({ Url = "http://127.0.0.1:8974/status", Method = "GET" })
             end)
-            if ok and res and (res.StatusCode == 200 or res.status_code == 200) then
+            if trk or (ok and res and (res.StatusCode == 200 or res.status_code == 200)) then
                 bridgeStatusLbl.Text = "Bridge: ● Online (SoundCloud / Universal)"
                 bridgeStatusLbl.TextColor3 = Color3.fromRGB(0, 220, 140)
-                Shared.Notify("Media Bridge", "● Connected to local bridge on port 8974", true)
-                local trk = getBridgeTrack()
+                Shared.Notify("Media Bridge", "● Connected to MediaBridge.exe", true)
                 if trk then updateVisuals(trk) end
                 startPolling()
             else

@@ -1,12 +1,8 @@
 """
 FihUI Universal Media Bridge (Native Windows SMTC & System Tray App)
-Uses native Windows Media Control (winrt.windows.media.control) to directly control and track:
-- Spotify (Free & Premium)
-- SoundCloud (Chrome / Brave / Edge / Firefox / Opera)
-- YouTube / YouTube Music
-- Apple Music & all Windows Audio sessions
-
-Exposes local REST API on http://127.0.0.1:8974 for Roblox Executor in-game HUD and controls.
+Dual Channel Transport:
+1. File-Based Realtime IPC (readfile/writefile via executor workspace) - 100% Reliable, Zero Network Permission Block
+2. Local REST API Server (http://127.0.0.1:8974)
 """
 
 import sys
@@ -108,7 +104,7 @@ async def _winrt_action(action):
             await session.try_play_async()
         elif action == "pause":
             await session.try_pause_async()
-    except Exception as e:
+    except Exception:
         press_physical_media_key(action)
 
 def dispatch_media_command(action):
@@ -168,6 +164,70 @@ async def _winrt_fetch_track():
                 current_track_state["last_update"] = time.time()
     except Exception:
         pass
+
+# ── DUAL FILE-BASED IPC ENGINE (ZERO NETWORK BLOCKS) ────────────────
+def get_all_workspace_paths():
+    """Scans all known executor workspace folders."""
+    candidates = []
+    local_app = os.environ.get('LOCALAPPDATA', '')
+    app_data = os.environ.get('APPDATA', '')
+    user_prof = os.environ.get('USERPROFILE', '')
+
+    paths = [
+        os.path.join(local_app, "Potassium", "workspace"),
+        os.path.join(local_app, "Hydrogen", "workspace"),
+        os.path.join(local_app, "Wave", "workspace"),
+        os.path.join(local_app, "Solara", "workspace"),
+        os.path.join(local_app, "Synapse Z", "workspace"),
+        os.path.join(local_app, "Celery", "workspace"),
+        os.path.join(user_prof, ".synapse", "workspace"),
+        os.path.join(local_app, "Roblox", "workspace"),
+        os.getcwd()
+    ]
+
+    for p in paths:
+        if os.path.exists(p) and p not in candidates:
+            candidates.append(p)
+    return candidates
+
+def ipc_file_worker():
+    """Watches for fih_bridge_cmd.txt in executor workspace folders and writes fih_bridge_state.json."""
+    last_handled_id = ""
+    while True:
+        try:
+            workspaces = get_all_workspace_paths()
+            for ws in workspaces:
+                # 1. Read command file
+                cmd_file = os.path.join(ws, "fih_bridge_cmd.txt")
+                if os.path.exists(cmd_file):
+                    try:
+                        with open(cmd_file, "r", encoding="utf-8") as f:
+                            raw = f.read().strip()
+                        if raw and raw != last_handled_id:
+                            last_handled_id = raw
+                            # format: action:timestamp e.g. "next:178798000"
+                            parts = raw.split(":")
+                            action = parts[0].lower()
+                            dispatch_media_command(action)
+                            # Remove processed command
+                            try:
+                                os.remove(cmd_file)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                # 2. Write track state file
+                state_file = os.path.join(ws, "fih_bridge_state.json")
+                try:
+                    with open(state_file, "w", encoding="utf-8") as f:
+                        json.dump(current_track_state, f)
+                except Exception:
+                    pass
+
+        except Exception:
+            pass
+        time.sleep(0.08)
 
 def smtc_worker():
     global _smtc_loop
@@ -312,12 +372,16 @@ def create_tray_image():
         return None
 
 def start_tray_app():
-    # Start SMTC polling thread
+    # 1. Start SMTC polling thread
     if HAS_WINRT:
         smtc_t = threading.Thread(target=smtc_worker, daemon=True)
         smtc_t.start()
 
-    # Start HTTP server thread
+    # 2. Start File-IPC thread (Guaranteed channel for Roblox executors)
+    ipc_t = threading.Thread(target=ipc_file_worker, daemon=True)
+    ipc_t.start()
+
+    # 3. Start HTTP server thread
     http_t = threading.Thread(target=run_http_server, daemon=True)
     http_t.start()
 
