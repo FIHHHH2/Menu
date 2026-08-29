@@ -61,14 +61,23 @@ end
 
 -- Universal HTTP Request engine with multi-executor normalization
 local function httpRequest(opt)
-    local req = (getgenv and (getgenv().request or getgenv().http_request))
+    local env = (getgenv and getgenv()) or (getfenv and getfenv(0)) or _G
+    local req = rawget(env, "request")
+             or rawget(env, "http_request")
+             or (getgenv and (getgenv().request or getgenv().http_request))
              or (typeof(request) == "function" and request)
              or (typeof(http_request) == "function" and http_request)
              or (syn and typeof(syn.request) == "function" and syn.request)
              or (http and typeof(http.request) == "function" and http.request)
+             or (fluxus and typeof(fluxus.request) == "function" and fluxus.request)
+             or (krnl and typeof(krnl.request) == "function" and krnl.request)
 
     local function normalize(res)
-        if not res or type(res) ~= "table" then return res end
+        if not res then return nil end
+        if type(res) == "string" then
+            return { Body = res, body = res, StatusCode = 200, statusCode = 200, status_code = 200, Success = true, Headers = {}, headers = {} }
+        end
+        if type(res) ~= "table" then return res end
         local body = res.Body or res.body or ""
         local code = tonumber(res.StatusCode or res.statusCode or res.status_code or res.Status or res.status) or 200
         local hdrs = res.Headers or res.headers or {}
@@ -84,13 +93,16 @@ local function httpRequest(opt)
         }
     end
 
+    local urlStr = opt.Url or opt.url
+    local methodStr = opt.Method or opt.method or "GET"
+
     if req then
         local ok1, res1 = pcall(function() return req(opt) end)
         if ok1 and res1 then return normalize(res1) end
 
         local lowerOpt = {
-            url     = opt.Url or opt.url,
-            method  = opt.Method or opt.method or "GET",
+            url     = urlStr,
+            method  = methodStr,
             headers = opt.Headers or opt.headers or {},
             body    = opt.Body or opt.body
         }
@@ -98,11 +110,10 @@ local function httpRequest(opt)
         if ok2 and res2 then return normalize(res2) end
     end
 
-    local hasAuth = (opt.Headers and (opt.Headers["Authorization"] or opt.Headers["authorization"]))
-                 or (opt.headers and (opt.headers["Authorization"] or opt.headers["authorization"]))
-    if not hasAuth and (opt.Method == "GET" or not opt.Method) and (opt.Url or opt.url) then
-        local ok, res = pcall(function() return game:HttpGet(opt.Url or opt.url) end)
-        if ok and res and type(res) == "string" and #res > 0 then
+    -- Fallback via HttpGet
+    if (methodStr == "GET" or not methodStr) and urlStr then
+        local ok, res = pcall(function() return game:HttpGet(urlStr) end)
+        if ok and res and type(res) == "string" then
             return normalize({ StatusCode = 200, Body = res })
         end
     end

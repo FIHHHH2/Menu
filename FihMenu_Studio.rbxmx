@@ -70,14 +70,23 @@ end
 
 -- Universal HTTP Request engine with multi-executor normalization
 local function httpRequest(opt)
-    local req = (getgenv and (getgenv().request or getgenv().http_request))
+    local env = (getgenv and getgenv()) or (getfenv and getfenv(0)) or _G
+    local req = rawget(env, "request")
+             or rawget(env, "http_request")
+             or (getgenv and (getgenv().request or getgenv().http_request))
              or (typeof(request) == "function" and request)
              or (typeof(http_request) == "function" and http_request)
              or (syn and typeof(syn.request) == "function" and syn.request)
              or (http and typeof(http.request) == "function" and http.request)
+             or (fluxus and typeof(fluxus.request) == "function" and fluxus.request)
+             or (krnl and typeof(krnl.request) == "function" and krnl.request)
 
     local function normalize(res)
-        if not res or type(res) ~= "table" then return res end
+        if not res then return nil end
+        if type(res) == "string" then
+            return { Body = res, body = res, StatusCode = 200, statusCode = 200, status_code = 200, Success = true, Headers = {}, headers = {} }
+        end
+        if type(res) ~= "table" then return res end
         local body = res.Body or res.body or ""
         local code = tonumber(res.StatusCode or res.statusCode or res.status_code or res.Status or res.status) or 200
         local hdrs = res.Headers or res.headers or {}
@@ -93,13 +102,16 @@ local function httpRequest(opt)
         }
     end
 
+    local urlStr = opt.Url or opt.url
+    local methodStr = opt.Method or opt.method or "GET"
+
     if req then
         local ok1, res1 = pcall(function() return req(opt) end)
         if ok1 and res1 then return normalize(res1) end
 
         local lowerOpt = {
-            url     = opt.Url or opt.url,
-            method  = opt.Method or opt.method or "GET",
+            url     = urlStr,
+            method  = methodStr,
             headers = opt.Headers or opt.headers or {},
             body    = opt.Body or opt.body
         }
@@ -107,11 +119,10 @@ local function httpRequest(opt)
         if ok2 and res2 then return normalize(res2) end
     end
 
-    local hasAuth = (opt.Headers and (opt.Headers["Authorization"] or opt.Headers["authorization"]))
-                 or (opt.headers and (opt.headers["Authorization"] or opt.headers["authorization"]))
-    if not hasAuth and (opt.Method == "GET" or not opt.Method) and (opt.Url or opt.url) then
-        local ok, res = pcall(function() return game:HttpGet(opt.Url or opt.url) end)
-        if ok and res and type(res) == "string" and #res > 0 then
+    -- Fallback via HttpGet
+    if (methodStr == "GET" or not methodStr) and urlStr then
+        local ok, res = pcall(function() return game:HttpGet(urlStr) end)
+        if ok and res and type(res) == "string" then
             return normalize({ StatusCode = 200, Body = res })
         end
     end
@@ -6669,54 +6680,51 @@ return function(Shared)
     -- ── UNIVERSAL LOCAL MEDIA BRIDGE & PLAYBACK CONTROLS (⏮ ⏯ ⏭) ─────
     local _bridgeDebounce = false
     local function sendBridgeCommand(action)
-        local ok, resp = pcall(function()
-            return Shared.HttpRequest({
-                Url     = "http://127.0.0.1:8974/" .. action,
-                Method  = "GET",
-                Headers = { ["User-Agent"] = "FihUI-Client" }
-            })
-        end)
-        if ok and resp and (resp.StatusCode == 200 or resp.status_code == 200) then
-            return true
-        end
+        local urls = {
+            "http://127.0.0.1:8974/" .. action,
+            "http://localhost:8974/" .. action,
+            "http://lvh.me:8974/" .. action
+        }
 
-        -- Fallback loopback check if 127.0.0.1 failed
-        local ok2, resp2 = pcall(function()
-            return Shared.HttpRequest({
-                Url     = "http://lvh.me:8974/" .. action,
-                Method  = "GET",
-                Headers = { ["User-Agent"] = "FihUI-Client" }
-            })
-        end)
-        if ok2 and resp2 and (resp2.StatusCode == 200 or resp2.status_code == 200) then
-            return true
+        for _, u in ipairs(urls) do
+            local ok, resp = pcall(function()
+                return Shared.HttpRequest({
+                    Url     = u,
+                    Method  = "GET",
+                    Headers = { ["User-Agent"] = "FihUI-Client" }
+                })
+            end)
+            if ok and resp and (resp.StatusCode == 200 or resp.status_code == 200) then
+                return true
+            end
         end
 
         return false
     end
 
     local function getBridgeTrack()
-        local ok, resp = pcall(function()
-            return Shared.HttpRequest({
-                Url     = "http://127.0.0.1:8974/current",
-                Method  = "GET",
-                Headers = { ["User-Agent"] = "FihUI-Client" }
-            })
-        end)
-        if not ok or not resp or not resp.Body or #resp.Body < 5 then
-            local ok2, resp2 = pcall(function()
+        local urls = {
+            "http://127.0.0.1:8974/current",
+            "http://localhost:8974/current",
+            "http://lvh.me:8974/current"
+        }
+
+        local resp = nil
+        for _, u in ipairs(urls) do
+            local ok, r = pcall(function()
                 return Shared.HttpRequest({
-                    Url     = "http://lvh.me:8974/current",
+                    Url     = u,
                     Method  = "GET",
                     Headers = { ["User-Agent"] = "FihUI-Client" }
                 })
             end)
-            if ok2 and resp2 and resp2.Body and #resp2.Body > 5 then
-                resp = resp2
-            else
-                return nil
+            if ok and r and r.Body and #r.Body > 5 then
+                resp = r
+                break
             end
         end
+
+        if not resp then return nil end
 
         local ok3, data = pcall(function() return Http:JSONDecode(resp.Body) end)
         if not ok3 or type(data) ~= "table" then return nil end
