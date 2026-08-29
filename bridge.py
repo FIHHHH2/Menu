@@ -1,10 +1,15 @@
 """
-FihUI Universal Media Bridge
-Controls SoundCloud, Spotify (Free / Premium), YouTube Music, Apple Music, and any browser or desktop player.
+FihUI Universal Media Bridge (Background Daemon & System Tray App)
+Controls SoundCloud, Spotify (Free / Premium), YouTube Music, Apple Music, and any browser/desktop player.
 Exposes local REST API on http://127.0.0.1:8974 for Roblox Executor in-game HUD and controls.
 
-Requirements: Python 3.8+ (Zero extra dependencies required for basic media control)
-Optional for real-time Windows metadata: pip install winsdk
+Features:
+- Runs silently in background / system tray (no console window needed via pythonw.exe)
+- System Tray menu (Status, Open on Startup toggle, Skip/Pause controls, Exit)
+- Auto-start on Windows boot (Registry Run Key)
+- Zero external dependencies required for core functionality (uses standard ctypes + winreg + http.server)
+- Optional tray icon with pystray/PIL or lightweight Tkinter tray/background fallback
+- Optional SMTC track metadata with winsdk
 """
 
 import sys
@@ -13,10 +18,13 @@ import time
 import json
 import ctypes
 import threading
+import winreg
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
 PORT = 8974
+APP_NAME = "FihUI Media Bridge"
+REG_RUN_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 # Windows Virtual Key Codes for Media Keys
 VK_MEDIA_NEXT_TRACK = 0xB0
@@ -34,10 +42,44 @@ def press_media_key(vk_code):
         ctypes.windll.user32.keybd_event(vk_code, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
         return True
     except Exception as e:
-        print(f"[!] keybd_event error: {e}")
         return False
 
-# Try importing Windows SMTC SDK for rich metadata reading
+# ── WINDOWS STARTUP REGISTRY HELPERS ─────────────────────────────────
+def is_startup_enabled():
+    """Checks if the bridge is set to run on Windows startup."""
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_RUN_PATH, 0, winreg.KEY_READ)
+        value, _ = winreg.QueryValueEx(key, APP_NAME)
+        winreg.CloseKey(key)
+        return True
+    except WindowsError:
+        return False
+
+def set_startup_enabled(enable=True):
+    """Adds or removes the bridge from the Windows startup registry."""
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_RUN_PATH, 0, winreg.KEY_SET_VALUE)
+        if enable:
+            # Prefer pythonw.exe if available so it starts completely silent without a cmd window
+            python_exe = sys.executable
+            if python_exe.lower().endswith("python.exe"):
+                w_exe = python_exe[:-10] + "pythonw.exe"
+                if os.path.exists(w_exe):
+                    python_exe = w_exe
+            script_path = os.path.abspath(__file__)
+            cmd = f'"{python_exe}" "{script_path}" --silent'
+            winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, cmd)
+        else:
+            try:
+                winreg.DeleteValue(key, APP_NAME)
+            except WindowsError:
+                pass
+        winreg.CloseKey(key)
+        return True
+    except Exception as e:
+        return False
+
+# ── WINDOWS SMTC METADATA READER ─────────────────────────────────────
 HAS_WINSDK = False
 try:
     import asyncio
@@ -59,7 +101,6 @@ current_track_state = {
 }
 
 async def fetch_smtc_metadata():
-    """Reads live track name and artist from Windows System Media Transport Controls."""
     global current_track_state
     try:
         manager = await SMTCManager.request_async()
@@ -115,6 +156,7 @@ def smtc_polling_worker():
             pass
         time.sleep(1.5)
 
+# ── HTTP REST SERVER ────────────────────────────────────────────────
 class BridgeRequestHandler(BaseHTTPRequestHandler):
     def _send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -136,7 +178,6 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps({"status": "ok", "action": "next"}).encode())
-            print("[+] Media Action: NEXT TRACK")
 
         elif path in ('/prev', '/previous'):
             press_media_key(VK_MEDIA_PREV_TRACK)
@@ -144,7 +185,6 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps({"status": "ok", "action": "previous"}).encode())
-            print("[+] Media Action: PREVIOUS TRACK")
 
         elif path in ('/playpause', '/play', '/pause'):
             press_media_key(VK_MEDIA_PLAY_PAUSE)
@@ -152,7 +192,6 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps({"status": "ok", "action": "play_pause"}).encode())
-            print("[+] Media Action: PLAY / PAUSE")
 
         elif path in ('/current', '/track'):
             self.send_response(200)
@@ -168,9 +207,18 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
                 "status": "online",
                 "port": PORT,
                 "has_winsdk": HAS_WINSDK,
+                "startup_enabled": is_startup_enabled(),
                 "supported": ["SoundCloud", "Spotify Free", "YouTube Music", "Apple Music", "Browser Media"]
             }
             self.wfile.write(json.dumps(payload).encode())
+
+        elif path == '/autostart/toggle':
+            cur = is_startup_enabled()
+            set_startup_enabled(not cur)
+            self.send_response(200)
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "startup_enabled": not cur}).encode())
 
         else:
             self.send_response(404)
@@ -181,23 +229,102 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         return
 
-def run_server():
+def run_http_server():
     server = HTTPServer(('127.0.0.1', PORT), BridgeRequestHandler)
-    print("=" * 60)
-    print("  ✦ FihUI Universal Media Bridge Online ✦")
-    print(f"  Listening on: http://127.0.0.1:{PORT}")
-    print("  Compatible with: SoundCloud, Spotify Free, YouTube Music, Apple Music")
-    if HAS_WINSDK:
-        print("  [✓] Windows SMTC Metadata Engine Active")
-    else:
-        print("  [i] Tip: Run 'pip install winsdk' to enable real-time Windows track titles")
-    print("=" * 60)
-    
-    if HAS_WINSDK:
-        t = threading.Thread(target=smtc_polling_worker, daemon=True)
-        t.start()
-
     server.serve_forever()
 
+# ── SYSTEM TRAY ICON & BACKGROUND RUNNER ────────────────────────────
+def create_tray_image():
+    """Generates a clean 64x64 musical note icon in memory using PIL or raw bitmap."""
+    try:
+        from PIL import Image, ImageDraw
+        img = Image.new('RGBA', (64, 64), color=(0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        # Rounded background box
+        draw.rounded_rectangle([4, 4, 60, 60], radius=12, fill=(20, 24, 34, 255), outline=(0, 160, 255, 255), width=2)
+        # Musical note
+        draw.ellipse([16, 36, 28, 48], fill=(0, 220, 140, 255))
+        draw.ellipse([36, 30, 48, 42], fill=(0, 220, 140, 255))
+        draw.rectangle([26, 16, 30, 42], fill=(0, 220, 140, 255))
+        draw.rectangle([46, 10, 50, 36], fill=(0, 220, 140, 255))
+        draw.line([26, 16, 50, 10], fill=(0, 220, 140, 255), width=4)
+        return img
+    except ImportError:
+        return None
+
+def start_tray_app():
+    """Runs system tray app with background daemon."""
+    # Start HTTP server thread
+    http_thread = threading.Thread(target=run_http_server, daemon=True)
+    http_thread.start()
+
+    # Start SMTC polling thread
+    if HAS_WINSDK:
+        smtc_thread = threading.Thread(target=smtc_polling_worker, daemon=True)
+        smtc_thread.start()
+
+    # Try loading pystray for real system tray icon in notification area
+    try:
+        import pystray
+        from PIL import Image
+
+        def toggle_startup_action(icon, item):
+            cur = is_startup_enabled()
+            set_startup_enabled(not cur)
+
+        def play_pause_action(icon, item):
+            press_media_key(VK_MEDIA_PLAY_PAUSE)
+
+        def next_action(icon, item):
+            press_media_key(VK_MEDIA_NEXT_TRACK)
+
+        def prev_action(icon, item):
+            press_media_key(VK_MEDIA_PREV_TRACK)
+
+        def exit_action(icon, item):
+            icon.stop()
+            os._exit(0)
+
+        img = create_tray_image()
+        if not img:
+            img = Image.new('RGB', (64, 64), color=(0, 160, 255))
+
+        menu = pystray.Menu(
+            pystray.MenuItem("FihUI Media Bridge (Online :8974)", None, enabled=False),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("⏯  Play / Pause", play_pause_action),
+            pystray.MenuItem("⏭  Next Track", next_action),
+            pystray.MenuItem("⏮  Previous Track", prev_action),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                "Run on Windows Startup",
+                toggle_startup_action,
+                checked=lambda item: is_startup_enabled()
+            ),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Exit Bridge", exit_action)
+        )
+
+        icon = pystray.Icon("FihUIMediaBridge", img, "FihUI Media Bridge (Port 8974)", menu)
+        icon.run()
+
+    except ImportError:
+        # Fallback to headless background loop if pystray is not installed
+        print("=" * 60)
+        print(f"  ✦ {APP_NAME} Online (Headless Background Daemon) ✦")
+        print(f"  Listening on: http://127.0.0.1:{PORT}")
+        print(f"  Run on Startup: {'[✓] Enabled' if is_startup_enabled() else '[ ] Disabled'}")
+        print("  Tip: Run 'pip install pystray pillow' to enable the taskbar tray icon")
+        print("=" * 60)
+        while True:
+            time.sleep(1)
+
 if __name__ == '__main__':
-    run_server()
+    # Auto-hide console window on Windows if started without pythonw
+    if "--silent" in sys.argv:
+        try:
+            ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+        except Exception:
+            pass
+
+    start_tray_app()
