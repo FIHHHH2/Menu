@@ -1857,7 +1857,21 @@ return function(Shared)
             sendNotification("Anti-Overlap Engine", "Game GUIs restored", false)
         end
     end)
-    makeToggle(DrawerScroll, "Semi-Translucent Adaptive UI (Song Cover Sync)", "AdaptiveTheme", 4, function(state)
+    makeToggle(DrawerScroll, "Music HUD & Playback Widget", "MusicHUD", 4, function(state)
+        Shared.Flags["MusicHUD"] = state
+        local hud = ScreenGui:FindFirstChild("Fih_BottomHUD")
+        if state then
+            if not hud and Shared.BuildMusicHUD then Shared.BuildMusicHUD() end
+            if hud then hud.Visible = true end
+            if Shared.StartMusicPolling then Shared.StartMusicPolling() end
+            sendNotification("Music Engine", "Music Info HUD Enabled", true)
+        else
+            if hud then hud.Visible = false end
+            sendNotification("Music Engine", "Music Info HUD Disabled", false)
+        end
+        if Shared.SaveConfigDebounced then Shared.SaveConfigDebounced() end
+    end)
+    makeToggle(DrawerScroll, "Semi-Translucent Adaptive UI (Song Cover Sync)", "AdaptiveTheme", 5, function(state)
         if state then
             themeMode = "Adaptive"
             local pal = generateAdaptivePalette(currentAdaptiveTrack or (Shared.CurrentTrack and Shared.CurrentTrack()))

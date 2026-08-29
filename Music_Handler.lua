@@ -1401,6 +1401,9 @@ return function(Shared)
     end
 
     Shared.CurrentTrack = function() return currentTrack end
+    Shared.BuildMusicHUD = buildHUD
+    Shared.StartMusicPolling = startPolling
+    Shared.UpdateMusicVisuals = updateVisuals
 
     -- ── PERSISTENT AUTO-POLL ENGINE ────────────────────────────────
     startPolling = function()
@@ -1530,11 +1533,9 @@ return function(Shared)
         end
     end)
 
-    -- Auto-launch HUD by default
+    -- Auto-launch HUD ONLY if user previously enabled it in config
     task.delay(0.5, function()
-        if setHudToggle then
-            setHudToggle(true, true)
-        else
+        if Shared.Flags["MusicHUD"] then
             buildHUD()
             startPolling()
         end
