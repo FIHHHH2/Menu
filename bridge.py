@@ -27,7 +27,7 @@ APP_NAME = "FihUI Media Bridge"
 REG_RUN_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 # Windows Virtual Key Codes and App Commands
-# Windows Virtual Key Codes
+# Windows Virtual Key Codes for Physical Media Keys
 VK_MEDIA_NEXT_TRACK = 0xB0
 VK_MEDIA_PREV_TRACK = 0xB1
 VK_MEDIA_STOP       = 0xB2
@@ -40,14 +40,14 @@ _action_lock = threading.Lock()
 
 def press_media_key(action_type):
     """
-    Sends precise, debounced physical media key event to Windows audio session.
-    Prevents loop skips and duplicate broadcasts.
+    Sends clean, physical media key events to Windows audio subsystem.
+    Works universally across Spotify, SoundCloud, Chrome, YouTube Music, Apple Music, and desktop players.
     """
     global _last_action_time
     with _action_lock:
         now = time.time()
-        # 300ms debounce to prevent rapid multi-clicks or echoing
-        if (now - _last_action_time) < 0.30:
+        # 250ms debounce
+        if (now - _last_action_time) < 0.25:
             return True
         _last_action_time = now
 
@@ -61,11 +61,11 @@ def press_media_key(action_type):
             else:
                 vk = VK_MEDIA_PLAY_PAUSE
 
-            # Clean single hardware key tap
-            scan_code = user32.MapVirtualKeyW(vk, 0)
-            user32.keybd_event(vk, scan_code, KEYEVENTF_EXTENDEDKEY, 0)
-            time.sleep(0.03)
-            user32.keybd_event(vk, scan_code, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
+            # 1. Physical key press down with extended flag
+            user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY, 0)
+            time.sleep(0.04)
+            # 2. Physical key release up
+            user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
             return True
         except Exception:
             return False
