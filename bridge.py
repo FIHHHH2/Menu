@@ -60,14 +60,16 @@ def set_startup_enabled(enable=True):
     try:
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_RUN_PATH, 0, winreg.KEY_SET_VALUE)
         if enable:
-            # Prefer pythonw.exe if available so it starts completely silent without a cmd window
-            python_exe = sys.executable
-            if python_exe.lower().endswith("python.exe"):
-                w_exe = python_exe[:-10] + "pythonw.exe"
-                if os.path.exists(w_exe):
-                    python_exe = w_exe
-            script_path = os.path.abspath(__file__)
-            cmd = f'"{python_exe}" "{script_path}" --silent'
+            if getattr(sys, 'frozen', False):
+                cmd = f'"{sys.executable}"'
+            else:
+                python_exe = sys.executable
+                if python_exe.lower().endswith("python.exe"):
+                    w_exe = python_exe[:-10] + "pythonw.exe"
+                    if os.path.exists(w_exe):
+                        python_exe = w_exe
+                script_path = os.path.abspath(__file__)
+                cmd = f'"{python_exe}" "{script_path}" --silent'
             winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, cmd)
         else:
             try:
