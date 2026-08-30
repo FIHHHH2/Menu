@@ -2840,12 +2840,16 @@ return function(Shared)
 
         makeToggle(visualsCols.Left, "2D Box ESP", "ESP2D", 2, function(state) end)
         makeToggle(visualsCols.Left, "Chams (Highlight ESP)", "ESPChams", 3, function(state) end)
-        makeToggle(visualsCols.Left, "Skeleton ESP", "ESPSkeleton", 4, function(state) end)
-        makeToggle(visualsCols.Left, "Health Bar Display", "ESPHealth", 5, function(state) end)
-        makeToggle(visualsCols.Left, "Player Names & Dist", "ESPNames", 6, function(state) end)
-        makeToggle(visualsCols.Left, "2D Screen Tracers", "Tracers", 7, function(state) end)
-        makeToggle(visualsCols.Left, "Mini Radar", "Radar", 8, function(state) end)
-        makeToggle(visualsCols.Left, "White Dot Crosshair", "Crosshair", 9, function(state) end)
+        makeSlider(visualsCols.Left, "Chams Transparency %", "ChamsTransparencyPct", 0, 100, 85, 4, function(val)
+            Shared.Flags["ChamsTransparency"] = val / 100
+        end)
+        makeToggle(visualsCols.Left, "Skeleton ESP", "ESPSkeleton", 5, function(state) end)
+        makeToggle(visualsCols.Left, "Health Bar Display", "ESPHealth", 6, function(state) end)
+        makeToggle(visualsCols.Left, "Player Names & Dist", "ESPNames", 7, function(state) end)
+        makeToggle(visualsCols.Left, "Role ESP & Overhead Tags", "RoleESP", 8, function(state) end)
+        makeToggle(visualsCols.Left, "2D Screen Tracers", "Tracers", 9, function(state) end)
+        makeToggle(visualsCols.Left, "Mini Radar", "Radar", 10, function(state) end)
+        makeToggle(visualsCols.Left, "White Dot Crosshair", "Crosshair", 11, function(state) end)
 
         -- Right Column: Camera & World Effects
         makeSection(visualsCols.Right, "Camera & World Lighting", 1)
@@ -2980,20 +2984,37 @@ return function(Shared)
                     local hum = char and char:FindFirstChildOfClass("Humanoid")
                     local valid = char and hum and hum.Health > 0 and root ~= nil
 
-                    -- Highlight / Chams
+                    -- Highlight / Chams (0.85 Transparency Default)
                     if Shared.Flags["ESPChams"] and valid then
                         if not playerHighlights[p] then
                             local hl = Instance.new("Highlight")
                             hl.Name = "Fih_Cham_" .. p.Name
                             hl.FillColor = Color3.fromRGB(230, 60, 60)
                             hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                            hl.FillTransparency = 0.4
+                            hl.FillTransparency = 0.85
                             hl.OutlineTransparency = 0
                             hl.Parent = ScreenGui
                             playerHighlights[p] = hl
                         end
-                        playerHighlights[p].Adornee = char
-                        playerHighlights[p].Enabled = true
+
+                        local hl = playerHighlights[p]
+                        local role = p:GetAttribute("Role")
+                        local roleStr = tostring(role or ""):lower()
+
+                        if roleStr:find("murder") or roleStr:find("shoot") or roleStr:find("killer") then
+                            hl.FillColor = Color3.fromRGB(255, 45, 45)
+                            hl.OutlineColor = Color3.fromRGB(255, 120, 120)
+                        elseif roleStr:find("sheriff") or roleStr:find("armed") or roleStr:find("hero") then
+                            hl.FillColor = Color3.fromRGB(45, 140, 255)
+                            hl.OutlineColor = Color3.fromRGB(130, 200, 255)
+                        else
+                            hl.FillColor = Color3.fromRGB(60, 220, 90)
+                            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        end
+
+                        hl.FillTransparency = (Shared.Flags["ChamsTransparency"] ~= nil) and Shared.Flags["ChamsTransparency"] or 0.85
+                        hl.Adornee = char
+                        hl.Enabled = true
                     else
                         if playerHighlights[p] then playerHighlights[p].Enabled = false end
                     end
@@ -3041,10 +3062,27 @@ return function(Shared)
                         bb.Enabled = true
 
                         local dist = math.floor((camera.CFrame.Position - root.Position).Magnitude)
+                        local role = p:GetAttribute("Role")
+                        local roleStr = tostring(role or "Bystander")
+                        local roleTag = ""
+                        local nameCol = Color3.fromRGB(255, 255, 255)
+                        if Shared.Flags["RoleESP"] then
+                            roleTag = " [" .. roleStr:upper() .. "]"
+                            local rLower = roleStr:lower()
+                            if rLower:find("murder") or rLower:find("shoot") or rLower:find("killer") then
+                                nameCol = Color3.fromRGB(255, 60, 60)
+                            elseif rLower:find("sheriff") or rLower:find("armed") or rLower:find("hero") then
+                                nameCol = Color3.fromRGB(80, 160, 255)
+                            else
+                                nameCol = Color3.fromRGB(80, 240, 120)
+                            end
+                        end
+
                         local nameLbl = bb:FindFirstChild("NameLabel")
                         if nameLbl then
-                            nameLbl.Visible = (Shared.Flags["ESPNames"] == true)
-                            nameLbl.Text = string.format("%s [%dm]", p.DisplayName, dist)
+                            nameLbl.Visible = (Shared.Flags["ESPNames"] == true or Shared.Flags["RoleESP"] == true)
+                            nameLbl.Text = string.format("%s%s [%dm]", p.DisplayName, roleTag, dist)
+                            nameLbl.TextColor3 = nameCol
                         end
 
                         local hpBar = bb:FindFirstChild("HPBar")
@@ -3116,10 +3154,26 @@ return function(Shared)
                         esp.HealthBarOutline.Visible = false
                     end
 
-                    -- Names & Distance
-                    if onScreen and Shared.Flags["ESPNames"] then
+                    -- Names & Distance & Role
+                    if onScreen and (Shared.Flags["ESPNames"] or Shared.Flags["RoleESP"]) then
                         local dist = math.floor((camera.CFrame.Position - root.Position).Magnitude)
-                        esp.Name.Text = string.format("%s [%dm]", p.DisplayName, dist)
+                        local role = p:GetAttribute("Role")
+                        local roleStr = tostring(role or "Bystander")
+                        local roleTag = ""
+                        local nameCol = Color3.fromRGB(255, 255, 255)
+                        if Shared.Flags["RoleESP"] then
+                            roleTag = " [" .. roleStr:upper() .. "]"
+                            local rLower = roleStr:lower()
+                            if rLower:find("murder") or rLower:find("shoot") or rLower:find("killer") then
+                                nameCol = Color3.fromRGB(255, 60, 60)
+                            elseif rLower:find("sheriff") or rLower:find("armed") or rLower:find("hero") then
+                                nameCol = Color3.fromRGB(80, 160, 255)
+                            else
+                                nameCol = Color3.fromRGB(80, 240, 120)
+                            end
+                        end
+                        esp.Name.Text = string.format("%s%s [%dm]", p.DisplayName, roleTag, dist)
+                        esp.Name.Color = nameCol
                         esp.Name.Position = Vector2.new(rootPos.X, headPos.Y - 16)
                         esp.Name.Visible = true
                     else

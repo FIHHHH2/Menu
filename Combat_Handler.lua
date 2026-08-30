@@ -1,5 +1,5 @@
 -- Combat_Handler.lua
--- Demise Gun Engine, Stamina Reduction & Combat Extension Module
+-- Demise Gun Engine, Aim Assist, Role Tracker, Stamina Reduction & Combat Module
 -- Compatible with Menu-Clean (Shared) and Standalone Execution
 
 return function(Shared)
@@ -56,30 +56,45 @@ return function(Shared)
         }
     end
 
-    -- Internal Combat & Movement State
+    -- Internal Combat, Aim Assist, and Role Tracking State
     local state = {
         -- Stamina & Movement
-        InfiniteStamina  = false,
-        StaminaReduction = 0, -- 0 = no reduction, 100 = 100% infinite stamina
-        FastRegen        = false,
-        SpeedBoost       = false,
-        SpeedMultiplier  = 1.0,
+        InfiniteStamina   = false,
+        StaminaReduction  = 0, -- 0 to 100%
+        FastRegen         = false,
+        SpeedBoost        = false,
+        SpeedMultiplier   = 1.0,
 
         -- Weapon Mechanisms
-        QuickReload      = false,
-        AutoChamber      = false,
-        CompleteAuto     = false,
-        SemiAutoForce    = false,
-        BurstMode        = false,
-        NoRecoil         = false,
-        FastFireRate     = false,
-        CustomFireRate   = 0.05,
-        BurstCount       = 3,
-        BurstDelay       = 0.06,
+        QuickReload       = false,
+        AutoChamber       = false,
+        CompleteAuto      = false,
+        SemiAutoForce     = false,
+        BurstMode         = false,
+        NoRecoil          = false,
+        FastFireRate      = false,
+        CustomFireRate    = 0.05,
+        BurstCount        = 3,
+        BurstDelay        = 0.06,
+
+        -- Aim Assist
+        AimAssist         = false,
+        AimAssistFOV      = false,
+        AimRadius         = 140,
+        AimSmoothing      = 5,
+        AimTargetPart     = "Head", -- "Head" or "Torso"
+        AimWallCheck      = true,
+        AimPrioritizeThreat = true,
+        AimKeyHeld        = false,
+
+        -- Role Tracker
+        RoleTracker       = false,
+        RoleNotifier      = true,
+        LastKnownRoles    = {},
 
         -- Active Runtime States
-        IsShooting       = false,
-        BurstActive      = false
+        IsShooting        = false,
+        BurstActive       = false
     }
 
     local function sendNotification(title, msg, status)
@@ -293,11 +308,155 @@ return function(Shared)
         end)
     end
 
-    -- Input Listeners for Rapid Auto / Burst Actions
+    -- ── AIM ASSIST ENGINE ─────────────────────────────────────────
+    local hasDrawing = (type(Drawing) == "table" and type(Drawing.new) == "function")
+    local aimFovCircle = nil
+    if hasDrawing then
+        pcall(function()
+            aimFovCircle = Drawing.new("Circle")
+            aimFovCircle.Thickness = 1.5
+            aimFovCircle.NumSides = 48
+            aimFovCircle.Filled = false
+            aimFovCircle.Transparency = 0.65
+            aimFovCircle.Color = Color3.fromRGB(255, 60, 60)
+            aimFovCircle.Visible = false
+        end)
+    end
+
+    local function isPartVisible(origin, targetPart, ignoreList)
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = ignoreList or {localPlayer.Character, targetPart.Parent}
+        params.IgnoreWater = true
+
+        local direction = targetPart.Position - origin
+        local result = workspace:Raycast(origin, direction, params)
+        return result == nil or result.Instance:IsDescendantOf(targetPart.Parent)
+    end
+
+    local function getPlayerRoleCategory(p)
+        local role = p:GetAttribute("Role")
+        local roleStr = tostring(role or ""):lower()
+        if roleStr:find("murder") or roleStr:find("shoot") or roleStr:find("killer") then
+            return "Threat", Color3.fromRGB(255, 45, 45)
+        elseif roleStr:find("sheriff") or roleStr:find("armed") or roleStr:find("hero") then
+            return "Sheriff", Color3.fromRGB(45, 140, 255)
+        end
+        -- Check backpack / character for weapons
+        local char = p.Character
+        if char then
+            for _, item in ipairs(char:GetChildren()) do
+                if item:IsA("Tool") and (item.Name:find("AK") or item.Name:find("AR") or item.Name:find("CZ") or item.Name:find("BLOCK") or item.Name:find("M249") or item.Name:find("UZI") or item.Name:find("Knife") or item.Name:find("Gun")) then
+                    return "Armed", Color3.fromRGB(255, 100, 50)
+                end
+            end
+        end
+        return "Bystander", Color3.fromRGB(60, 220, 90)
+    end
+
+    local function getBestAimTarget()
+        local cam = workspace.CurrentCamera
+        if not cam then return nil end
+        local vp = cam.ViewportSize
+        local screenCenter = Vector2.new(vp.X / 2, vp.Y / 2)
+        local bestTarget = nil
+        local shortestDist = state.AimRadius or 140
+        local highestPriority = -1
+
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= localPlayer and p.Character then
+                local char = p.Character
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local targetPart = (state.AimTargetPart == "Head" and char:FindFirstChild("Head")) or char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+
+                if hum and hum.Health > 0 and targetPart then
+                    local screenPos, onScreen = cam:WorldToViewportPoint(targetPart.Position)
+                    if onScreen then
+                        local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+                        if screenDist <= (state.AimRadius or 140) then
+                            local canSee = true
+                            if state.AimWallCheck then
+                                canSee = isPartVisible(cam.CFrame.Position, targetPart, {localPlayer.Character, char})
+                            end
+
+                            if canSee then
+                                local roleCategory = getPlayerRoleCategory(p)
+                                local priority = 0
+                                if state.AimPrioritizeThreat and roleCategory == "Threat" then
+                                    priority = 2
+                                elseif state.AimPrioritizeThreat and (roleCategory == "Sheriff" or roleCategory == "Armed") then
+                                    priority = 1
+                                end
+
+                                if priority > highestPriority or (priority == highestPriority and screenDist < shortestDist) then
+                                    highestPriority = priority
+                                    shortestDist = screenDist
+                                    bestTarget = targetPart
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        return bestTarget
+    end
+
+    local aimRenderConn = RunService.RenderStepped:Connect(function()
+        local cam = workspace.CurrentCamera
+        if not cam then return end
+        local vp = cam.ViewportSize
+        local screenCenter = Vector2.new(vp.X / 2, vp.Y / 2)
+
+        if aimFovCircle then
+            aimFovCircle.Position = screenCenter
+            aimFovCircle.Radius = state.AimRadius or 140
+            aimFovCircle.Visible = (state.AimAssist and state.AimAssistFOV) == true
+        end
+
+        if state.AimAssist and (state.AimKeyHeld or (state.IsShooting and state.CompleteAuto)) then
+            local targetPart = getBestAimTarget()
+            if targetPart then
+                local targetCF = CFrame.lookAt(cam.CFrame.Position, targetPart.Position)
+                local smoothness = math.max(1, state.AimSmoothing or 5)
+                local lerpFactor = math.clamp(1 / smoothness, 0.05, 1)
+                cam.CFrame = cam.CFrame:Lerp(targetCF, lerpFactor)
+            end
+        end
+    end)
+
+    -- ── ROLE TRACKER & REVEAL WATCHDOG ─────────────────────────────
+    local function checkPlayerRoles()
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= localPlayer then
+                local role = p:GetAttribute("Role")
+                local roleCategory, roleCol = getPlayerRoleCategory(p)
+                local prevCategory = state.LastKnownRoles[p]
+
+                if roleCategory ~= prevCategory then
+                    state.LastKnownRoles[p] = roleCategory
+                    if state.RoleNotifier and (roleCategory == "Threat" or roleCategory == "Armed") and prevCategory ~= nil then
+                        sendNotification("ROLE ALERT", string.format("%s is %s!", p.DisplayName, roleCategory == "Threat" and "THE SHOOTER / KILLER" or "ARMED"), false)
+                    end
+                end
+            end
+        end
+    end
+
+    local roleWatcherConn = RunService.Heartbeat:Connect(function()
+        if state.RoleTracker or state.RoleNotifier then
+            checkPlayerRoles()
+        end
+    end)
+
+    -- Input Listeners for Rapid Auto / Burst / Aim Assist Actions
     local inputBeganConn = UserInput.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
 
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            state.AimKeyHeld = true
+        elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             local tool, config = getEquippedGun()
             if not tool or not config then return end
 
@@ -327,7 +486,9 @@ return function(Shared)
     end)
 
     local inputEndedConn = UserInput.InputEnded:Connect(function(input, _)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            state.AimKeyHeld = false
+        elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             state.IsShooting = false
         end
     end)
@@ -392,6 +553,9 @@ return function(Shared)
         Shared.AddCleanup(inputEndedConn)
         Shared.AddCleanup(charAddedConn)
         Shared.AddCleanup(staminaHeartbeatConn)
+        Shared.AddCleanup(aimRenderConn)
+        Shared.AddCleanup(roleWatcherConn)
+        if aimFovCircle then Shared.AddCleanup(function() pcall(function() aimFovCircle:Remove() end) end) end
     end
 
     -- UI Integration with Menu-Clean ("Run N Hide" Tab)
@@ -401,37 +565,40 @@ return function(Shared)
         local leftCol = (Shared.QuadCols and Shared.QuadCols["Run N Hide"] and Shared.QuadCols["Run N Hide"].Left) or (quad and quad:FindFirstChild("LeftCol")) or targetTab
         local rightCol = (Shared.QuadCols and Shared.QuadCols["Run N Hide"] and Shared.QuadCols["Run N Hide"].Right) or (quad and quad:FindFirstChild("RightCol")) or targetTab
 
-        -- ── LEFT COLUMN: WEAPON MODS & STAMINA ─────────────────────
+        -- ── LEFT COLUMN: AIM ASSIST & COMBAT ───────────────────────
         if Shared.MakeSection then
-            Shared.MakeSection(leftCol, "Stamina & Mobility", 1)
+            Shared.MakeSection(leftCol, "Aim Assist Engine", 1)
         end
 
         if Shared.MakeToggle then
-            Shared.MakeToggle(leftCol, "Infinite Stamina (Zero Drain)", "InfiniteStamina", 2, function(val)
-                state.InfiniteStamina = val
-                applyStaminaState()
+            Shared.MakeToggle(leftCol, "Aim Assist (Hold R-Click)", "CombatAimAssist", 2, function(val)
+                state.AimAssist = val
             end)
 
-            Shared.MakeToggle(leftCol, "Fast Stamina Recovery", "FastStaminaRegen", 3, function(val)
-                state.FastRegen = val
-                applyStaminaState()
+            Shared.MakeToggle(leftCol, "Show Aim Assist FOV", "CombatAimFOV", 3, function(val)
+                state.AimAssistFOV = val
             end)
 
-            Shared.MakeToggle(leftCol, "Sprint Speed Multiplier", "SpeedBoostToggle", 4, function(val)
-                state.SpeedBoost = val
-                applyStaminaState()
+            Shared.MakeToggle(leftCol, "Aim Wallcheck (Visible Only)", "CombatAimWallcheck", 4, function(val)
+                state.AimWallCheck = val
+            end)
+
+            Shared.MakeToggle(leftCol, "Prioritize Threats / Shooters", "CombatAimThreats", 5, function(val)
+                state.AimPrioritizeThreat = val
+            end)
+
+            Shared.MakeToggle(leftCol, "Target Head (Off = Torso)", "CombatAimHead", 6, function(val)
+                state.AimTargetPart = val and "Head" or "Torso"
             end)
         end
 
         if Shared.MakeSlider then
-            Shared.MakeSlider(leftCol, "Stamina Drain Reduction %", "StaminaReductionPct", 0, 100, 50, 5, function(val)
-                state.StaminaReduction = val
-                applyStaminaState()
+            Shared.MakeSlider(leftCol, "Aim FOV Radius", "CombatAimRadius", 40, 350, 140, 7, function(val)
+                state.AimRadius = val
             end)
 
-            Shared.MakeSlider(leftCol, "Sprint Speed Factor", "SprintSpeedMult", 1, 3, 1, 6, function(val)
-                state.SpeedMultiplier = val
-                applyStaminaState()
+            Shared.MakeSlider(leftCol, "Aim Smoothing (1=Snap)", "CombatAimSmooth", 1, 15, 5, 8, function(val)
+                state.AimSmoothing = val
             end)
         end
 
@@ -490,32 +657,100 @@ return function(Shared)
             end)
         end
 
-        -- ── RIGHT COLUMN: TUNING & CONTROLS ────────────────────────
+        -- ── RIGHT COLUMN: ROLE TRACKER, STAMINA & CONTROLS ─────────
         if Shared.MakeSection then
-            Shared.MakeSection(rightCol, "Firing Controls & Tuning", 1)
+            Shared.MakeSection(rightCol, "Role Tracker & Alerts", 1)
+        end
+
+        if Shared.MakeToggle then
+            Shared.MakeToggle(rightCol, "Role Tracker Watcher", "CombatRoleTracker", 2, function(val)
+                state.RoleTracker = val
+                checkPlayerRoles()
+            end)
+
+            Shared.MakeToggle(rightCol, "Shooter / Killer Reveal Alert", "CombatRoleAlert", 3, function(val)
+                state.RoleNotifier = val
+            end)
+        end
+
+        if Shared.MakeButton then
+            Shared.MakeButton(rightCol, "Scan All Player Roles Now", 4, function()
+                checkPlayerRoles()
+                local threats = {}
+                local sheriffs = {}
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= localPlayer then
+                        local cat = getPlayerRoleCategory(p)
+                        if cat == "Threat" or cat == "Armed" then
+                            table.insert(threats, p.DisplayName)
+                        elseif cat == "Sheriff" then
+                            table.insert(sheriffs, p.DisplayName)
+                        end
+                    end
+                end
+                local summary = string.format("Threats: %s | Sheriffs: %s", #threats > 0 and table.concat(threats, ", ") or "None", #sheriffs > 0 and table.concat(sheriffs, ", ") or "None")
+                sendNotification("Role Scan", summary, true)
+            end)
+        end
+
+        if Shared.MakeSection then
+            Shared.MakeSection(rightCol, "Stamina & Mobility", 10)
+        end
+
+        if Shared.MakeToggle then
+            Shared.MakeToggle(rightCol, "Infinite Stamina (Zero Drain)", "InfiniteStamina", 11, function(val)
+                state.InfiniteStamina = val
+                applyStaminaState()
+            end)
+
+            Shared.MakeToggle(rightCol, "Fast Stamina Recovery", "FastStaminaRegen", 12, function(val)
+                state.FastRegen = val
+                applyStaminaState()
+            end)
+
+            Shared.MakeToggle(rightCol, "Sprint Speed Multiplier", "SpeedBoostToggle", 13, function(val)
+                state.SpeedBoost = val
+                applyStaminaState()
+            end)
         end
 
         if Shared.MakeSlider then
-            Shared.MakeSlider(rightCol, "Burst Shot Count", "CombatBurstCount", 2, 10, 3, 2, function(val)
+            Shared.MakeSlider(rightCol, "Stamina Drain Reduction %", "StaminaReductionPct", 0, 100, 50, 14, function(val)
+                state.StaminaReduction = val
+                applyStaminaState()
+            end)
+
+            Shared.MakeSlider(rightCol, "Sprint Speed Factor", "SprintSpeedMult", 1, 3, 1, 15, function(val)
+                state.SpeedMultiplier = val
+                applyStaminaState()
+            end)
+        end
+
+        if Shared.MakeSection then
+            Shared.MakeSection(rightCol, "Firing Controls & Tuning", 20)
+        end
+
+        if Shared.MakeSlider then
+            Shared.MakeSlider(rightCol, "Burst Shot Count", "CombatBurstCount", 2, 10, 3, 21, function(val)
                 state.BurstCount = val
             end)
 
-            Shared.MakeSlider(rightCol, "Burst Round Delay (ms)", "CombatBurstDelay", 20, 150, 60, 3, function(val)
+            Shared.MakeSlider(rightCol, "Burst Round Delay (ms)", "CombatBurstDelay", 20, 150, 60, 22, function(val)
                 state.BurstDelay = val / 1000
             end)
 
-            Shared.MakeSlider(rightCol, "Overclock Delay (ms)", "CombatFireDelay", 10, 250, 50, 4, function(val)
+            Shared.MakeSlider(rightCol, "Overclock Delay (ms)", "CombatFireDelay", 10, 250, 50, 23, function(val)
                 state.CustomFireRate = val / 1000
                 updateWeaponConfigs(true)
             end)
         end
 
         if Shared.MakeSection then
-            Shared.MakeSection(rightCol, "Quick Actions", 10)
+            Shared.MakeSection(rightCol, "Quick Actions", 30)
         end
 
         if Shared.MakeButton then
-            Shared.MakeButton(rightCol, "Force Instant Reload", 11, function()
+            Shared.MakeButton(rightCol, "Force Instant Reload", 31, function()
                 local tool = getEquippedGun()
                 if tool then
                     executeQuickReload(tool)
@@ -525,7 +760,7 @@ return function(Shared)
                 end
             end)
 
-            Shared.MakeButton(rightCol, "Chamber Equipped Weapon", 12, function()
+            Shared.MakeButton(rightCol, "Chamber Equipped Weapon", 32, function()
                 local tool = getEquippedGun()
                 if tool then
                     executeAutoChamber(tool)
@@ -533,26 +768,6 @@ return function(Shared)
                 else
                     sendNotification("Run N Hide", "No gun equipped", false)
                 end
-            end)
-
-            Shared.MakeButton(rightCol, "Reset Stamina & Gun Configs", 13, function()
-                state.InfiniteStamina = false
-                state.StaminaReduction = 0
-                state.SpeedBoost = false
-                state.CompleteAuto = false
-                state.SemiAutoForce = false
-                state.BurstMode = false
-                state.NoRecoil = false
-                state.QuickReload = false
-                state.FastFireRate = false
-
-                for _, flag in ipairs({"InfiniteStamina", "FastStaminaRegen", "SpeedBoostToggle", "CombatQuickReload", "CombatCompleteAuto", "CombatSemiAuto", "CombatBurstMode", "CombatNoRecoil", "CombatFastFire"}) do
-                    if Shared.Toggles[flag] then Shared.Toggles[flag].SetToggle(false, true) end
-                end
-
-                applyStaminaState()
-                updateWeaponConfigs()
-                sendNotification("Run N Hide", "All modifiers restored to default", true)
             end)
         end
     end
