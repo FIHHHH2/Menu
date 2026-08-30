@@ -2292,7 +2292,7 @@ return function(Shared)
             end
         end)
 
-        makeToggle(playerCols.Left, "Orbit Spectate Target", "PlayerOrbitSpectate", 14, function(state)
+        makeToggle(playerCols.Left, "3rd-Person Shoulder POV", "PlayerShoulderPOV", 14, function(state)
             if not state then
                 camera.CameraType = Enum.CameraType.Custom
                 local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
@@ -2300,29 +2300,63 @@ return function(Shared)
             end
         end)
 
-        makeButton(playerCols.Left, "Reset Camera to Self", 15, function()
+        makeSlider(playerCols.Left, "3rd-Person Distance", "Player3rdDist", 3, 35, 9, 15, function(val) end)
+
+        makeToggle(playerCols.Left, "Orbit Spectate Target", "PlayerOrbitSpectate", 16, function(state)
+            if not state then
+                camera.CameraType = Enum.CameraType.Custom
+                local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
+                if myHum then camera.CameraSubject = myHum end
+            end
+        end)
+
+        makeToggle(playerCols.Left, "Hear Target Audio (Spatial Mic)", "TargetAudioRelay", 17, function(state)
+            local SoundService = game:GetService("SoundService")
+            if not state then
+                pcall(function() SoundService:SetListener(Enum.ListenerType.Camera) end)
+            end
+        end)
+
+        makeButton(playerCols.Left, "Reset Camera to Self", 18, function()
             Shared.Flags["PlayerPOVMode"] = false
+            Shared.Flags["PlayerShoulderPOV"] = false
             Shared.Flags["PlayerOrbitSpectate"] = false
+            Shared.Flags["TargetAudioRelay"] = false
             local t1 = Shared.Toggles["PlayerPOVMode"]
-            local t2 = Shared.Toggles["PlayerOrbitSpectate"]
+            local t2 = Shared.Toggles["PlayerShoulderPOV"]
+            local t3 = Shared.Toggles["PlayerOrbitSpectate"]
+            local t4 = Shared.Toggles["TargetAudioRelay"]
             if t1 and t1.SetToggle then t1.SetToggle(false, true) end
             if t2 and t2.SetToggle then t2.SetToggle(false, true) end
+            if t3 and t3.SetToggle then t3.SetToggle(false, true) end
+            if t4 and t4.SetToggle then t4.SetToggle(false, true) end
             camera.CameraType = Enum.CameraType.Custom
             local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
             if myHum then camera.CameraSubject = myHum end
-            sendNotification("Camera", "Camera restored to local player", true)
+            pcall(function() game:GetService("SoundService"):SetListener(Enum.ListenerType.Camera) end)
+            sendNotification("Camera", "Camera & audio restored to local player", true)
         end)
 
         local playerPovRender = RunService.RenderStepped:Connect(function()
-            if Shared.Flags["PlayerPOVMode"] and selectedPTarget and selectedPTarget.Character then
+            local SoundService = game:GetService("SoundService")
+            if (Shared.Flags["PlayerPOVMode"] or Shared.Flags["PlayerShoulderPOV"] or Shared.Flags["PlayerOrbitSpectate"] or Shared.Flags["TargetAudioRelay"]) and selectedPTarget and selectedPTarget.Character then
                 local tHead = selectedPTarget.Character:FindFirstChild("Head") or selectedPTarget.Character:FindFirstChild("HumanoidRootPart") or selectedPTarget.Character:FindFirstChild("Torso")
-                if tHead then
+                local pHum = selectedPTarget.Character:FindFirstChildOfClass("Humanoid")
+
+                -- Spatial audio listener
+                if Shared.Flags["TargetAudioRelay"] and tHead then
+                    pcall(function() SoundService:SetListener(Enum.ListenerType.ObjectPosition, tHead) end)
+                end
+
+                if Shared.Flags["PlayerPOVMode"] and tHead then
                     camera.CameraType = Enum.CameraType.Scriptable
                     camera.CFrame = tHead.CFrame * CFrame.new(0, 0.2, 0)
-                end
-            elseif Shared.Flags["PlayerOrbitSpectate"] and selectedPTarget and selectedPTarget.Character then
-                local pHum = selectedPTarget.Character:FindFirstChildOfClass("Humanoid")
-                if pHum and pHum.Health > 0 then
+                elseif Shared.Flags["PlayerShoulderPOV"] and tHead then
+                    local dist = Shared.Flags["Player3rdDist"] or 9
+                    camera.CameraType = Enum.CameraType.Scriptable
+                    local camPos = tHead.Position - (tHead.CFrame.LookVector * dist) + Vector3.new(0, 2.2, 0) + (tHead.CFrame.RightVector * 1.5)
+                    camera.CFrame = CFrame.lookAt(camPos, tHead.Position + Vector3.new(0, 1.2, 0) + (tHead.CFrame.LookVector * 15))
+                elseif Shared.Flags["PlayerOrbitSpectate"] and pHum and pHum.Health > 0 then
                     if camera.CameraSubject ~= pHum then camera.CameraSubject = pHum end
                     if camera.CameraType ~= Enum.CameraType.Custom then camera.CameraType = Enum.CameraType.Custom end
                 end
@@ -3323,15 +3357,7 @@ return function(Shared)
         nextBtn.MouseButton1Click:Connect(function() cyclePlayer(1) end)
 
         -- Spectate Toggles & Actions
-        makeToggle(spyCols.Left, "Spectate Target (Orbit)", "SpySpectate", 4, function(state)
-            if not state then
-                local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
-                if myHum then camera.CameraSubject = myHum end
-                camera.CameraType = Enum.CameraType.Custom
-            end
-        end)
-
-        makeToggle(spyCols.Left, "First-Person POV View", "SpyFirstPersonPOV", 5, function(state)
+        makeToggle(spyCols.Left, "First-Person POV View", "SpyFirstPersonPOV", 4, function(state)
             if not state then
                 camera.CameraType = Enum.CameraType.Custom
                 local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
@@ -3339,20 +3365,52 @@ return function(Shared)
             end
         end)
 
-        makeButton(spyCols.Left, "Return Camera to Self", 6, function()
+        makeToggle(spyCols.Left, "3rd-Person Shoulder POV", "SpyShoulderPOV", 5, function(state)
+            if not state then
+                camera.CameraType = Enum.CameraType.Custom
+                local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
+                if myHum then camera.CameraSubject = myHum end
+            end
+        end)
+
+        makeSlider(spyCols.Left, "3rd-Person Distance", "Spy3rdDist", 3, 35, 9, 6, function(val) end)
+
+        makeToggle(spyCols.Left, "Spectate Target (Orbit)", "SpySpectate", 7, function(state)
+            if not state then
+                local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
+                if myHum then camera.CameraSubject = myHum end
+                camera.CameraType = Enum.CameraType.Custom
+            end
+        end)
+
+        makeToggle(spyCols.Left, "Hear Target Audio (Spatial Mic)", "SpyAudioRelay", 8, function(state)
+            local SoundService = game:GetService("SoundService")
+            if not state then
+                pcall(function() SoundService:SetListener(Enum.ListenerType.Camera) end)
+            end
+        end)
+
+        makeButton(spyCols.Left, "Return Camera to Self", 9, function()
             Shared.Flags["SpySpectate"] = false
             Shared.Flags["SpyFirstPersonPOV"] = false
+            Shared.Flags["SpyShoulderPOV"] = false
+            Shared.Flags["SpyAudioRelay"] = false
             local t1 = Shared.Toggles["SpySpectate"]
             local t2 = Shared.Toggles["SpyFirstPersonPOV"]
+            local t3 = Shared.Toggles["SpyShoulderPOV"]
+            local t4 = Shared.Toggles["SpyAudioRelay"]
             if t1 and t1.SetToggle then t1.SetToggle(false, true) end
             if t2 and t2.SetToggle then t2.SetToggle(false, true) end
+            if t3 and t3.SetToggle then t3.SetToggle(false, true) end
+            if t4 and t4.SetToggle then t4.SetToggle(false, true) end
             camera.CameraType = Enum.CameraType.Custom
             local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
             if myHum then camera.CameraSubject = myHum end
-            sendNotification("Camera Engine", "Camera returned to local character", true)
+            pcall(function() game:GetService("SoundService"):SetListener(Enum.ListenerType.Camera) end)
+            sendNotification("Camera Engine", "Camera & audio returned to local character", true)
         end)
 
-        makeButton(spyCols.Left, "Teleport Behind Target", 7, function()
+        makeButton(spyCols.Left, "Teleport Behind Target", 10, function()
             if selectedSpyPlayer and selectedSpyPlayer.Character then
                 local pRoot = selectedSpyPlayer.Character:FindFirstChild("HumanoidRootPart") or selectedSpyPlayer.Character:FindFirstChild("Torso")
                 local myRoot = localPlr.Character and (localPlr.Character:FindFirstChild("HumanoidRootPart") or localPlr.Character:FindFirstChild("Torso"))
@@ -3365,7 +3423,7 @@ return function(Shared)
             end
         end)
 
-        makeButton(spyCols.Left, "Teleport Overhead (Spy Height)", 8, function()
+        makeButton(spyCols.Left, "Teleport Overhead (Spy Height)", 11, function()
             if selectedSpyPlayer and selectedSpyPlayer.Character then
                 local pRoot = selectedSpyPlayer.Character:FindFirstChild("HumanoidRootPart") or selectedSpyPlayer.Character:FindFirstChild("Torso")
                 local myRoot = localPlr.Character and (localPlr.Character:FindFirstChild("HumanoidRootPart") or localPlr.Character:FindFirstChild("Torso"))
@@ -3443,6 +3501,7 @@ return function(Shared)
         local spyRenderConn = RunService.RenderStepped:Connect(function(dt)
             local myChar = localPlr.Character
             local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+            local SoundService = game:GetService("SoundService")
 
             -- Update target card stats continuously
             if selectedSpyPlayer and selectedSpyPlayer.Character then
@@ -3458,6 +3517,11 @@ return function(Shared)
                     hpStr = string.format("%d/%d", math.floor(pHum.Health), math.floor(pHum.MaxHealth))
                 end
                 targetInfoLbl.Text = string.format("Dist: %s | Health: %s", distStr, hpStr)
+
+                -- Spatial audio listener
+                if Shared.Flags["SpyAudioRelay"] and pRoot then
+                    pcall(function() SoundService:SetListener(Enum.ListenerType.ObjectPosition, pRoot) end)
+                end
             end
 
             -- 1. First-Person POV Spy Mode (See directly through target's eyes)
@@ -3472,7 +3536,19 @@ return function(Shared)
                 return
             end
 
-            -- 2. Third-Person Spectate with Force Bypass
+            -- 2. 3rd-Person Shoulder POV
+            if Shared.Flags["SpyShoulderPOV"] and selectedSpyPlayer and selectedSpyPlayer.Character then
+                local tHead = getTargetHead(selectedSpyPlayer) or selectedSpyPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if tHead then
+                    local dist = Shared.Flags["Spy3rdDist"] or 9
+                    camera.CameraType = Enum.CameraType.Scriptable
+                    local camPos = tHead.Position - (tHead.CFrame.LookVector * dist) + Vector3.new(0, 2.2, 0) + (tHead.CFrame.RightVector * 1.5)
+                    camera.CFrame = CFrame.lookAt(camPos, tHead.Position + Vector3.new(0, 1.2, 0) + (tHead.CFrame.LookVector * 15))
+                end
+                return
+            end
+
+            -- 3. Third-Person Spectate with Force Bypass
             if (Shared.Flags["SpySpectate"] or Shared.Flags["ForceSpectateBypass"]) and selectedSpyPlayer and selectedSpyPlayer.Character then
                 local tHum = getTargetHum(selectedSpyPlayer)
                 if tHum and tHum.Health > 0 then
@@ -3486,7 +3562,7 @@ return function(Shared)
                 return
             end
 
-            -- 3. Freecam Mode
+            -- 4. Freecam Mode
             if Shared.Flags["FreecamEnabled"] then
                 camera.CameraType = Enum.CameraType.Scriptable
                 if not freecamPos then

@@ -416,7 +416,7 @@ return function(Shared)
     -- ── THEMED PLAYER PROFILE POPUP CARD ────────────────────────
     local profileCard = Instance.new("Frame")
     profileCard.Name = "Fih_PlayerProfileCard"
-    profileCard.Size = UDim2.new(0, 220, 0, 255)
+    profileCard.Size = UDim2.new(0, 220, 0, 285)
     profileCard.Position = UDim2.new(1, -475, 0, 48)
     profileCard.BackgroundColor3 = C.BodyBg
     profileCard.BackgroundTransparency = 0.15
@@ -553,7 +553,7 @@ return function(Shared)
         pcInfo.Text = "Age: " .. tostring(plr.AccountAge) .. "d | ID: " .. tostring(plr.UserId)
         pcAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. tostring(plr.UserId) .. "&width=150&height=150&format=png"
 
-        local cardH = 255
+        local cardH = 285
         local cardW = 220
         local cam = workspace.CurrentCamera
         local viewportH = (cam and cam.ViewportSize.Y) or 800
@@ -575,23 +575,42 @@ return function(Shared)
         end)
     end
 
-    makePcBtn("👁  First-Person POV View", 76, function()
+    makePcBtn("👁  First-Person POV View", 74, function()
         if currentSelectedPlr and currentSelectedPlr.Character then
             local camera = workspace.CurrentCamera
             local tHead = currentSelectedPlr.Character:FindFirstChild("Head") or currentSelectedPlr.Character:FindFirstChild("HumanoidRootPart")
             if tHead then
                 Shared.Flags["SpyFirstPersonPOV"] = true
+                Shared.Flags["SpyShoulderPOV"] = false
                 if Shared.Toggles["SpyFirstPersonPOV"] and Shared.Toggles["SpyFirstPersonPOV"].SetToggle then
                     Shared.Toggles["SpyFirstPersonPOV"].SetToggle(true, true)
                 end
                 camera.CameraType = Enum.CameraType.Scriptable
                 camera.CFrame = tHead.CFrame * CFrame.new(0, 0.2, 0)
-                sendNotification("Camera POV", "Viewing POV of @" .. currentSelectedPlr.Name, true)
+                sendNotification("Camera POV", "Viewing 1st-person POV of @" .. currentSelectedPlr.Name, true)
             end
         end
     end)
 
-    makePcBtn("🎥  Spectate Player (Orbit)", 104, function()
+    makePcBtn("🎥  3rd-Person Shoulder POV", 100, function()
+        if currentSelectedPlr and currentSelectedPlr.Character then
+            local camera = workspace.CurrentCamera
+            local tHead = currentSelectedPlr.Character:FindFirstChild("Head") or currentSelectedPlr.Character:FindFirstChild("HumanoidRootPart")
+            if tHead then
+                Shared.Flags["SpyShoulderPOV"] = true
+                Shared.Flags["SpyFirstPersonPOV"] = false
+                if Shared.Toggles["SpyShoulderPOV"] and Shared.Toggles["SpyShoulderPOV"].SetToggle then
+                    Shared.Toggles["SpyShoulderPOV"].SetToggle(true, true)
+                end
+                camera.CameraType = Enum.CameraType.Scriptable
+                local camPos = tHead.Position - (tHead.CFrame.LookVector * 9) + Vector3.new(0, 2.2, 0) + (tHead.CFrame.RightVector * 1.5)
+                camera.CFrame = CFrame.lookAt(camPos, tHead.Position + Vector3.new(0, 1.2, 0) + (tHead.CFrame.LookVector * 15))
+                sendNotification("Camera POV", "Viewing 3rd-person POV of @" .. currentSelectedPlr.Name, true)
+            end
+        end
+    end)
+
+    makePcBtn("🌐  Spectate Player (Orbit)", 126, function()
         if currentSelectedPlr and currentSelectedPlr.Character then
             local camera = workspace.CurrentCamera
             local hum = currentSelectedPlr.Character:FindFirstChildOfClass("Humanoid")
@@ -607,7 +626,7 @@ return function(Shared)
         end
     end)
 
-    makePcBtn("⚡  Teleport To Player", 132, function()
+    makePcBtn("⚡  Teleport To Player", 152, function()
         if currentSelectedPlr and currentSelectedPlr.Character then
             local pRoot = currentSelectedPlr.Character:FindFirstChild("HumanoidRootPart") or currentSelectedPlr.Character:FindFirstChild("Torso")
             local myRoot = Shared.Player and Shared.Player.Character and (Shared.Player.Character:FindFirstChild("HumanoidRootPart") or Shared.Player.Character:FindFirstChild("Torso"))
@@ -618,7 +637,7 @@ return function(Shared)
         end
     end)
 
-    makePcBtn("📋  Copy Username", 160, function()
+    makePcBtn("📋  Copy Username", 178, function()
         if currentSelectedPlr then
             local clip = setclipboard or (getgenv and getgenv().setclipboard)
             if type(clip) == "function" then
@@ -628,7 +647,7 @@ return function(Shared)
         end
     end)
 
-    makePcBtn("📋  Copy User ID", 188, function()
+    makePcBtn("📋  Copy User ID", 204, function()
         if currentSelectedPlr then
             local clip = setclipboard or (getgenv and getgenv().setclipboard)
             if type(clip) == "function" then
@@ -638,7 +657,7 @@ return function(Shared)
         end
     end)
 
-    makePcBtn("👥  Send Friend Request", 216, function()
+    makePcBtn("👥  Send Friend Request", 230, function()
         if currentSelectedPlr then
             pcall(function()
                 StarterGui:SetCore("PromptSendFriendRequest", currentSelectedPlr)
