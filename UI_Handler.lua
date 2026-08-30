@@ -2236,6 +2236,103 @@ return function(Shared)
         end)
         if Shared.AddCleanup then Shared.AddCleanup(fakeLagConn) end
 
+        -- ── WALK FLING ENGINE (TOUCH / CONTACT FLING) ────────────────
+        makeToggle(playerCols.Right, "Walk Fling (Touch Fling)", "WalkFling", 7, function(state) end)
+        makeSlider(playerCols.Right, "Fling Force", "FlingPower", 1000, 50000, 15000, 8, function(val) end)
+
+        local flingSavedVelocity = Vector3.zero
+        local flingActiveContact = false
+
+        local walkFlingHeartbeat = RunService.Heartbeat:Connect(function()
+            if not Shared.Flags["WalkFling"] then return end
+            local root = getLocalRoot()
+            local hum = getLocalHum()
+            local char = localPlr and localPlr.Character
+            if not (root and hum and hum.Health > 0 and char) then return end
+
+            -- Detect proximity to other players
+            local nearbyPlayer = false
+            local power = Shared.Flags["FlingPower"] or 15000
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= localPlr and p.Character then
+                    local pRoot = p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Torso")
+                    local pHum = p.Character:FindFirstChildOfClass("Humanoid")
+                    if pRoot and pHum and pHum.Health > 0 then
+                        local dist = (root.Position - pRoot.Position).Magnitude
+                        if dist <= 7.5 then
+                            nearbyPlayer = true
+                            break
+                        end
+                    end
+                end
+            end
+
+            flingActiveContact = nearbyPlayer
+            if nearbyPlayer then
+                flingSavedVelocity = root.AssemblyLinearVelocity
+                -- Inject massive angular and linear velocity on network replication step
+                root.AssemblyLinearVelocity = Vector3.new(root.CFrame.LookVector.X * power, power, root.CFrame.LookVector.Z * power)
+                root.AssemblyAngularVelocity = Vector3.new(0, 999999, 0)
+            end
+        end)
+
+        local walkFlingRender = RunService.RenderStepped:Connect(function()
+            if not Shared.Flags["WalkFling"] then return end
+            local root = getLocalRoot()
+            if root and flingActiveContact then
+                -- Instantly restore clean local velocity so player walks completely normally
+                root.AssemblyLinearVelocity = flingSavedVelocity
+                root.AssemblyAngularVelocity = Vector3.zero
+            end
+        end)
+        if Shared.AddCleanup then
+            Shared.AddCleanup(walkFlingHeartbeat)
+            Shared.AddCleanup(walkFlingRender)
+        end
+
+        -- ── ANTI-FLING PROTECTION (VELOCITY & COLLISION SHIELD) ─────
+        makeToggle(playerCols.Right, "Anti-Fling Shield", "AntiFling", 9, function(state)
+            local hum = getLocalHum()
+            if hum then
+                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, not state)
+                hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, not state)
+            end
+        end)
+
+        local antiFlingConn = RunService.Stepped:Connect(function()
+            if not Shared.Flags["AntiFling"] then return end
+            local char = localPlr and localPlr.Character
+            local root = getLocalRoot()
+            local hum = getLocalHum()
+            if not (char and root and hum and hum.Health > 0) then return end
+
+            -- 1. Strip collision with other player characters
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= localPlr and p.Character then
+                    for _, pPart in ipairs(p.Character:GetDescendants()) do
+                        if pPart:IsA("BasePart") and pPart.CanCollide then
+                            pPart.CanCollide = false
+                        end
+                    end
+                end
+            end
+
+            -- 2. Clamp extreme external velocities while not flying
+            if not Shared.Flags["Flight"] then
+                local linVel = root.AssemblyLinearVelocity
+                local angVel = root.AssemblyAngularVelocity
+                if linVel.Magnitude > 100 or angVel.Magnitude > 50 then
+                    root.AssemblyLinearVelocity = Vector3.new(
+                        math.clamp(linVel.X, -50, 50),
+                        math.clamp(linVel.Y, -80, 50),
+                        math.clamp(linVel.Z, -50, 50)
+                    )
+                    root.AssemblyAngularVelocity = Vector3.zero
+                end
+            end
+        end)
+        if Shared.AddCleanup then Shared.AddCleanup(antiFlingConn) end
+
         -- Speed/Jump render step enforcer
         local renderStatConn = RunService.RenderStepped:Connect(function()
             local hum = getLocalHum()
