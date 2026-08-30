@@ -281,25 +281,25 @@ return function(Shared)
         Shared.AddCleanup(charAddedConn)
     end
 
-    -- UI Integration with Menu-Clean
-    if Shared.Tabs and Shared.Tabs["Player"] then
-        local quad = Shared.Tabs["Player"]:FindFirstChild("QuadGrid")
-        local leftCol = quad and quad:FindFirstChild("LeftCol")
-        local rightCol = quad and quad:FindFirstChild("RightCol")
-        local targetParent = leftCol or Shared.Tabs["Player"]
+    -- UI Integration with Menu-Clean ("Run N Hide" Tab)
+    local targetTab = (Shared.Tabs and Shared.Tabs["Run N Hide"]) or (Shared.Tabs and Shared.Tabs["Player"])
+    if targetTab then
+        local quad = targetTab:FindFirstChild("QuadGrid")
+        local leftCol = (Shared.QuadCols and Shared.QuadCols["Run N Hide"] and Shared.QuadCols["Run N Hide"].Left) or (quad and quad:FindFirstChild("LeftCol")) or targetTab
+        local rightCol = (Shared.QuadCols and Shared.QuadCols["Run N Hide"] and Shared.QuadCols["Run N Hide"].Right) or (quad and quad:FindFirstChild("RightCol")) or targetTab
 
         if Shared.MakeSection then
-            Shared.MakeSection(targetParent, "Weapon & Combat Mods", 20)
+            Shared.MakeSection(leftCol, "Weapon Mechanisms", 1)
         end
 
         if Shared.MakeToggle then
-            Shared.MakeToggle(targetParent, "Quick Reload & Instant Rack", "CombatQuickReload", 21, function(val)
+            Shared.MakeToggle(leftCol, "Quick Reload & Instant Rack", "CombatQuickReload", 2, function(val)
                 state.QuickReload = val
                 state.AutoChamber = val
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(targetParent, "Complete Auto (All Guns)", "CombatCompleteAuto", 22, function(val)
+            Shared.MakeToggle(leftCol, "Complete Auto (All Guns)", "CombatCompleteAuto", 3, function(val)
                 state.CompleteAuto = val
                 if val then
                     state.SemiAutoForce = false
@@ -310,7 +310,7 @@ return function(Shared)
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(targetParent, "The Semi-Auto Force", "CombatSemiAuto", 23, function(val)
+            Shared.MakeToggle(leftCol, "The Semi-Auto Force", "CombatSemiAuto", 4, function(val)
                 state.SemiAutoForce = val
                 if val then
                     state.CompleteAuto = false
@@ -321,7 +321,7 @@ return function(Shared)
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(targetParent, "The Burst Rounds", "CombatBurstMode", 24, function(val)
+            Shared.MakeToggle(leftCol, "The Burst Rounds", "CombatBurstMode", 5, function(val)
                 state.BurstMode = val
                 if val then
                     state.CompleteAuto = false
@@ -332,36 +332,54 @@ return function(Shared)
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(targetParent, "Zero Recoil", "CombatNoRecoil", 25, function(val)
+            Shared.MakeToggle(leftCol, "Zero Recoil", "CombatNoRecoil", 6, function(val)
                 state.NoRecoil = val
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(targetParent, "Rapid Fire Rate Overclock", "CombatFastFire", 26, function(val)
+            Shared.MakeToggle(leftCol, "Rapid Fire Rate Overclock", "CombatFastFire", 7, function(val)
                 state.FastFireRate = val
                 updateWeaponConfigs()
             end)
         end
 
+        if Shared.MakeSection then
+            Shared.MakeSection(rightCol, "Firing Controls & Tuning", 1)
+        end
+
         if Shared.MakeSlider then
-            Shared.MakeSlider(targetParent, "Burst Shot Count", "CombatBurstCount", 2, 10, 3, 27, function(val)
+            Shared.MakeSlider(rightCol, "Burst Shot Count", "CombatBurstCount", 2, 10, 3, 2, function(val)
                 state.BurstCount = val
             end)
 
-            Shared.MakeSlider(targetParent, "Overclock Delay (ms)", "CombatFireDelay", 10, 250, 50, 28, function(val)
+            Shared.MakeSlider(rightCol, "Overclock Delay (ms)", "CombatFireDelay", 10, 250, 50, 3, function(val)
                 state.CustomFireRate = val / 1000
                 updateWeaponConfigs()
             end)
         end
 
+        if Shared.MakeSection then
+            Shared.MakeSection(rightCol, "Quick Actions", 4)
+        end
+
         if Shared.MakeButton then
-            Shared.MakeButton(targetParent, "Force Instant Reload Current Gun", 29, function()
+            Shared.MakeButton(rightCol, "Force Instant Reload", 5, function()
                 local tool = getEquippedGun()
                 if tool then
                     executeQuickReload(tool)
-                    sendNotification("Combat", "Weapon reloaded & chambered", true)
+                    sendNotification("Run N Hide", "Weapon reloaded & chambered", true)
                 else
-                    sendNotification("Combat", "No gun equipped", false)
+                    sendNotification("Run N Hide", "No gun equipped", false)
+                end
+            end)
+
+            Shared.MakeButton(rightCol, "Chamber Equipped Weapon", 6, function()
+                local tool = getEquippedGun()
+                if tool then
+                    executeAutoChamber(tool)
+                    sendNotification("Run N Hide", "Weapon chambered", true)
+                else
+                    sendNotification("Run N Hide", "No gun equipped", false)
                 end
             end)
         end

@@ -1420,12 +1420,13 @@ return function(Shared)
     local activeTab = nil
 
     local tabDefs = {
-        {name="Menu",     order=1},
-        {name="Player",   order=2},
-        {name="Visuals",  order=3},
-        {name="Spy",      order=4},
-        {name="Music",    order=5},
-        {name="Keybinds", order=6},
+        {name="Menu",       order=1},
+        {name="Player",     order=2},
+        {name="Visuals",    order=3},
+        {name="Run N Hide", order=4},
+        {name="Spy",        order=5},
+        {name="Music",      order=6},
+        {name="Keybinds",   order=7},
     }
 
     local function switchTab(name)
@@ -1523,6 +1524,10 @@ return function(Shared)
         Tabs[def.name] = tabFrame; TabBtns[def.name] = btn
         btn.MouseButton1Click:Connect(function() switchTab(def.name) end)
     end
+    Shared.Tabs     = Tabs
+    Shared.TabBtns  = TabBtns
+    Shared.QuadCols = QuadCols
+    Shared.SwitchTab = switchTab
 
     -- ── FACTORY BUILDERS WITH HOVER & THEME SUPPORT ──────────────
     local function makeSection(parent, labelText, order)
