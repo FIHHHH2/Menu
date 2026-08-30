@@ -1392,7 +1392,7 @@ return function(Shared)
     local activeTab = nil
 
     local tabDefs = {
-        {name="Main",     order=1},
+        {name="Display",  order=1},
         {name="Music",    order=2},
         {name="Keybinds", order=3},
     }
@@ -1462,28 +1462,26 @@ return function(Shared)
         local tLayout = Instance.new("UIListLayout")
         tLayout.SortOrder = Enum.SortOrder.LayoutOrder; tLayout.Padding = UDim.new(0,6); tLayout.Parent = tabFrame
 
-        if def.name ~= "Main" then
-            local quadFrame = Instance.new("Frame")
-            quadFrame.Name = "QuadGrid"; quadFrame.Size = UDim2.new(1, 0, 0, 0)
-            quadFrame.AutomaticSize = Enum.AutomaticSize.Y; quadFrame.BackgroundTransparency = 1
-            quadFrame.LayoutOrder = 2; quadFrame.Parent = tabFrame
+        local quadFrame = Instance.new("Frame")
+        quadFrame.Name = "QuadGrid"; quadFrame.Size = UDim2.new(1, 0, 0, 0)
+        quadFrame.AutomaticSize = Enum.AutomaticSize.Y; quadFrame.BackgroundTransparency = 1
+        quadFrame.LayoutOrder = 1; quadFrame.Parent = tabFrame
 
-            local leftCol = Instance.new("Frame")
-            leftCol.Name = "LeftCol"; leftCol.Size = UDim2.new(0.5, -4, 0, 0)
-            leftCol.Position = UDim2.new(0, 0, 0, 0); leftCol.AutomaticSize = Enum.AutomaticSize.Y
-            leftCol.BackgroundTransparency = 1; leftCol.Parent = quadFrame
-            local lLayout = Instance.new("UIListLayout")
-            lLayout.SortOrder = Enum.SortOrder.LayoutOrder; lLayout.Padding = UDim.new(0,6); lLayout.Parent = leftCol
+        local leftCol = Instance.new("Frame")
+        leftCol.Name = "LeftCol"; leftCol.Size = UDim2.new(0.5, -4, 0, 0)
+        leftCol.Position = UDim2.new(0, 0, 0, 0); leftCol.AutomaticSize = Enum.AutomaticSize.Y
+        leftCol.BackgroundTransparency = 1; leftCol.Parent = quadFrame
+        local lLayout = Instance.new("UIListLayout")
+        lLayout.SortOrder = Enum.SortOrder.LayoutOrder; lLayout.Padding = UDim.new(0,6); lLayout.Parent = leftCol
 
-            local rightCol = Instance.new("Frame")
-            rightCol.Name = "RightCol"; rightCol.Size = UDim2.new(0.5, -4, 0, 0)
-            rightCol.Position = UDim2.new(0.5, 4, 0, 0); rightCol.AutomaticSize = Enum.AutomaticSize.Y
-            rightCol.BackgroundTransparency = 1; rightCol.Parent = quadFrame
-            local rLayout = Instance.new("UIListLayout")
-            rLayout.SortOrder = Enum.SortOrder.LayoutOrder; rLayout.Padding = UDim.new(0,6); rLayout.Parent = rightCol
+        local rightCol = Instance.new("Frame")
+        rightCol.Name = "RightCol"; rightCol.Size = UDim2.new(0.5, -4, 0, 0)
+        rightCol.Position = UDim2.new(0.5, 4, 0, 0); rightCol.AutomaticSize = Enum.AutomaticSize.Y
+        rightCol.BackgroundTransparency = 1; rightCol.Parent = quadFrame
+        local rLayout = Instance.new("UIListLayout")
+        rLayout.SortOrder = Enum.SortOrder.LayoutOrder; rLayout.Padding = UDim.new(0,6); rLayout.Parent = rightCol
 
-            QuadCols[def.name] = {Left = leftCol, Right = rightCol}
-        end
+        QuadCols[def.name] = {Left = leftCol, Right = rightCol}
 
         if def.name == "Music" then
             btn.Visible = (Shared.Flags["EnableMusicTab"] == true)
@@ -1492,39 +1490,6 @@ return function(Shared)
         Tabs[def.name] = tabFrame; TabBtns[def.name] = btn
         btn.MouseButton1Click:Connect(function() switchTab(def.name) end)
     end
-
-    -- MAIN BANNER
-    local mainTab = Tabs["Main"]
-    local logoBox = Instance.new("Frame")
-    logoBox.Size = UDim2.new(1, 0, 0, 76); logoBox.BackgroundColor3 = C.BannerBg
-    logoBox.BackgroundTransparency = 0.35
-    logoBox.BorderSizePixel = 1; logoBox.BorderColor3 = C.WinBorder
-    logoBox.LayoutOrder = 1; logoBox.Parent = mainTab
-    registerThemed(logoBox, { BackgroundColor3 = "BannerBg", BorderColor3 = "WinBorder" })
-
-    local bannerGrad = Instance.new("UIGradient")
-    bannerGrad.Name = "BannerGradient"
-    bannerGrad.Rotation = 45
-    bannerGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, C.BannerGradTop or Color3.fromRGB(26, 38, 62)),
-        ColorSequenceKeypoint.new(1, C.BannerGradBot or Color3.fromRGB(14, 18, 26))
-    })
-    bannerGrad.Parent = logoBox
-
-    local logoText = Instance.new("TextLabel")
-    logoText.Size = UDim2.new(1,0,0,46); logoText.Position = UDim2.new(0,0,0,4)
-    logoText.BackgroundTransparency = 1; logoText.Text = "Fih Ui"
-    logoText.TextColor3 = C.BannerTitle; logoText.Font = Enum.Font.ArimoBold
-    logoText.TextSize = 40; logoText.TextXAlignment = Enum.TextXAlignment.Center; logoText.Parent = logoBox
-    registerThemed(logoText, { TextColor3 = "BannerTitle" })
-
-    local logoSub = Instance.new("TextLabel")
-    logoSub.Size = UDim2.new(1,0,0,18); logoSub.Position = UDim2.new(0,0,0,50)
-    logoSub.BackgroundTransparency = 1
-    logoSub.Text = "Windows XP / IE7 Modular Engine  |  ] to Toggle"
-    logoSub.TextColor3 = C.BannerSub; logoSub.Font = Enum.Font.Code
-    logoSub.TextSize = 11; logoSub.TextXAlignment = Enum.TextXAlignment.Center; logoSub.Parent = logoBox
-    registerThemed(logoSub, { TextColor3 = "BannerSub" })
 
     -- ── FACTORY BUILDERS WITH HOVER & THEME SUPPORT ──────────────
     local function makeSection(parent, labelText, order)
@@ -1814,6 +1779,95 @@ return function(Shared)
         end)
     end
 
+    -- DISPLAY TAB (Pure UI Elements & Component Showcase)
+    local dispCols = QuadCols["Display"]
+    if dispCols then
+        -- Left Column
+        makeSection(dispCols.Left, "Toggle & Checkbox Components", 1)
+        makeToggle(dispCols.Left, "Smooth Window Transitions", "SmoothAnimations", 2, function(state)
+            Shared.Flags["SmoothAnimations"] = state
+        end)
+        makeToggle(dispCols.Left, "Aero Glass Window Borders", "AeroGlassBorder", 3, function(state)
+            Shared.Flags["AeroGlassBorder"] = state
+            if ScreenGui and ScreenGui:FindFirstChild("IE7_Menu") then
+                local mainFrame = ScreenGui.IE7_Menu:FindFirstChild("MainFrame")
+                if mainFrame then mainFrame.BorderSizePixel = state and 2 or 1 end
+            end
+        end)
+        makeToggle(dispCols.Left, "Interface Click Sounds", "InterfaceSounds", 4, function(state)
+            Shared.Flags["InterfaceSounds"] = state
+        end)
+        makeToggle(dispCols.Left, "Showcase State Switch", "DemoStateSwitch", 5, function(state)
+            Shared.Flags["DemoStateSwitch"] = state
+        end)
+
+        makeSection(dispCols.Left, "Value Sliders & Gauges", 10)
+        makeSlider(dispCols.Left, "Interface Scale Meter (%)", "InterfaceScale", 75, 125, 100, 11, function(val)
+            Shared.Flags["InterfaceScale"] = val
+        end)
+        makeSlider(dispCols.Left, "Animation Speed (ms)", "DemoAnimSpeed", 50, 500, 180, 12, function(val)
+            Shared.Flags["DemoAnimSpeed"] = val
+        end)
+        makeSlider(dispCols.Left, "Accent Color Saturation", "DemoSaturation", 0, 100, 75, 13, function(val)
+            Shared.Flags["DemoSaturation"] = val
+        end)
+
+        -- Right Column
+        makeSection(dispCols.Right, "Interactive Buttons", 1)
+        makeButton(dispCols.Right, "[ 🖱 Standard Aero Button ]", 2, function()
+            sendNotification("UI Showcase", "Aero Button Click Triggered", true)
+        end)
+        makeButton(dispCols.Right, "[ 🔔 Test Notification Toast ]", 3, function()
+            sendNotification("Notification Engine", "Windows XP Aero Toast Display", true)
+        end)
+        makeButton(dispCols.Right, "[ 🔄 Reset Window Positions ]", 4, function()
+            if ScreenGui and ScreenGui:FindFirstChild("IE7_Menu") then
+                local mainFrame = ScreenGui.IE7_Menu:FindFirstChild("MainFrame")
+                if mainFrame then mainFrame.Position = UDim2.new(0.5, -290, 0.5, -200) end
+            end
+            local lb = ScreenGui and ScreenGui:FindFirstChild("Fih_CustomLeaderboard")
+            if lb then lb.Position = UDim2.new(1, -242, 0, 48) end
+            local chat = ScreenGui and ScreenGui:FindFirstChild("Fih_CustomChat")
+            if chat then chat.Position = UDim2.new(0, 16, 0, 48) end
+            local hud = ScreenGui and ScreenGui:FindFirstChild("Fih_BottomHUD")
+            if hud then hud.Position = UDim2.new(0.5, -165, 1, -115) end
+            sendNotification("UI Engine", "All window positions reset to defaults", true)
+        end)
+
+        makeSection(dispCols.Right, "Text Input Fields", 10)
+        local demoInputBox = Instance.new("TextBox")
+        demoInputBox.Name = "DemoTextInput"
+        demoInputBox.Size = UDim2.new(1, 0, 0, 24)
+        demoInputBox.BackgroundColor3 = C.BodyBg
+        demoInputBox.BorderSizePixel = 1
+        demoInputBox.BorderColor3 = C.WinBorder
+        demoInputBox.Text = ""
+        demoInputBox.PlaceholderText = "Type display text here..."
+        demoInputBox.TextColor3 = C.BtnText
+        demoInputBox.PlaceholderColor3 = Color3.fromRGB(130, 140, 155)
+        demoInputBox.Font = Enum.Font.Code
+        demoInputBox.TextSize = 11
+        demoInputBox.LayoutOrder = 11
+        demoInputBox.Parent = dispCols.Right
+        registerThemed(demoInputBox, { BackgroundColor3 = "BodyBg", TextColor3 = "BtnText", BorderColor3 = "WinBorder" })
+
+        local demoSearchBox = Instance.new("TextBox")
+        demoSearchBox.Name = "DemoSearchInput"
+        demoSearchBox.Size = UDim2.new(1, 0, 0, 24)
+        demoSearchBox.BackgroundColor3 = C.BodyBg
+        demoSearchBox.BorderSizePixel = 1
+        demoSearchBox.BorderColor3 = C.WinBorder
+        demoSearchBox.Text = ""
+        demoSearchBox.PlaceholderText = "Search components (Display)..."
+        demoSearchBox.TextColor3 = C.BtnText
+        demoSearchBox.PlaceholderColor3 = Color3.fromRGB(130, 140, 155)
+        demoSearchBox.Font = Enum.Font.Code
+        demoSearchBox.TextSize = 11
+        demoSearchBox.LayoutOrder = 12
+        demoSearchBox.Parent = dispCols.Right
+        registerThemed(demoSearchBox, { BackgroundColor3 = "BodyBg", TextColor3 = "BtnText", BorderColor3 = "WinBorder" })
+    end
+
     task.delay(0.6, function() loadConfig(); buildKeybindsUI() end)
 
     -- SETTINGS DRAWER POPULATION (General, Performance, Audio & Camera)
@@ -1854,7 +1908,7 @@ return function(Shared)
             musicBtn.Visible = state
         end
         if not state and activeTab == "Music" then
-            switchTab("Main")
+            switchTab("Display")
         end
         local hud = ScreenGui:FindFirstChild("Fih_BottomHUD")
         if not state and hud then
@@ -2053,7 +2107,7 @@ return function(Shared)
     Shared.StyleRobloxCoreUI = styleRobloxCoreUI
     Shared.RestoreDefaultRobloxCoreUI = restoreDefaultRobloxCoreUI
 
-    switchTab("Main")
+    switchTab("Display")
     print("[UI_Handler] Loaded -- Dark Mode Engine, Smooth Transitions, Hover Effects Active")
 end
 
