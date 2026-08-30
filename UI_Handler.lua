@@ -2378,7 +2378,7 @@ return function(Shared)
             local char = localPlr and localPlr.Character
             if not char then return end
 
-            if Shared.Flags["NoFallDamage"] or Shared.Flags["FightFloat"] or Shared.Flags["WalkFling"] then
+            if Shared.Flags["NoFallDamage"] or Shared.Flags["FightFloat"] or Shared.Flags["WalkFling"] or Shared.Flags["SilentFling"] then
                 neutralizeFallDamageScripts(char)
             end
 
@@ -2402,6 +2402,74 @@ return function(Shared)
             end
         end)
         if Shared.AddCleanup then Shared.AddCleanup(fallDamageConn) end
+
+        -- ── SILENT FLING ENGINE (DESYNC AURA / INVISIBLE FLING) ──────
+        makeToggle(playerCols.Right, "Silent Fling (Aura)", "SilentFling", 11, function(state) end)
+        makeSlider(playerCols.Right, "Silent Fling Radius", "SilentFlingRadius", 10, 200, 45, 12, function(val) end)
+
+        local silentSavedCFrame = CFrame.identity
+        local silentSavedLinVel = Vector3.zero
+        local silentSavedAngVel = Vector3.zero
+        local silentActive = false
+
+        local silentFlingHeartbeat = RunService.Heartbeat:Connect(function()
+            if not Shared.Flags["SilentFling"] then return end
+            local power = Shared.Flags["FlingPower"] or 25000
+            if power <= 0 then return end
+
+            local root = getLocalRoot()
+            local hum = getLocalHum()
+            local char = localPlr and localPlr.Character
+            if not (root and hum and hum.Health > 0 and char) then return end
+
+            neutralizeFallDamageScripts(char)
+
+            local radius = Shared.Flags["SilentFlingRadius"] or 45
+            local targetRoot = nil
+            local closestDist = radius
+
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= localPlr and p.Character then
+                    local pRoot = p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Torso")
+                    local pHum = p.Character:FindFirstChildOfClass("Humanoid")
+                    if pRoot and pHum and pHum.Health > 0 then
+                        local dist = (root.Position - pRoot.Position).Magnitude
+                        if dist <= closestDist then
+                            closestDist = dist
+                            targetRoot = pRoot
+                        end
+                    end
+                end
+            end
+
+            if targetRoot then
+                silentSavedCFrame = root.CFrame
+                silentSavedLinVel = root.AssemblyLinearVelocity
+                silentSavedAngVel = root.AssemblyAngularVelocity
+                silentActive = true
+
+                -- Desync teleport onto target on physics replication step
+                root.CFrame = targetRoot.CFrame * CFrame.new(0, 0.2, 0)
+                root.AssemblyAngularVelocity = Vector3.new(0, power * 30, 0)
+                root.AssemblyLinearVelocity = Vector3.new(0, 50, 0)
+            end
+        end)
+
+        local silentFlingRender = RunService.RenderStepped:Connect(function()
+            if not Shared.Flags["SilentFling"] then return end
+            local root = getLocalRoot()
+            if root and silentActive then
+                -- Instantly restore local client position so you never appear to move on your screen
+                root.CFrame = silentSavedCFrame
+                root.AssemblyLinearVelocity = silentSavedLinVel
+                root.AssemblyAngularVelocity = silentSavedAngVel
+                silentActive = false
+            end
+        end)
+        if Shared.AddCleanup then
+            Shared.AddCleanup(silentFlingHeartbeat)
+            Shared.AddCleanup(silentFlingRender)
+        end
 
         -- Speed/Jump render step enforcer
         local renderStatConn = RunService.RenderStepped:Connect(function()
