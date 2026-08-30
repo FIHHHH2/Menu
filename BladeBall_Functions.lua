@@ -3,11 +3,12 @@
 -- Complete production suite with latency compensation, clash detection, ball trajectory ESP & auto-curve
 
 return function(Shared)
-    local Players           = Shared.Services.Players
-    local RunService        = Shared.Services.RunService
-    local UserInput         = Shared.Services.UserInput
-    local TweenService      = Shared.Services.TweenService
-    local Workspace         = Shared.Services.Workspace
+    local Services          = Shared.Services or {}
+    local Players           = Services.Players or game:GetService("Players")
+    local RunService        = Services.RunService or game:GetService("RunService")
+    local UserInput         = Services.UserInput or game:GetService("UserInputService")
+    local TweenService      = Services.TweenService or game:GetService("TweenService")
+    local Workspace         = Services.Workspace or workspace
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local VirtualInputManager = game:GetService("VirtualInputManager")
 

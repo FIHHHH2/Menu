@@ -2,12 +2,13 @@
 -- Natural Disaster Survival Ultimate Feature Suite (Aligned with Native Menu Styling)
 
 return function(Shared)
-    local Players      = Shared.Services.Players
-    local RunService   = Shared.Services.RunService
-    local UserInput    = Shared.Services.UserInput
-    local TweenService = Shared.Services.TweenService
-    local Workspace    = Shared.Services.Workspace
-    local Lighting     = Shared.Services.Workspace.Parent:GetService("Lighting")
+    local Services     = Shared.Services or {}
+    local Players      = Services.Players or game:GetService("Players")
+    local RunService   = Services.RunService or game:GetService("RunService")
+    local UserInput    = Services.UserInput or game:GetService("UserInputService")
+    local TweenService = Services.TweenService or game:GetService("TweenService")
+    local Workspace    = Services.Workspace or workspace
+    local Lighting     = game:GetService("Lighting")
 
     local Player    = Shared.Player
     local Tabs      = Shared.Tabs or {}
@@ -52,7 +53,8 @@ return function(Shared)
     local activeDisaster = "Scanning..."
     local function scanDisaster()
         local detected = nil
-        local pgui = Player:FindFirstChild("PlayerGui")
+        local p = Player or Players.LocalPlayer
+        local pgui = p and (p:FindFirstChildOfClass("PlayerGui") or p:FindFirstChild("PlayerGui"))
         if pgui then
             for _, g in ipairs(pgui:GetDescendants()) do
                 if g:IsA("TextLabel") and g.Visible and g.Text ~= "" then

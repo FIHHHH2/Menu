@@ -3,11 +3,12 @@
 -- Real-Time Synced Lyrics (LRCLIB), High-Threshold 28-Bar Equalizer, Overhead Billboard, & Resizable Drag HUD
 
 return function(Shared)
-    local Http        = Shared.Services.Http
+    local Services    = Shared.Services or {}
+    local Http        = Services.Http or game:GetService("HttpService")
     local Player      = Shared.Player
-    local RunSvc      = Shared.Services.RunService
-    local UserInput   = Shared.Services.UserInput
-    local TweenSvc    = Shared.Services.TweenService
+    local RunSvc      = Services.RunService or game:GetService("RunService")
+    local UserInput   = Services.UserInput or game:GetService("UserInputService")
+    local TweenSvc    = Services.TweenService or game:GetService("TweenService")
     local MarketSvc   = game:GetService("MarketplaceService")
 
     local Tabs      = Shared.Tabs or {}

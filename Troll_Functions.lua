@@ -3,11 +3,12 @@
 -- Player Selector (< > arrows + dropdown popup), Orbit Swarm, Head Stand, Shadow Leash
 
 return function(Shared)
-    local Players      = Shared.Services.Players
-    local RunService   = Shared.Services.RunService
-    local UserInput    = Shared.Services.UserInput
-    local Workspace    = Shared.Services.Workspace
-    local TweenSvc     = Shared.Services.TweenService
+    local Services     = Shared.Services or {}
+    local Players      = Services.Players or game:GetService("Players")
+    local RunService   = Services.RunService or game:GetService("RunService")
+    local UserInput    = Services.UserInput or game:GetService("UserInputService")
+    local Workspace    = Services.Workspace or workspace
+    local TweenSvc     = Services.TweenService or game:GetService("TweenService")
 
     local Player    = Shared.Player
     local Tabs      = Shared.Tabs or {}

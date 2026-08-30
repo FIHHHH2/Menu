@@ -3,11 +3,12 @@
 -- Unrestricted Kill Aura, Non-Intrusive Silent Aim, and Sheriff Dropped Gun Beacon
 
 return function(Shared)
-    local Players      = Shared.Services.Players
-    local RunService   = Shared.Services.RunService
-    local UserInput    = Shared.Services.UserInput
-    local TweenService = Shared.Services.TweenService
-    local Workspace    = Shared.Services.Workspace
+    local Services     = Shared.Services or {}
+    local Players      = Services.Players or game:GetService("Players")
+    local RunService   = Services.RunService or game:GetService("RunService")
+    local UserInput    = Services.UserInput or game:GetService("UserInputService")
+    local TweenService = Services.TweenService or game:GetService("TweenService")
+    local Workspace    = Services.Workspace or workspace
 
     local Player    = Shared.Player
     local Tabs      = Shared.Tabs or {}

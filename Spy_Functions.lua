@@ -3,10 +3,11 @@
 -- Real-time 3rd-Person POV camera lock, Target Dossier, Player Directory, Highlight ESP, & Tactical Utilities
 
 return function(Shared)
-    local Players      = Shared.Services.Players
-    local RunService   = Shared.Services.RunService
-    local UserInput    = Shared.Services.UserInput
-    local TweenSvc     = Shared.Services.TweenService
+    local Services     = Shared.Services or {}
+    local Players      = Services.Players or game:GetService("Players")
+    local RunService   = Services.RunService or game:GetService("RunService")
+    local UserInput    = Services.UserInput or game:GetService("UserInputService")
+    local TweenSvc     = Services.TweenService or game:GetService("TweenService")
     local StarterGui   = game:GetService("StarterGui")
     local GuiService   = game:GetService("GuiService")
 

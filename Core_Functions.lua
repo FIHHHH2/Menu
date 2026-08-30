@@ -14,9 +14,11 @@ return function(Shared)
     if not ScreenGui then
         local gethui = rawget(getfenv and getfenv(0) or _G, "gethui") or (getgenv and getgenv().gethui)
         local h = (type(gethui) == "function" and gethui())
-               or Shared.Services.CoreGui
+               or (Shared.Services and Shared.Services.CoreGui)
                or (Shared.Player and Shared.Player:FindFirstChildOfClass("PlayerGui"))
-        if h then ScreenGui = h:FindFirstChild("IE7_Menu") end
+        if h and typeof(h) == "Instance" then
+            ScreenGui = h:FindFirstChild("IE7_Menu")
+        end
     end
 
     if not ScreenGui then
@@ -51,6 +53,7 @@ return function(Shared)
     end)
 
     -- ── CUSTOM WINDOWS AERO LEADERBOARD (PLAYERLIST) ─────────────
+    local playerRows = {}
     local lbScroll = nil
     local lbResizeGrip = nil
     local renderLeaderboardPlayers = nil
@@ -598,8 +601,6 @@ return function(Shared)
             end)
         end
     end)
-
-    local playerRows = {}
 
     local function createPlayerRow(plr, layoutOrder, staggerDelay)
         if playerRows[plr] and playerRows[plr].row and playerRows[plr].row.Parent then

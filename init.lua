@@ -12,28 +12,56 @@ pcall(function()
     end
 end)
 
-local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu/main"
+local BASE_URLS = {
+    "https://raw.githubusercontent.com/FIHHHH2/Menu-Clean/main/Menu",
+    "https://raw.githubusercontent.com/FIHHHH2/Menu/main"
+}
+
+-- Safe Service Initializer
+local function getService(name)
+    local ok, s = pcall(function() return game:GetService(name) end)
+    return ok and s or nil
+end
+
+local PlayersService = getService("Players") or game:GetService("Players")
+local localPlayer = PlayersService.LocalPlayer
+if not localPlayer then
+    local startTime = os.clock()
+    while not localPlayer and (os.clock() - startTime < 5) do
+        localPlayer = PlayersService.LocalPlayer
+        task.wait(0.05)
+    end
+end
 
 local function loadModule(name)
     -- Local Studio / ModuleScript direct require support (Bypasses Studio loadstring block)
-    local rep = game:GetService("ReplicatedStorage")
-    local localFolder = rep:FindFirstChild("FihMenu")
-    if localFolder and localFolder:FindFirstChild(name) then
-        local targetMod = localFolder:FindFirstChild(name)
-        if targetMod:IsA("ModuleScript") then
-            local okReq, mod = pcall(require, targetMod)
-            if okReq and type(mod) == "function" then
-                return mod
+    local rep = getService("ReplicatedStorage")
+    if rep then
+        local localFolder = rep:FindFirstChild("FihMenu")
+        if localFolder and localFolder:FindFirstChild(name) then
+            local targetMod = localFolder:FindFirstChild(name)
+            if targetMod and targetMod:IsA("ModuleScript") then
+                local okReq, mod = pcall(require, targetMod)
+                if okReq and type(mod) == "function" then
+                    return mod
+                end
             end
         end
     end
 
     -- Cache busting prevents GitHub CDN from serving stale code
-    local url = BASE_URL .. "/" .. name .. ".lua?t=" .. tostring(os.time()) .. tostring(math.random(1000, 9999))
+    local src = nil
+    for _, baseUrl in ipairs(BASE_URLS) do
+        local url = baseUrl .. "/" .. name .. ".lua?t=" .. tostring(os.time()) .. tostring(math.random(1000, 9999))
+        local ok, res = pcall(function() return game:HttpGet(url) end)
+        if ok and type(res) == "string" and #res > 0 then
+            src = res
+            break
+        end
+    end
 
-    local ok, src = pcall(function() return game:HttpGet(url) end)
-    if not ok or type(src) ~= "string" or #src == 0 then
-        warn("[Menu] HttpGet failed: " .. name .. " -> " .. tostring(src))
+    if not src then
+        warn("[Menu] HttpGet failed for module: " .. name)
         return function() end
     end
 
@@ -41,6 +69,11 @@ local function loadModule(name)
     if type(ls) ~= "function" then
         ls = _G["loadstring"]
     end
+    if type(ls) ~= "function" then
+        warn("[Menu] No valid loadstring function available for: " .. name)
+        return function() end
+    end
+
     local chunk, cerr = ls(src)
     if type(chunk) ~= "function" then
         warn("[Menu] Compile error: " .. name .. " -> " .. tostring(cerr))
@@ -121,10 +154,12 @@ local function httpRequest(opt)
     return nil
 end
 
--- Comprehensive Cleanup & Residual Purge Engine (Instantaneous, non-blocking)
+-- Comprehensive Cleanup & Residual Purge Engine
 local function purgeAllResiduals()
     local containers = {}
-    pcall(function() table.insert(containers, game:GetService("CoreGui")) end)
+    local cg = getService("CoreGui")
+    if cg then table.insert(containers, cg) end
+
     pcall(function()
         local gethui = rawget(getfenv and getfenv(0) or _G, "gethui") or (getgenv and getgenv().gethui)
         if type(gethui) == "function" then
@@ -132,49 +167,54 @@ local function purgeAllResiduals()
             if hui and not table.find(containers, hui) then table.insert(containers, hui) end
         end
     end)
+
     pcall(function()
-        local lp = game:GetService("Players").LocalPlayer
+        local lp = localPlayer or PlayersService.LocalPlayer
         if lp then
             local pg = lp:FindFirstChildOfClass("PlayerGui")
             if pg and not table.find(containers, pg) then table.insert(containers, pg) end
         end
     end)
-    pcall(function() table.insert(containers, game:GetService("Workspace")) end)
-    pcall(function()
-        if workspace.CurrentCamera and not table.find(containers, workspace.CurrentCamera) then
-            table.insert(containers, workspace.CurrentCamera)
-        end
-    end)
+
+    local ws = getService("Workspace") or workspace
+    if ws then table.insert(containers, ws) end
+
+    if ws and ws.CurrentCamera and not table.find(containers, ws.CurrentCamera) then
+        table.insert(containers, ws.CurrentCamera)
+    end
 
     for _, container in ipairs(containers) do
-        pcall(function()
-            for _, child in ipairs(container:GetChildren()) do
-                local n = child.Name
-                local isOurs = (n == "IE7_Menu" or n == "FihUi" or n == "Fih_CustomLeaderboard" or n == "Fih_CustomChat"
-                    or n == "Fih_BottomHUD" or n == "Fih_ArtworkBillboard" or n == "Fih_NotifHub" or n == "Fih_SpyWindow"
-                    or n == "Fih_TrollPanel" or n == "FihUI_ScreenGui" or n == "Fih_SongTitlePopup" or n == "Fih_GodPlatform"
-                    or n:find("^Fih_") or n:find("^ESP_") or n:find("^Chams_") or n:find("^AeroChams")
-                    or n:find("^UniversalESP") or n:find("^RoleESP") or n:find("^CoinESP") or n:find("^GunESP")
-                    or n:find("^KillAuraBox") or n:find("^BB_BallESP") or n:find("^BB_ParryZone")
-                    or n:find("^NDS_GodPlat") or n:find("^NDS_ShieldPart") or n:find("^PeerRadar"))
+        if container then
+            pcall(function()
+                for _, child in ipairs(container:GetChildren()) do
+                    if child then
+                        local n = child.Name
+                        local isOurs = (n == "IE7_Menu" or n == "FihUi" or n == "Fih_CustomLeaderboard" or n == "Fih_CustomChat"
+                            or n == "Fih_BottomHUD" or n == "Fih_ArtworkBillboard" or n == "Fih_NotifHub" or n == "Fih_SpyWindow"
+                            or n == "Fih_TrollPanel" or n == "FihUI_ScreenGui" or n == "Fih_SongTitlePopup" or n == "Fih_GodPlatform"
+                            or n:find("^Fih_") or n:find("^ESP_") or n:find("^Chams_") or n:find("^AeroChams")
+                            or n:find("^UniversalESP") or n:find("^RoleESP") or n:find("^CoinESP") or n:find("^GunESP")
+                            or n:find("^KillAuraBox") or n:find("^BB_BallESP") or n:find("^BB_ParryZone")
+                            or n:find("^NDS_GodPlat") or n:find("^NDS_ShieldPart") or n:find("^PeerRadar"))
 
-                if not isOurs and child:IsA("ScreenGui") then
-                    if child:FindFirstChild("MainFrame") or child:FindFirstChild("QuadGrid") or child:FindFirstChild("TitleBar") or child:FindFirstChild("Fih_CustomLeaderboard") or child:FindFirstChild("Fih_BottomHUD") then
-                        isOurs = true
+                        if not isOurs and child:IsA("ScreenGui") then
+                            if child:FindFirstChild("MainFrame") or child:FindFirstChild("QuadGrid") or child:FindFirstChild("TitleBar") or child:FindFirstChild("Fih_CustomLeaderboard") or child:FindFirstChild("Fih_BottomHUD") then
+                                isOurs = true
+                            end
+                        end
+
+                        if isOurs then
+                            pcall(function() child:Destroy() end)
+                        end
                     end
                 end
-
-                if isOurs then
-                    pcall(function() child:Destroy() end)
-                end
-            end
-        end)
+            end)
+        end
     end
 
     pcall(function()
-        local Players = game:GetService("Players")
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p.Character then
+        for _, p in ipairs(PlayersService:GetPlayers()) do
+            if p and p.Character then
                 for _, d in ipairs(p.Character:GetChildren()) do
                     if d:IsA("Highlight") or d:IsA("BillboardGui") or d:IsA("SurfaceGui") or d:IsA("SelectionBox") or d:IsA("BoxHandleAdornment") or d:IsA("CylinderHandleAdornment") then
                         if d.Name:find("^Fih_") or d.Name:find("^ESP_") or d.Name:find("^Chams_") or d.Name:find("^AeroChams") or d.Name:find("^BB_") or d.Name:find("^NDS_") then
@@ -195,18 +235,18 @@ purgeAllResiduals()
 
 -- Shared state table
 local Shared = {
-    Player      = game:GetService("Players").LocalPlayer,
+    Player      = localPlayer,
     Character   = nil,
     HumanoidRP  = nil,
     Services    = {
-        Players      = game:GetService("Players"),
-        RunService   = game:GetService("RunService"),
-        UserInput    = game:GetService("UserInputService"),
-        TweenService = game:GetService("TweenService"),
-        SoundService = game:GetService("SoundService"),
-        Workspace    = game:GetService("Workspace"),
-        Http         = game:GetService("HttpService"),
-        CoreGui      = game:GetService("CoreGui"),
+        Players      = PlayersService,
+        RunService   = getService("RunService") or game:GetService("RunService"),
+        UserInput    = getService("UserInputService") or game:GetService("UserInputService"),
+        TweenService = getService("TweenService") or game:GetService("TweenService"),
+        SoundService = getService("SoundService") or game:GetService("SoundService"),
+        Workspace    = getService("Workspace") or workspace,
+        Http         = getService("HttpService") or game:GetService("HttpService"),
+        CoreGui      = getService("CoreGui"),
     },
     HttpRequest = httpRequest,
     Flags       = {},
@@ -223,7 +263,7 @@ local Shared = {
         Flags               = {},
     },
     GUI         = nil,
-    Version     = "3.5.0",
+    Version     = "3.5.1",
 }
 
 local function addCleanup(item)
@@ -255,23 +295,31 @@ _G.FihUI_Cleanup = cleanupAll
 -- Config persistence (writefile / readfile if executor supports it)
 local CONFIG_FILE = "FihUi_Config.json"
 local function saveConfig()
-    if not pcall(function() writefile(CONFIG_FILE, game:GetService("HttpService"):JSONEncode(Shared.Config)) end) then end
+    pcall(function()
+        if writefile and Shared.Services.Http then
+            writefile(CONFIG_FILE, Shared.Services.Http:JSONEncode(Shared.Config))
+        end
+    end)
 end
 local function loadConfig()
-    local ok, src = pcall(function() return readfile(CONFIG_FILE) end)
-    if ok and src and #src > 2 then
-        local ok2, data = pcall(function() return game:GetService("HttpService"):JSONDecode(src) end)
-        if ok2 and type(data) == "table" then
-            for k, v in pairs(data) do
-                Shared.Config[k] = v
-            end
-            if data.Flags and type(data.Flags) == "table" then
-                for k, v in pairs(data.Flags) do
-                    Shared.Flags[k] = v
+    pcall(function()
+        if readfile and Shared.Services.Http then
+            local src = readfile(CONFIG_FILE)
+            if src and #src > 2 then
+                local data = Shared.Services.Http:JSONDecode(src)
+                if type(data) == "table" then
+                    for k, v in pairs(data) do
+                        Shared.Config[k] = v
+                    end
+                    if data.Flags and type(data.Flags) == "table" then
+                        for k, v in pairs(data.Flags) do
+                            Shared.Flags[k] = v
+                        end
+                    end
                 end
             end
         end
-    end
+    end)
 end
 pcall(loadConfig)
 Shared.SaveConfig = saveConfig
@@ -303,22 +351,29 @@ local function spotifyHTTP(opt)
 end
 Shared.SpotifyHTTP = spotifyHTTP
 
-Shared.Character  = Shared.Player.Character or Shared.Player.CharacterAdded:Wait()
-Shared.HumanoidRP = Shared.Character:WaitForChild("HumanoidRootPart")
-
-Shared.Player.CharacterAdded:Connect(function(char)
-    Shared.Character  = char
-    Shared.HumanoidRP = char:WaitForChild("HumanoidRootPart")
-end)
+-- Character and RootPart initial bind
+if Shared.Player then
+    Shared.Character = Shared.Player.Character
+    if Shared.Character then
+        Shared.HumanoidRP = Shared.Character:FindFirstChild("HumanoidRootPart") or Shared.Character:WaitForChild("HumanoidRootPart", 3)
+    end
+    Shared.Player.CharacterAdded:Connect(function(char)
+        Shared.Character  = char
+        Shared.HumanoidRP = char:WaitForChild("HumanoidRootPart", 5) or char:FindFirstChild("HumanoidRootPart")
+    end)
+end
 
 -- Game Environment Detection (Strict verification)
 local isMM2 = (game.PlaceId == 142823291 or game.GameId == 66654135 or game.PlaceId == 335132309 or game.PlaceId == 63518381)
 if not isMM2 then
     pcall(function()
-        local rep = game:GetService("ReplicatedStorage")
-        -- Only flag as MM2 if the exact Remotes.Gameplay folder exists with ShootGun
-        if rep:FindFirstChild("Remotes") and rep.Remotes:FindFirstChild("Gameplay") and rep.Remotes.Gameplay:FindFirstChild("ShootGun") then
-            isMM2 = true
+        local rep = getService("ReplicatedStorage")
+        if rep then
+            local remotes = rep:FindFirstChild("Remotes")
+            local gameplay = remotes and remotes:FindFirstChild("Gameplay")
+            if gameplay and gameplay:FindFirstChild("ShootGun") then
+                isMM2 = true
+            end
         end
     end)
 end

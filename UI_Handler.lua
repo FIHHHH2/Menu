@@ -18,18 +18,23 @@ return function(Shared)
     Shared.SaveConfig   = function() end
     Shared.LoadConfig   = function() end
 
-    local TweenService = Shared.Services.TweenService
+    local Services     = Shared.Services or {}
+    local TweenService = Services.TweenService or game:GetService("TweenService")
     local TweenSvc     = TweenService
-    local UserInput    = Shared.Services.UserInput
-    local CoreGui      = Shared.Services.CoreGui
-    local Http         = Shared.Services.Http
-    local RunService   = Shared.Services.RunService or game:GetService("RunService")
-    local Players      = Shared.Services.Players or game:GetService("Players")
+    local UserInput    = Services.UserInput or game:GetService("UserInputService")
+    local CoreGui      = Services.CoreGui
+    local Http         = Services.Http or game:GetService("HttpService")
+    local RunService   = Services.RunService or game:GetService("RunService")
+    local Players      = Services.Players or game:GetService("Players")
     local StarterGui   = game:GetService("StarterGui")
+
+    if not CoreGui then
+        pcall(function() CoreGui = game:GetService("CoreGui") end)
+    end
 
     if Shared.CleanupAll then
         pcall(Shared.CleanupAll)
-    elseif CoreGui:FindFirstChild("IE7_Menu") then
+    elseif CoreGui and CoreGui:FindFirstChild("IE7_Menu") then
         pcall(function() CoreGui:FindFirstChild("IE7_Menu"):Destroy() end)
     end
 
@@ -46,14 +51,14 @@ return function(Shared)
         local ok, h = pcall(gethui)
         if ok and h then targetParent = h end
     end
-    if not targetParent and not isStudio then
+    if not targetParent and not isStudio and CoreGui then
         local ok, _ = pcall(function() ScreenGui.Parent = CoreGui end)
         if ok and ScreenGui.Parent == CoreGui then
             targetParent = CoreGui
         end
     end
     if not targetParent then
-        local lp = Shared.Player or game:GetService("Players").LocalPlayer
+        local lp = Shared.Player or Players.LocalPlayer
         targetParent = (lp and lp:FindFirstChildOfClass("PlayerGui"))
                     or (lp and lp:WaitForChild("PlayerGui", 5))
     end
