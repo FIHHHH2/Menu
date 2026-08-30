@@ -2170,6 +2170,166 @@ return function(Shared)
             end
         end)
 
+        -- ── PLAYER POV & SPECTATE (PLAYER TAB) ───────────────────────
+        makeSection(playerCols.Left, "Player POV & Spectate", 10)
+
+        local pTabTargetCard = Instance.new("Frame")
+        pTabTargetCard.Name = "PTabTargetCard"
+        pTabTargetCard.Size = UDim2.new(1, 0, 0, 44)
+        pTabTargetCard.BackgroundColor3 = C.RowBg
+        pTabTargetCard.BackgroundTransparency = 0.35
+        pTabTargetCard.BorderSizePixel = 1
+        pTabTargetCard.BorderColor3 = C.RowBorder
+        pTabTargetCard.LayoutOrder = 11
+        pTabTargetCard.Parent = playerCols.Left
+        registerThemed(pTabTargetCard, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder" })
+
+        local pTabTargetName = Instance.new("TextLabel")
+        pTabTargetName.Name = "TargetName"
+        pTabTargetName.Size = UDim2.new(1, -12, 0, 18)
+        pTabTargetName.Position = UDim2.new(0, 6, 0, 3)
+        pTabTargetName.BackgroundTransparency = 1
+        pTabTargetName.Font = Enum.Font.Code
+        pTabTargetName.TextSize = 11
+        pTabTargetName.TextColor3 = C.Accent
+        pTabTargetName.TextXAlignment = Enum.TextXAlignment.Left
+        pTabTargetName.Text = "Target: [None]"
+        pTabTargetName.Parent = pTabTargetCard
+        registerThemed(pTabTargetName, { TextColor3 = "Accent" })
+
+        local pTabTargetInfo = Instance.new("TextLabel")
+        pTabTargetInfo.Name = "TargetInfo"
+        pTabTargetInfo.Size = UDim2.new(1, -12, 0, 16)
+        pTabTargetInfo.Position = UDim2.new(0, 6, 0, 22)
+        pTabTargetInfo.BackgroundTransparency = 1
+        pTabTargetInfo.Font = Enum.Font.Code
+        pTabTargetInfo.TextSize = 10
+        pTabTargetInfo.TextColor3 = C.BtnText
+        pTabTargetInfo.TextXAlignment = Enum.TextXAlignment.Left
+        pTabTargetInfo.Text = "Status: Idle"
+        pTabTargetInfo.Parent = pTabTargetCard
+        registerThemed(pTabTargetInfo, { TextColor3 = "BtnText" })
+
+        local selectedPTarget = nil
+        local function updatePTabTarget(p)
+            selectedPTarget = p
+            if not p then
+                pTabTargetName.Text = "Target: [None]"
+                pTabTargetInfo.Text = "Status: Idle"
+                return
+            end
+            local distStr = "--"
+            local char = p.Character
+            local myRoot = localPlr.Character and (localPlr.Character:FindFirstChild("HumanoidRootPart") or localPlr.Character:FindFirstChild("Torso"))
+            if char and myRoot then
+                local pRoot = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+                if pRoot then
+                    distStr = string.format("%dm away", math.floor((myRoot.Position - pRoot.Position).Magnitude))
+                end
+            end
+            pTabTargetName.Text = "Target: " .. p.DisplayName
+            pTabTargetInfo.Text = "@" .. p.Name .. " | " .. distStr
+        end
+
+        local pCycleRow = Instance.new("Frame")
+        pCycleRow.Name = "PCycleRow"
+        pCycleRow.Size = UDim2.new(1, 0, 0, 24)
+        pCycleRow.BackgroundTransparency = 1
+        pCycleRow.LayoutOrder = 12
+        pCycleRow.Parent = playerCols.Left
+
+        local pPrevBtn = Instance.new("TextButton")
+        pPrevBtn.Name = "PPrevBtn"
+        pPrevBtn.Size = UDim2.new(0.5, -3, 1, 0)
+        pPrevBtn.Position = UDim2.new(0, 0, 0, 0)
+        pPrevBtn.BackgroundColor3 = C.BtnBg
+        pPrevBtn.BackgroundTransparency = 0.25
+        pPrevBtn.BorderSizePixel = 1
+        pPrevBtn.BorderColor3 = C.BtnBorder
+        pPrevBtn.Font = Enum.Font.Code
+        pPrevBtn.TextSize = 11
+        pPrevBtn.TextColor3 = C.BtnText
+        pPrevBtn.Text = "< Prev Target"
+        pPrevBtn.Parent = pCycleRow
+        registerThemed(pPrevBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
+
+        local pNextBtn = Instance.new("TextButton")
+        pNextBtn.Name = "PNextBtn"
+        pNextBtn.Size = UDim2.new(0.5, -3, 1, 0)
+        pNextBtn.Position = UDim2.new(0.5, 3, 0, 0)
+        pNextBtn.BackgroundColor3 = C.BtnBg
+        pNextBtn.BackgroundTransparency = 0.25
+        pNextBtn.BorderSizePixel = 1
+        pNextBtn.BorderColor3 = C.BtnBorder
+        pNextBtn.Font = Enum.Font.Code
+        pNextBtn.TextSize = 11
+        pNextBtn.TextColor3 = C.BtnText
+        pNextBtn.Text = "Next Target >"
+        pNextBtn.Parent = pCycleRow
+        registerThemed(pNextBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
+
+        local pTargetIdx = 1
+        local function cyclePTabPlayer(delta)
+            local t = {}
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= localPlr then table.insert(t, p) end
+            end
+            if #t == 0 then updatePTabTarget(nil) return end
+            pTargetIdx = pTargetIdx + delta
+            if pTargetIdx > #t then pTargetIdx = 1 end
+            if pTargetIdx < 1 then pTargetIdx = #t end
+            updatePTabTarget(t[pTargetIdx])
+        end
+
+        pPrevBtn.MouseButton1Click:Connect(function() cyclePTabPlayer(-1) end)
+        pNextBtn.MouseButton1Click:Connect(function() cyclePTabPlayer(1) end)
+
+        makeToggle(playerCols.Left, "First-Person Target POV", "PlayerPOVMode", 13, function(state)
+            if not state then
+                camera.CameraType = Enum.CameraType.Custom
+                local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
+                if myHum then camera.CameraSubject = myHum end
+            end
+        end)
+
+        makeToggle(playerCols.Left, "Orbit Spectate Target", "PlayerOrbitSpectate", 14, function(state)
+            if not state then
+                camera.CameraType = Enum.CameraType.Custom
+                local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
+                if myHum then camera.CameraSubject = myHum end
+            end
+        end)
+
+        makeButton(playerCols.Left, "Reset Camera to Self", 15, function()
+            Shared.Flags["PlayerPOVMode"] = false
+            Shared.Flags["PlayerOrbitSpectate"] = false
+            local t1 = Shared.Toggles["PlayerPOVMode"]
+            local t2 = Shared.Toggles["PlayerOrbitSpectate"]
+            if t1 and t1.SetToggle then t1.SetToggle(false, true) end
+            if t2 and t2.SetToggle then t2.SetToggle(false, true) end
+            camera.CameraType = Enum.CameraType.Custom
+            local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
+            if myHum then camera.CameraSubject = myHum end
+            sendNotification("Camera", "Camera restored to local player", true)
+        end)
+
+        local playerPovRender = RunService.RenderStepped:Connect(function()
+            if Shared.Flags["PlayerPOVMode"] and selectedPTarget and selectedPTarget.Character then
+                local tHead = selectedPTarget.Character:FindFirstChild("Head") or selectedPTarget.Character:FindFirstChild("HumanoidRootPart") or selectedPTarget.Character:FindFirstChild("Torso")
+                if tHead then
+                    camera.CameraType = Enum.CameraType.Scriptable
+                    camera.CFrame = tHead.CFrame * CFrame.new(0, 0.2, 0)
+                end
+            elseif Shared.Flags["PlayerOrbitSpectate"] and selectedPTarget and selectedPTarget.Character then
+                local pHum = selectedPTarget.Character:FindFirstChildOfClass("Humanoid")
+                if pHum and pHum.Health > 0 then
+                    if camera.CameraSubject ~= pHum then camera.CameraSubject = pHum end
+                    if camera.CameraType ~= Enum.CameraType.Custom then camera.CameraType = Enum.CameraType.Custom end
+                end
+            end
+        end)
+        if Shared.AddCleanup then Shared.AddCleanup(playerPovRender) end
+
         -- Right Column: Physics & Exploits
         makeSection(playerCols.Right, "Physics & Exploits", 1)
 

@@ -416,7 +416,7 @@ return function(Shared)
     -- ── THEMED PLAYER PROFILE POPUP CARD ────────────────────────
     local profileCard = Instance.new("Frame")
     profileCard.Name = "Fih_PlayerProfileCard"
-    profileCard.Size = UDim2.new(0, 220, 0, 215)
+    profileCard.Size = UDim2.new(0, 220, 0, 255)
     profileCard.Position = UDim2.new(1, -475, 0, 48)
     profileCard.BackgroundColor3 = C.BodyBg
     profileCard.BackgroundTransparency = 0.15
@@ -553,7 +553,7 @@ return function(Shared)
         pcInfo.Text = "Age: " .. tostring(plr.AccountAge) .. "d | ID: " .. tostring(plr.UserId)
         pcAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. tostring(plr.UserId) .. "&width=150&height=150&format=png"
 
-        local cardH = 215
+        local cardH = 255
         local cardW = 220
         local cam = workspace.CurrentCamera
         local viewportH = (cam and cam.ViewportSize.Y) or 800
@@ -575,7 +575,50 @@ return function(Shared)
         end)
     end
 
-    makePcBtn("📋  Copy Username", 78, function()
+    makePcBtn("👁  First-Person POV View", 76, function()
+        if currentSelectedPlr and currentSelectedPlr.Character then
+            local camera = workspace.CurrentCamera
+            local tHead = currentSelectedPlr.Character:FindFirstChild("Head") or currentSelectedPlr.Character:FindFirstChild("HumanoidRootPart")
+            if tHead then
+                Shared.Flags["SpyFirstPersonPOV"] = true
+                if Shared.Toggles["SpyFirstPersonPOV"] and Shared.Toggles["SpyFirstPersonPOV"].SetToggle then
+                    Shared.Toggles["SpyFirstPersonPOV"].SetToggle(true, true)
+                end
+                camera.CameraType = Enum.CameraType.Scriptable
+                camera.CFrame = tHead.CFrame * CFrame.new(0, 0.2, 0)
+                sendNotification("Camera POV", "Viewing POV of @" .. currentSelectedPlr.Name, true)
+            end
+        end
+    end)
+
+    makePcBtn("🎥  Spectate Player (Orbit)", 104, function()
+        if currentSelectedPlr and currentSelectedPlr.Character then
+            local camera = workspace.CurrentCamera
+            local hum = currentSelectedPlr.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                Shared.Flags["SpySpectate"] = true
+                if Shared.Toggles["SpySpectate"] and Shared.Toggles["SpySpectate"].SetToggle then
+                    Shared.Toggles["SpySpectate"].SetToggle(true, true)
+                end
+                camera.CameraType = Enum.CameraType.Custom
+                camera.CameraSubject = hum
+                sendNotification("Spectator", "Spectating @" .. currentSelectedPlr.Name, true)
+            end
+        end
+    end)
+
+    makePcBtn("⚡  Teleport To Player", 132, function()
+        if currentSelectedPlr and currentSelectedPlr.Character then
+            local pRoot = currentSelectedPlr.Character:FindFirstChild("HumanoidRootPart") or currentSelectedPlr.Character:FindFirstChild("Torso")
+            local myRoot = Shared.Player and Shared.Player.Character and (Shared.Player.Character:FindFirstChild("HumanoidRootPart") or Shared.Player.Character:FindFirstChild("Torso"))
+            if pRoot and myRoot then
+                myRoot.CFrame = pRoot.CFrame * CFrame.new(0, 0, 3)
+                sendNotification("Teleport", "Teleported to @" .. currentSelectedPlr.Name, true)
+            end
+        end
+    end)
+
+    makePcBtn("📋  Copy Username", 160, function()
         if currentSelectedPlr then
             local clip = setclipboard or (getgenv and getgenv().setclipboard)
             if type(clip) == "function" then
@@ -585,7 +628,7 @@ return function(Shared)
         end
     end)
 
-    makePcBtn("📋  Copy User ID", 108, function()
+    makePcBtn("📋  Copy User ID", 188, function()
         if currentSelectedPlr then
             local clip = setclipboard or (getgenv and getgenv().setclipboard)
             if type(clip) == "function" then
@@ -595,18 +638,10 @@ return function(Shared)
         end
     end)
 
-    makePcBtn("👥  Send Friend Request", 138, function()
+    makePcBtn("👥  Send Friend Request", 216, function()
         if currentSelectedPlr then
             pcall(function()
                 StarterGui:SetCore("PromptSendFriendRequest", currentSelectedPlr)
-            end)
-        end
-    end)
-
-    makePcBtn("👁  Inspect Roblox Avatar", 168, function()
-        if currentSelectedPlr then
-            pcall(function()
-                GuiService:InspectPlayerFromUserId(currentSelectedPlr.UserId)
             end)
         end
     end)
