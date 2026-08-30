@@ -2341,12 +2341,14 @@ return function(Shared)
             local hum = getLocalHum()
             if not (char and root and hum and hum.Health > 0) then return end
 
-            -- 1. Strip collision with other player characters
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= localPlr and p.Character then
-                    for _, pPart in ipairs(p.Character:GetDescendants()) do
-                        if pPart:IsA("BasePart") and pPart.CanCollide then
-                            pPart.CanCollide = false
+            -- 1. Strip collision with other player characters only when not actively flinging
+            if not (Shared.Flags["WalkFling"] or Shared.Flags["SilentFling"]) then
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= localPlr and p.Character then
+                        for _, pPart in ipairs(p.Character:GetDescendants()) do
+                            if pPart:IsA("BasePart") and pPart.CanCollide then
+                                pPart.CanCollide = false
+                            end
                         end
                     end
                 end
@@ -2448,11 +2450,13 @@ return function(Shared)
                 silentSavedAngVel = root.AssemblyAngularVelocity
                 silentActive = true
 
-                -- Desync teleport right at the base of their feet (-1.5 studs) for guaranteed collision contact
-                local yOffset = -1.5 + (math.sin(tick() * 20) * 0.3)
-                root.CFrame = targetRoot.CFrame * CFrame.new(0, yOffset, 0)
-                root.AssemblyAngularVelocity = Vector3.new(0, power * 35, 0)
-                root.AssemblyLinearVelocity = Vector3.new(0, 100, 0)
+                -- Ensure collision box is enabled during pulse
+                root.CanCollide = true
+
+                -- Desync full body directly into target's lower/foot hitbox (-0.75 studs) on replication step
+                root.CFrame = targetRoot.CFrame * CFrame.new(0, -0.75, 0)
+                root.AssemblyAngularVelocity = Vector3.new(power * 25, power * 25, power * 25)
+                root.AssemblyLinearVelocity = Vector3.new(0, power * 2, 0)
             end
         end)
 
