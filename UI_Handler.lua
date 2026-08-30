@@ -1288,8 +1288,9 @@ return function(Shared)
     ContentArea.BackgroundColor3     = C.BodyBg
     ContentArea.BackgroundTransparency = 1
     ContentArea.BorderSizePixel      = 0
-    ContentArea.ScrollBarThickness   = 0
-    ContentArea.ScrollBarImageTransparency = 1
+    ContentArea.ScrollBarThickness   = 4
+    ContentArea.ScrollBarImageColor3 = Color3.fromRGB(100, 125, 170)
+    ContentArea.ScrollBarImageTransparency = 0.4
     ContentArea.CanvasSize           = UDim2.new(0,0,0,0)
     ContentArea.AutomaticCanvasSize  = Enum.AutomaticSize.Y
     ContentArea.ClipsDescendants     = true
@@ -1299,8 +1300,8 @@ return function(Shared)
     local CAPad = Instance.new("UIPadding")
     CAPad.PaddingTop    = UDim.new(0, 6)
     CAPad.PaddingLeft   = UDim.new(0, 6)
-    CAPad.PaddingRight  = UDim.new(0, 6)
-    CAPad.PaddingBottom = UDim.new(0, 16)
+    CAPad.PaddingRight  = UDim.new(0, 8)
+    CAPad.PaddingBottom = UDim.new(0, 20)
     CAPad.Parent        = ContentArea
 
     -- SETTINGS DRAWER

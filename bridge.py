@@ -88,31 +88,30 @@ async def _winrt_action(action):
             press_physical_media_key(action)
             return
 
+        ok = False
         if action == "next":
             ok = await session.try_skip_next_async()
-            if not ok:
-                press_physical_media_key("next")
         elif action == "prev":
             ok = await session.try_skip_previous_async()
-            if not ok:
-                press_physical_media_key("prev")
         elif action in ("playpause", "play_pause", "toggle"):
             ok = await session.try_toggle_play_pause_async()
-            if not ok:
-                press_physical_media_key("playpause")
         elif action == "play":
-            await session.try_play_async()
+            ok = await session.try_play_async()
         elif action == "pause":
-            await session.try_pause_async()
+            ok = await session.try_pause_async()
+
+        if not ok:
+            press_physical_media_key(action)
     except Exception:
         press_physical_media_key(action)
 
 def dispatch_media_command(action):
-    """Executes media command on the background event loop."""
+    """Executes media command on the background event loop, and triggers physical virtual key as instant fallback."""
     global _smtc_loop
     if _smtc_loop and _smtc_loop.is_running():
         asyncio.run_coroutine_threadsafe(_winrt_action(action), _smtc_loop)
     else:
+        press_physical_media_key(action)
         press_physical_media_key(action)
 
 async def _winrt_fetch_track():

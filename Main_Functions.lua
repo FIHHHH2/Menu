@@ -393,13 +393,14 @@ return function(Shared)
         end
     end)
 
-    MkSection(rightCol, "Camera & View", 30)
+    -- ── LEFT COLUMN: CAMERA & VIEW ─────────────────────────────────
+    MkSection(leftCol, "Camera & View", 15)
 
-    MkSlider(rightCol, "FOV", "FOV", 70, 120, 70, 31, function(val)
+    MkSlider(leftCol, "FOV", "FOV", 70, 120, 70, 16, function(val)
         if workspace.CurrentCamera then workspace.CurrentCamera.FieldOfView = val end
     end)
 
-    MkToggle(rightCol, "Full Bright", "FullBright", 32, function(state)
+    MkToggle(leftCol, "Full Bright", "FullBright", 17, function(state)
         if state then
             Lighting.Brightness = 2; Lighting.ClockTime = 14
             Lighting.FogEnd = 1e6; Lighting.GlobalShadows = false
@@ -409,8 +410,8 @@ return function(Shared)
         end
     end)
 
-    -- ── RIGHT COLUMN: UNIVERSAL ESP & CROSS-PLAYER DETECTION ──────
-    MkSection(rightCol, "Universal ESP & Peer Radar", 35)
+    -- ── LEFT COLUMN: UNIVERSAL ESP & CROSS-PLAYER DETECTION ──────
+    MkSection(leftCol, "Universal ESP & Peer Radar", 20)
 
     local peerUsers = {}          -- [UserId] = { isPeer = true, song = "", artist = "", cover = "", billboard = nil, visBars = {}, lastSeen = 0 }
     local universalESPList = {}   -- [Player] = { gui = BillboardGui, hl = Highlight, lbl = TextLabel, bg = Frame }
@@ -852,7 +853,7 @@ return function(Shared)
         end)
     end)
 
-    MkToggle(rightCol, "Cross-Player Detection (Peer Radar)", "PeerDetect", 37, function(state)
+    MkToggle(leftCol, "Cross-Player Detection (Peer Radar)", "PeerDetect", 22, function(state)
         if state then
             broadcastBeacon()
             Shared.Notify("Peer Radar", "Broadcasting & scanning for script peers...", true)
