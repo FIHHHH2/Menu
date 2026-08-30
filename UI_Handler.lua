@@ -923,11 +923,16 @@ return function(Shared)
     Shared.Notify = sendNotification
 
     -- ── MAIN WINDOW ─────────────────────────────────────────────
-    local WIN_W, WIN_H = 820, 440
+    local cam = workspace.CurrentCamera
+    local vp = (cam and cam.ViewportSize) or Vector2.new(1920, 1080)
+    local WIN_W = math.clamp(math.floor(vp.X * 0.60), 560, 780)
+    local WIN_H = math.clamp(math.floor(vp.Y * 0.60), 380, 460)
+
     local Window = Instance.new("Frame")
     Window.Name             = "Window"
+    Window.AnchorPoint      = Vector2.new(0.5, 0.5)
     Window.Size             = UDim2.new(0, WIN_W, 0, WIN_H)
-    Window.Position         = UDim2.new(0.5, -WIN_W/2, 0.5, -WIN_H/2)
+    Window.Position         = UDim2.new(0.5, 0, 0.5, 0)
     Window.BackgroundColor3 = C.BodyBg
     Window.BackgroundTransparency = 0.25
     Window.BorderSizePixel  = 2; Window.BorderColor3 = C.WinBorder
@@ -984,22 +989,40 @@ return function(Shared)
         winBtns[def.id] = b
     end
 
-    do  -- DRAG WINDOW
+    do  -- DRAG WINDOW WITH SCREEN BOUNDARY CONSTRAINTS
         local drag, ds, sp = false, nil, nil
         TitleBar.InputBegan:Connect(function(i)
             if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-                drag=true; ds=i.Position; sp=Window.Position
+                drag = true; ds = i.Position; sp = Window.Position
             end
         end)
         TitleBar.InputEnded:Connect(function(i)
             if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-                drag=false
+                drag = false
             end
         end)
         UserInput.InputChanged:Connect(function(i)
             if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
                 local d = i.Position - ds
-                Window.Position = UDim2.new(sp.X.Scale, sp.X.Offset+d.X, sp.Y.Scale, sp.Y.Offset+d.Y)
+                local curCam = workspace.CurrentCamera
+                local curVp = (curCam and curCam.ViewportSize) or Vector2.new(1920, 1080)
+                local curW = Window.AbsoluteSize.X
+                local curH = Window.AbsoluteSize.Y
+                local halfW = curW / 2
+                local halfH = curH / 2
+
+                local rawX = (sp.X.Scale * curVp.X) + sp.X.Offset + d.X
+                local rawY = (sp.Y.Scale * curVp.Y) + sp.Y.Offset + d.Y
+
+                local minX = halfW + 4
+                local maxX = math.max(curVp.X - halfW - 4, minX)
+                local minY = halfH + 4
+                local maxY = math.max(curVp.Y - halfH - 4, minY)
+
+                local clampedX = math.clamp(rawX, minX, maxX)
+                local clampedY = math.clamp(rawY, minY, maxY)
+
+                Window.Position = UDim2.new(0, clampedX, 0, clampedY)
             end
         end)
     end
@@ -1034,8 +1057,12 @@ return function(Shared)
         UserInput.InputChanged:Connect(function(i)
             if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
                 local d = i.Position - rStartPos
-                local newW = math.clamp(rStartSize.X + d.X, 520, 1600)
-                local newH = math.clamp(rStartSize.Y + d.Y, 300, 1100)
+                local curCam = workspace.CurrentCamera
+                local curVp = (curCam and curCam.ViewportSize) or Vector2.new(1920, 1080)
+                local maxW = math.max(curVp.X - 20, 480)
+                local maxH = math.max(curVp.Y - 20, 260)
+                local newW = math.clamp(rStartSize.X + d.X, 480, maxW)
+                local newH = math.clamp(rStartSize.Y + d.Y, 260, maxH)
                 Window.Size = UDim2.new(0, newW, 0, newH)
             end
         end)

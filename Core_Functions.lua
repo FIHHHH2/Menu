@@ -331,10 +331,18 @@ return function(Shared)
         UserInput.InputChanged:Connect(function(input)
             if input == dragInput and dragging then
                 local delta = input.Position - dragStart
-                lbWindow.Position = UDim2.new(
-                    startPos.X.Scale, startPos.X.Offset + delta.X,
-                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
-                )
+                local cam = workspace.CurrentCamera
+                local vp = (cam and cam.ViewportSize) or Vector2.new(1920, 1080)
+                local curW = lbWindow.AbsoluteSize.X
+                local curH = lbWindow.AbsoluteSize.Y
+
+                local rawX = (startPos.X.Scale * vp.X) + startPos.X.Offset + delta.X
+                local rawY = (startPos.Y.Scale * vp.Y) + startPos.Y.Offset + delta.Y
+
+                local clampedX = math.clamp(rawX, 4, math.max(vp.X - curW - 4, 4))
+                local clampedY = math.clamp(rawY, 4, math.max(vp.Y - curH - 4, 4))
+
+                lbWindow.Position = UDim2.new(0, clampedX, 0, clampedY)
             end
         end)
     end
@@ -1249,10 +1257,18 @@ return function(Shared)
                 local cur = UserInput:GetMouseLocation()
                 local dx  = cur.X - chatDragStart.X
                 local dy  = cur.Y - chatDragStart.Y
-                chatWindow.Position = UDim2.new(
-                    chatPosStart.X.Scale, chatPosStart.X.Offset + dx,
-                    chatPosStart.Y.Scale, chatPosStart.Y.Offset + dy
-                )
+                local cam = workspace.CurrentCamera
+                local vp = (cam and cam.ViewportSize) or Vector2.new(1920, 1080)
+                local curW = chatWindow.AbsoluteSize.X
+                local curH = chatWindow.AbsoluteSize.Y
+
+                local rawX = (chatPosStart.X.Scale * vp.X) + chatPosStart.X.Offset + dx
+                local rawY = (chatPosStart.Y.Scale * vp.Y) + chatPosStart.Y.Offset + dy
+
+                local clampedX = math.clamp(rawX, 4, math.max(vp.X - curW - 4, 4))
+                local clampedY = math.clamp(rawY, 4, math.max(vp.Y - curH - 4, 4))
+
+                chatWindow.Position = UDim2.new(0, clampedX, 0, clampedY)
             end
         end)
     end

@@ -1153,7 +1153,18 @@ return function(Shared)
             UserInput.InputChanged:Connect(function(i)
                 if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
                     local d = i.Position - ds
-                    frame.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
+                    local cam = workspace.CurrentCamera
+                    local vp = (cam and cam.ViewportSize) or Vector2.new(1920, 1080)
+                    local curW = frame.AbsoluteSize.X
+                    local curH = frame.AbsoluteSize.Y
+
+                    local rawX = (sp.X.Scale * vp.X) + sp.X.Offset + d.X
+                    local rawY = (sp.Y.Scale * vp.Y) + sp.Y.Offset + d.Y
+
+                    local clampedX = math.clamp(rawX, 4, math.max(vp.X - curW - 4, 4))
+                    local clampedY = math.clamp(rawY, 4, math.max(vp.Y - curH - 4, 4))
+
+                    frame.Position = UDim2.new(0, clampedX, 0, clampedY)
                 end
             end)
         end
