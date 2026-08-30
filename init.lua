@@ -358,6 +358,8 @@ loadModule("UI_Handler")(Shared)
 task.wait(0.01)
 loadModule("Core_Functions")(Shared)
 task.wait(0.01)
+loadModule("Main_Functions")(Shared)
+task.wait(0.01)
 loadModule("Music_Handler")(Shared)
 
 return Shared

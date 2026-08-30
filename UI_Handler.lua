@@ -1392,8 +1392,9 @@ return function(Shared)
     local activeTab = nil
 
     local tabDefs = {
-        {name="Music",    order=1},
-        {name="Keybinds", order=2},
+        {name="Main",     order=1},
+        {name="Music",    order=2},
+        {name="Keybinds", order=3},
     }
 
     local function switchTab(name)
@@ -2049,7 +2050,7 @@ return function(Shared)
     Shared.StyleRobloxCoreUI = styleRobloxCoreUI
     Shared.RestoreDefaultRobloxCoreUI = restoreDefaultRobloxCoreUI
 
-    switchTab("Music")
+    switchTab("Main")
     print("[UI_Handler] Loaded -- Dark Mode Engine, Smooth Transitions, Hover Effects Active")
 end
 
