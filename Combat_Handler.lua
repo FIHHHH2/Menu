@@ -1,5 +1,5 @@
 -- Combat_Handler.lua
--- Demise Gun Engine & Combat Extension Module
+-- Demise Gun Engine, Stamina Reduction & Combat Extension Module
 -- Compatible with Menu-Clean (Shared) and Standalone Execution
 
 return function(Shared)
@@ -13,22 +13,26 @@ return function(Shared)
     local localPlayer = Shared.Player or Players.LocalPlayer
     local camera = workspace.CurrentCamera
 
-    -- Resolve Demise Gun System Modules & Packets
+    -- Resolve Demise Gun System & Movement Modules
     local gunSystemFolder = ReplicatedStorage:WaitForChild("GunSystem", 5)
     local modulesFolder = ReplicatedStorage:WaitForChild("Modules", 5)
 
     local gunsDataModule = gunSystemFolder and gunSystemFolder:FindFirstChild("Data") and gunSystemFolder.Data:FindFirstChild("Guns")
     local packetsModule = modulesFolder and modulesFolder:FindFirstChild("Data") and modulesFolder.Data:FindFirstChild("Packets")
+    local configModule = modulesFolder and modulesFolder:FindFirstChild("Data") and modulesFolder.Data:FindFirstChild("Config")
+    local muzzleLib = gunSystemFolder and gunSystemFolder:FindFirstChild("Libraries") and gunSystemFolder.Libraries:FindFirstChild("Muzzle")
 
     local Guns = gunsDataModule and require(gunsDataModule) or nil
     local Packets = packetsModule and require(packetsModule) or nil
+    local Config = configModule and require(configModule) or nil
+    local Muzzle = muzzleLib and require(muzzleLib) or nil
 
     if not Guns or not Packets then
         warn("[Combat_Handler] Failed to locate Demise GunSystem modules or Packets.")
         return
     end
 
-    -- Backup original weapon configs for clean restore
+    -- Backup original weapon and stamina configs for clean restoration
     local originalConfigs = {}
     for gunName, config in pairs(Guns) do
         originalConfigs[gunName] = {
@@ -42,20 +46,40 @@ return function(Shared)
         }
     end
 
-    -- Internal Combat State
+    local originalStamina = nil
+    if Config and Config.Stamina then
+        originalStamina = {
+            Max        = Config.Stamina.Max,
+            DrainRate  = Config.Stamina.DrainRate,
+            RegenRate  = Config.Stamina.RegenRate,
+            RegenDelay = Config.Stamina.RegenDelay
+        }
+    end
+
+    -- Internal Combat & Movement State
     local state = {
-        QuickReload    = false,
-        AutoChamber    = false,
-        CompleteAuto   = false,
-        SemiAutoForce  = false,
-        BurstMode      = false,
-        NoRecoil       = false,
-        FastFireRate   = false,
-        CustomFireRate = 0.05,
-        BurstCount     = 3,
-        BurstDelay     = 0.06,
-        IsShooting     = false,
-        BurstActive    = false
+        -- Stamina & Movement
+        InfiniteStamina  = false,
+        StaminaReduction = 0, -- 0 = no reduction, 100 = 100% infinite stamina
+        FastRegen        = false,
+        SpeedBoost       = false,
+        SpeedMultiplier  = 1.0,
+
+        -- Weapon Mechanisms
+        QuickReload      = false,
+        AutoChamber      = false,
+        CompleteAuto     = false,
+        SemiAutoForce    = false,
+        BurstMode        = false,
+        NoRecoil         = false,
+        FastFireRate     = false,
+        CustomFireRate   = 0.05,
+        BurstCount       = 3,
+        BurstDelay       = 0.06,
+
+        -- Active Runtime States
+        IsShooting       = false,
+        BurstActive      = false
     }
 
     local function sendNotification(title, msg, status)
@@ -77,8 +101,29 @@ return function(Shared)
         return nil, nil
     end
 
+    -- Instant Re-equip helper so GunClient cleanly re-reads the modified Guns table
+    local function refreshEquippedGun()
+        local char = localPlayer.Character
+        if not char then return end
+        local tool = nil
+        for _, child in ipairs(char:GetChildren()) do
+            if child:IsA("Tool") and Guns[child.Name] then
+                tool = child
+                break
+            end
+        end
+        if tool then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:UnequipTools()
+                task.wait(0.03)
+                humanoid:EquipTool(tool)
+            end
+        end
+    end
+
     -- Apply modifications to the live Guns table
-    local function updateWeaponConfigs()
+    local function updateWeaponConfigs(skipRefresh)
         for gunName, config in pairs(Guns) do
             local original = originalConfigs[gunName]
             if not original then continue end
@@ -115,7 +160,70 @@ return function(Shared)
                 config.Recoil = original.Recoil
             end
         end
+
+        if not skipRefresh then
+            task.spawn(refreshEquippedGun)
+        end
     end
+
+    -- Apply Stamina & Movement Modifications
+    local function applyStaminaState()
+        local char = localPlayer.Character
+        if char then
+            if state.InfiniteStamina then
+                char:SetAttribute("StamDrainMult", 0)
+                char:SetAttribute("StamMult", 10)
+            elseif state.StaminaReduction > 0 then
+                local mult = math.clamp(1 - (state.StaminaReduction / 100), 0, 1)
+                char:SetAttribute("StamDrainMult", mult)
+                char:SetAttribute("StamMult", 1 + (state.StaminaReduction / 50))
+            else
+                char:SetAttribute("StamDrainMult", 1)
+                char:SetAttribute("StamMult", 1)
+            end
+
+            if state.SpeedBoost and state.SpeedMultiplier > 1 then
+                char:SetAttribute("SpeedMult", state.SpeedMultiplier)
+            else
+                char:SetAttribute("SpeedMult", 1)
+            end
+        end
+
+        if Config and Config.Stamina and originalStamina then
+            if state.InfiniteStamina then
+                Config.Stamina.DrainRate = 0
+                Config.Stamina.RegenRate = 100
+                Config.Stamina.RegenDelay = 0
+            elseif state.StaminaReduction > 0 then
+                local factor = math.clamp(1 - (state.StaminaReduction / 100), 0, 1)
+                Config.Stamina.DrainRate = originalStamina.DrainRate * factor
+                if state.FastRegen then
+                    Config.Stamina.RegenRate = originalStamina.RegenRate * 4
+                    Config.Stamina.RegenDelay = 0.2
+                end
+            else
+                Config.Stamina.DrainRate = originalStamina.DrainRate
+                Config.Stamina.RegenRate = originalStamina.RegenRate
+                Config.Stamina.RegenDelay = originalStamina.RegenDelay
+            end
+        end
+    end
+
+    -- Continuous Stamina & Character Watcher
+    local staminaHeartbeatConn = RunService.Heartbeat:Connect(function()
+        if state.InfiniteStamina or state.StaminaReduction > 0 or state.SpeedBoost then
+            local char = localPlayer.Character
+            if char then
+                if state.InfiniteStamina and char:GetAttribute("StamDrainMult") ~= 0 then
+                    char:SetAttribute("StamDrainMult", 0)
+                    char:SetAttribute("StamMult", 10)
+                end
+                if state.SpeedBoost and char:GetAttribute("SpeedMult") ~= state.SpeedMultiplier then
+                    char:SetAttribute("SpeedMult", state.SpeedMultiplier)
+                end
+            end
+        end
+    end)
 
     -- Fast Reload and Auto-Chamber triggers
     local function executeQuickReload(tool)
@@ -132,7 +240,7 @@ return function(Shared)
         end
     end
 
-    -- Core Manual / Burst Firing Loop
+    -- Core Manual / Burst Firing Execution
     local function fireSingleRound(tool, config)
         if not tool or tool.Parent ~= localPlayer.Character then return false end
         local cam = workspace.CurrentCamera
@@ -148,12 +256,8 @@ return function(Shared)
         end
 
         if not tool:GetAttribute("Chambered") then
-            if state.AutoChamber or state.QuickReload then
-                executeAutoChamber(tool)
-                task.wait(0.05)
-            else
-                return false
-            end
+            executeAutoChamber(tool)
+            task.wait(0.05)
         end
 
         Packets.GunFireHit:Fire({
@@ -161,6 +265,13 @@ return function(Shared)
             Origin = cam.CFrame.Position,
             Direction = cam.CFrame.LookVector
         })
+
+        if Muzzle then
+            pcall(function()
+                Muzzle.Play(tool.Name, localPlayer.Character)
+            end)
+        end
+
         return true
     end
 
@@ -226,8 +337,8 @@ return function(Shared)
         if not tool:IsA("Tool") or not Guns[tool.Name] then return end
 
         local chamberConn = tool:GetAttributeChangedSignal("Chambered"):Connect(function()
-            if state.AutoChamber and tool.Parent == localPlayer.Character and not tool:GetAttribute("Chambered") then
-                task.wait(0.05)
+            if (state.AutoChamber or state.QuickReload) and tool.Parent == localPlayer.Character and not tool:GetAttribute("Chambered") then
+                task.wait(0.04)
                 executeAutoChamber(tool)
             end
         end)
@@ -235,15 +346,15 @@ return function(Shared)
         local ammoConn = tool:GetAttributeChangedSignal("CurrentAmmo"):Connect(function()
             local ammo = tool:GetAttribute("CurrentAmmo")
             if typeof(ammo) == "number" and ammo <= 0 and state.QuickReload and tool.Parent == localPlayer.Character then
-                task.wait(0.05)
+                task.wait(0.04)
                 executeQuickReload(tool)
             end
         end)
 
         tool.AncestryChanged:Connect(function(_, parent)
             if parent == localPlayer.Character then
-                if state.AutoChamber then
-                    task.wait(0.1)
+                if state.AutoChamber or state.QuickReload then
+                    task.wait(0.08)
                     executeAutoChamber(tool)
                 end
             elseif not parent then
@@ -259,6 +370,7 @@ return function(Shared)
                 trackTool(item)
             end
             localPlayer.Character.ChildAdded:Connect(trackTool)
+            applyStaminaState()
         end
         local backpack = localPlayer:FindFirstChildOfClass("Backpack")
         if backpack then
@@ -279,6 +391,7 @@ return function(Shared)
         Shared.AddCleanup(inputBeganConn)
         Shared.AddCleanup(inputEndedConn)
         Shared.AddCleanup(charAddedConn)
+        Shared.AddCleanup(staminaHeartbeatConn)
     end
 
     -- UI Integration with Menu-Clean ("Run N Hide" Tab)
@@ -288,18 +401,52 @@ return function(Shared)
         local leftCol = (Shared.QuadCols and Shared.QuadCols["Run N Hide"] and Shared.QuadCols["Run N Hide"].Left) or (quad and quad:FindFirstChild("LeftCol")) or targetTab
         local rightCol = (Shared.QuadCols and Shared.QuadCols["Run N Hide"] and Shared.QuadCols["Run N Hide"].Right) or (quad and quad:FindFirstChild("RightCol")) or targetTab
 
+        -- ── LEFT COLUMN: WEAPON MODS & STAMINA ─────────────────────
         if Shared.MakeSection then
-            Shared.MakeSection(leftCol, "Weapon Mechanisms", 1)
+            Shared.MakeSection(leftCol, "Stamina & Mobility", 1)
         end
 
         if Shared.MakeToggle then
-            Shared.MakeToggle(leftCol, "Quick Reload & Instant Rack", "CombatQuickReload", 2, function(val)
+            Shared.MakeToggle(leftCol, "Infinite Stamina (Zero Drain)", "InfiniteStamina", 2, function(val)
+                state.InfiniteStamina = val
+                applyStaminaState()
+            end)
+
+            Shared.MakeToggle(leftCol, "Fast Stamina Recovery", "FastStaminaRegen", 3, function(val)
+                state.FastRegen = val
+                applyStaminaState()
+            end)
+
+            Shared.MakeToggle(leftCol, "Sprint Speed Multiplier", "SpeedBoostToggle", 4, function(val)
+                state.SpeedBoost = val
+                applyStaminaState()
+            end)
+        end
+
+        if Shared.MakeSlider then
+            Shared.MakeSlider(leftCol, "Stamina Drain Reduction %", "StaminaReductionPct", 0, 100, 50, 5, function(val)
+                state.StaminaReduction = val
+                applyStaminaState()
+            end)
+
+            Shared.MakeSlider(leftCol, "Sprint Speed Factor", "SprintSpeedMult", 1, 3, 1, 6, function(val)
+                state.SpeedMultiplier = val
+                applyStaminaState()
+            end)
+        end
+
+        if Shared.MakeSection then
+            Shared.MakeSection(leftCol, "Weapon Mechanisms", 10)
+        end
+
+        if Shared.MakeToggle then
+            Shared.MakeToggle(leftCol, "Quick Reload & Instant Rack", "CombatQuickReload", 11, function(val)
                 state.QuickReload = val
                 state.AutoChamber = val
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(leftCol, "Complete Auto (All Guns)", "CombatCompleteAuto", 3, function(val)
+            Shared.MakeToggle(leftCol, "Complete Auto (All Guns)", "CombatCompleteAuto", 12, function(val)
                 state.CompleteAuto = val
                 if val then
                     state.SemiAutoForce = false
@@ -310,7 +457,7 @@ return function(Shared)
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(leftCol, "The Semi-Auto Force", "CombatSemiAuto", 4, function(val)
+            Shared.MakeToggle(leftCol, "The Semi-Auto Force", "CombatSemiAuto", 13, function(val)
                 state.SemiAutoForce = val
                 if val then
                     state.CompleteAuto = false
@@ -321,7 +468,7 @@ return function(Shared)
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(leftCol, "The Burst Rounds", "CombatBurstMode", 5, function(val)
+            Shared.MakeToggle(leftCol, "The Burst Rounds", "CombatBurstMode", 14, function(val)
                 state.BurstMode = val
                 if val then
                     state.CompleteAuto = false
@@ -332,17 +479,18 @@ return function(Shared)
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(leftCol, "Zero Recoil", "CombatNoRecoil", 6, function(val)
+            Shared.MakeToggle(leftCol, "Zero Recoil", "CombatNoRecoil", 15, function(val)
                 state.NoRecoil = val
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(leftCol, "Rapid Fire Rate Overclock", "CombatFastFire", 7, function(val)
+            Shared.MakeToggle(leftCol, "Rapid Fire Rate Overclock", "CombatFastFire", 16, function(val)
                 state.FastFireRate = val
                 updateWeaponConfigs()
             end)
         end
 
+        -- ── RIGHT COLUMN: TUNING & CONTROLS ────────────────────────
         if Shared.MakeSection then
             Shared.MakeSection(rightCol, "Firing Controls & Tuning", 1)
         end
@@ -352,18 +500,22 @@ return function(Shared)
                 state.BurstCount = val
             end)
 
-            Shared.MakeSlider(rightCol, "Overclock Delay (ms)", "CombatFireDelay", 10, 250, 50, 3, function(val)
+            Shared.MakeSlider(rightCol, "Burst Round Delay (ms)", "CombatBurstDelay", 20, 150, 60, 3, function(val)
+                state.BurstDelay = val / 1000
+            end)
+
+            Shared.MakeSlider(rightCol, "Overclock Delay (ms)", "CombatFireDelay", 10, 250, 50, 4, function(val)
                 state.CustomFireRate = val / 1000
-                updateWeaponConfigs()
+                updateWeaponConfigs(true)
             end)
         end
 
         if Shared.MakeSection then
-            Shared.MakeSection(rightCol, "Quick Actions", 4)
+            Shared.MakeSection(rightCol, "Quick Actions", 10)
         end
 
         if Shared.MakeButton then
-            Shared.MakeButton(rightCol, "Force Instant Reload", 5, function()
+            Shared.MakeButton(rightCol, "Force Instant Reload", 11, function()
                 local tool = getEquippedGun()
                 if tool then
                     executeQuickReload(tool)
@@ -373,7 +525,7 @@ return function(Shared)
                 end
             end)
 
-            Shared.MakeButton(rightCol, "Chamber Equipped Weapon", 6, function()
+            Shared.MakeButton(rightCol, "Chamber Equipped Weapon", 12, function()
                 local tool = getEquippedGun()
                 if tool then
                     executeAutoChamber(tool)
@@ -382,9 +534,30 @@ return function(Shared)
                     sendNotification("Run N Hide", "No gun equipped", false)
                 end
             end)
+
+            Shared.MakeButton(rightCol, "Reset Stamina & Gun Configs", 13, function()
+                state.InfiniteStamina = false
+                state.StaminaReduction = 0
+                state.SpeedBoost = false
+                state.CompleteAuto = false
+                state.SemiAutoForce = false
+                state.BurstMode = false
+                state.NoRecoil = false
+                state.QuickReload = false
+                state.FastFireRate = false
+
+                for _, flag in ipairs({"InfiniteStamina", "FastStaminaRegen", "SpeedBoostToggle", "CombatQuickReload", "CombatCompleteAuto", "CombatSemiAuto", "CombatBurstMode", "CombatNoRecoil", "CombatFastFire"}) do
+                    if Shared.Toggles[flag] then Shared.Toggles[flag].SetToggle(false, true) end
+                end
+
+                applyStaminaState()
+                updateWeaponConfigs()
+                sendNotification("Run N Hide", "All modifiers restored to default", true)
+            end)
         end
     end
 
-    updateWeaponConfigs()
+    updateWeaponConfigs(true)
+    applyStaminaState()
     return state
 end
