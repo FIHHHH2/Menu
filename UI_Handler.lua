@@ -1391,47 +1391,10 @@ return function(Shared)
     local QuadCols = {}
     local activeTab = nil
 
-    local isMM2 = false
-    if Shared.IsMM2 ~= nil then
-        isMM2 = (Shared.IsMM2 == true)
-    else
-        isMM2 = (game.PlaceId == 142823291 or game.GameId == 66654135 or game.PlaceId == 335132309 or game.PlaceId == 63518381)
-        if not isMM2 then
-            pcall(function()
-                local rep = game:GetService("ReplicatedStorage")
-                if rep:FindFirstChild("Remotes") and rep.Remotes:FindFirstChild("Gameplay") and rep.Remotes.Gameplay:FindFirstChild("ShootGun") then
-                    isMM2 = true
-                end
-            end)
-        end
-    end
-
-    local isNDS = (game.PlaceId == 189707 or game.GameId == 65241)
-    if Shared.IsNDS ~= nil then isNDS = (Shared.IsNDS == true) end
-
-    local isBladeBall = (game.PlaceId == 13772394625 or game.PlaceId == 14732610803 or game.PlaceId == 15131065025 or game.PlaceId == 15264892126 or game.PlaceId == 17135832729 or game.PlaceId == 15552588147 or game.GameId == 4777817887)
-    if Shared.IsBladeBall ~= nil then isBladeBall = (Shared.IsBladeBall == true) end
-
     local tabDefs = {
-        {name="Main",     order=1},
+        {name="Music",    order=1},
+        {name="Keybinds", order=2},
     }
-    local curOrder = 2
-    if isMM2 then
-        table.insert(tabDefs, {name="MM2", order=curOrder})
-        curOrder = curOrder + 1
-    end
-    if isNDS then
-        table.insert(tabDefs, {name="Disasters", order=curOrder})
-        curOrder = curOrder + 1
-    end
-    if isBladeBall then
-        table.insert(tabDefs, {name="Blade Ball", order=curOrder})
-        curOrder = curOrder + 1
-    end
-    table.insert(tabDefs, {name="Spy",      order=curOrder})
-    table.insert(tabDefs, {name="Music",    order=curOrder + 1})
-    table.insert(tabDefs, {name="Troll",    order=curOrder + 2})
-    table.insert(tabDefs, {name="Keybinds", order=curOrder + 3})
 
     local function switchTab(name)
         if activeTab == name then return end
@@ -2086,7 +2049,7 @@ return function(Shared)
     Shared.StyleRobloxCoreUI = styleRobloxCoreUI
     Shared.RestoreDefaultRobloxCoreUI = restoreDefaultRobloxCoreUI
 
-    switchTab("Main")
+    switchTab("Music")
     print("[UI_Handler] Loaded -- Dark Mode Engine, Smooth Transitions, Hover Effects Active")
 end
 

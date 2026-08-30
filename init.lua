@@ -353,52 +353,10 @@ if Shared.Player then
     end)
 end
 
--- Game Environment Detection (Strict verification)
-local isMM2 = (game.PlaceId == 142823291 or game.GameId == 66654135 or game.PlaceId == 335132309 or game.PlaceId == 63518381)
-if not isMM2 then
-    pcall(function()
-        local rep = getService("ReplicatedStorage")
-        if rep then
-            local remotes = rep:FindFirstChild("Remotes")
-            local gameplay = remotes and remotes:FindFirstChild("Gameplay")
-            if gameplay and gameplay:FindFirstChild("ShootGun") then
-                isMM2 = true
-            end
-        end
-    end)
-end
-Shared.IsMM2 = isMM2
-
-local isNDS = (game.PlaceId == 189707 or game.GameId == 65241)
-Shared.IsNDS = isNDS
-
-local isBladeBall = (game.PlaceId == 13772394625 or game.PlaceId == 14732610803 or game.PlaceId == 15131065025 or game.PlaceId == 15264892126 or game.PlaceId == 17135832729 or game.PlaceId == 15552588147 or game.GameId == 4777817887)
-Shared.IsBladeBall = isBladeBall
-
 -- Load order with zero-freeze staggered micro-yields
 loadModule("UI_Handler")(Shared)
 task.wait(0.01)
 loadModule("Core_Functions")(Shared)
-task.wait(0.01)
-loadModule("Main_Functions")(Shared)
-task.wait(0.01)
-loadModule("Spy_Functions")(Shared)
-task.wait(0.01)
--- MM2_Functions always loads — it self-guards via Tabs["MM2"] nil check at line 22.
--- If UI_Handler detected MM2 via its own fallback, the tab+cols will exist and MM2_Functions will populate them.
--- If this game is not MM2, Tabs["MM2"] will be nil and MM2_Functions returns immediately (no cost).
-loadModule("MM2_Functions")(Shared)
-task.wait(0.01)
-
-if isNDS then
-    loadModule("NDS_Functions")(Shared)
-    task.wait(0.01)
-end
-if isBladeBall then
-    loadModule("BladeBall_Functions")(Shared)
-    task.wait(0.01)
-end
-loadModule("Troll_Functions")(Shared)
 task.wait(0.01)
 loadModule("Music_Handler")(Shared)
 

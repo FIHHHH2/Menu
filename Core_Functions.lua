@@ -567,22 +567,23 @@ return function(Shared)
         end)
     end
 
-    makePcBtn("🎯  Set as Troll Target", 78, function()
+    makePcBtn("📋  Copy Username", 78, function()
         if currentSelectedPlr then
-            Shared.Flags["TrollTarget"] = currentSelectedPlr
-            Shared.Flags["TrollTargetName"] = currentSelectedPlr.Name
-            sendNotification("Troll Suite", "Target set to: @" .. currentSelectedPlr.Name, true)
-            profileCard.Visible = false
+            local clip = setclipboard or (getgenv and getgenv().setclipboard)
+            if type(clip) == "function" then
+                pcall(function() clip(currentSelectedPlr.Name) end)
+            end
+            sendNotification("Player Profile", "Copied @" .. currentSelectedPlr.Name .. " to clipboard", true)
         end
     end)
 
-    makePcBtn("⚡  Teleport to Player", 108, function()
-        if currentSelectedPlr and currentSelectedPlr.Character and currentSelectedPlr.Character:FindFirstChild("HumanoidRootPart") then
-            local myHRP = Shared.HumanoidRP or (Shared.Player.Character and Shared.Player.Character:FindFirstChild("HumanoidRootPart"))
-            if myHRP then
-                myHRP.CFrame = currentSelectedPlr.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
-                sendNotification("Teleport", "Teleported to @" .. currentSelectedPlr.Name, true)
+    makePcBtn("📋  Copy User ID", 108, function()
+        if currentSelectedPlr then
+            local clip = setclipboard or (getgenv and getgenv().setclipboard)
+            if type(clip) == "function" then
+                pcall(function() clip(tostring(currentSelectedPlr.UserId)) end)
             end
+            sendNotification("Player Profile", "Copied ID: " .. tostring(currentSelectedPlr.UserId) .. " to clipboard", true)
         end
     end)
 
