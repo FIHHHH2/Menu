@@ -328,7 +328,27 @@ return function(Shared)
         end
 
         task.spawn(function()
-            local rawData = CoverHTTP(url)
+            -- 1. Direct High-Priority Local Workspace File Check (Authentic OS/Bridge Thumbnail)
+            local rawData = nil
+            pcall(function()
+                if (typeof(isfile) == "function" or (getgenv and typeof(getgenv().isfile) == "function"))
+                   and (typeof(readfile) == "function" or (getgenv and typeof(getgenv().readfile) == "function")) then
+                    local isf = isfile or getgenv().isfile
+                    local rdf = readfile or getgenv().readfile
+                    if isf("fih_cover.png") then
+                        local d = rdf("fih_cover.png")
+                        if d and #d > 500 and isValidImageData(d) then
+                            rawData = d
+                        end
+                    end
+                end
+            end)
+
+            -- 2. Fallback to CoverHTTP URL or Music Search API
+            if not rawData or not isValidImageData(rawData) then
+                rawData = CoverHTTP(url)
+            end
+
             if not rawData or not isValidImageData(rawData) then
                 if track and track.artist and track.name then
                     local fallback = fetchArtworkFallback(track.artist, track.name)

@@ -162,6 +162,24 @@ async def _winrt_fetch_track():
                 current_track_state["duration_ms"] = dur_ms
                 current_track_state["source"] = clean_source
                 current_track_state["last_update"] = time.time()
+
+                # Extract authentic native thumbnail stream directly from Windows OS
+                if media_props.thumbnail:
+                    try:
+                        import winrt.windows.storage.streams as streams
+                        stream = await media_props.thumbnail.open_read_async()
+                        size = stream.size
+                        if size > 100:
+                            reader = streams.DataReader(stream)
+                            await reader.load_async(size)
+                            buf = bytearray(size)
+                            reader.read_bytes(buf)
+                            if len(buf) > 100:
+                                current_track_state["cover_bytes"] = bytes(buf)
+                                current_track_state["has_native_cover"] = True
+                                current_track_state["cover"] = f"http://127.0.0.1:{PORT}/cover"
+                    except Exception:
+                        pass
     except Exception:
         pass
 
@@ -193,6 +211,7 @@ def get_all_workspace_paths():
 def ipc_file_worker():
     """Watches for fih_bridge_cmd.txt in executor workspace folders and writes fih_bridge_state.json."""
     last_handled_id = ""
+    last_cover_hash = None
     while True:
         try:
             workspaces = get_all_workspace_paths()
@@ -217,13 +236,28 @@ def ipc_file_worker():
                     except Exception:
                         pass
 
-                # 2. Write track state file
+                # 2. Write track state JSON file (strip large binary bytes from JSON)
                 state_file = os.path.join(ws, "fih_bridge_state.json")
                 try:
+                    export_state = dict(current_track_state)
+                    export_state.pop("cover_bytes", None)
                     with open(state_file, "w", encoding="utf-8") as f:
-                        json.dump(current_track_state, f)
+                        json.dump(export_state, f)
                 except Exception:
                     pass
+
+                # 3. Write authentic native cover directly to executor workspace as fih_cover.png
+                raw_cover = current_track_state.get("cover_bytes")
+                if raw_cover:
+                    cov_file = os.path.join(ws, "fih_cover.png")
+                    cur_h = len(raw_cover)
+                    if cur_h != last_cover_hash or not os.path.exists(cov_file):
+                        last_cover_hash = cur_h
+                        try:
+                            with open(cov_file, "wb") as f:
+                                f.write(raw_cover)
+                        except Exception:
+                            pass
 
         except Exception:
             pass
@@ -317,7 +351,24 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self._send_cors_headers()
             self.end_headers()
-            self.wfile.write(json.dumps(current_track_state).encode())
+            export_state = dict(current_track_state)
+            export_state.pop("cover_bytes", None)
+            self.wfile.write(json.dumps(export_state).encode())
+
+        elif path in ('/cover', '/artwork'):
+            cov_bytes = current_track_state.get("cover_bytes")
+            if cov_bytes and len(cov_bytes) > 50:
+                self.send_response(200)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Content-Type', 'image/png')
+                self.send_header('Content-Length', str(len(cov_bytes)))
+                self.end_headers()
+                self.wfile.write(cov_bytes)
+            else:
+                self.send_response(404)
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(b'{"error": "no cover"}')
 
         elif path in ('/status', '/ping'):
             self.send_response(200)
