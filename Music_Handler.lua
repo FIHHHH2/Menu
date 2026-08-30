@@ -161,6 +161,7 @@ return function(Shared)
         return false
     end
 
+    local artworkCache = {}
     local function fetchArtworkFallback(artist, song)
         if not artist or artist == "" or not song or song == "" then return "" end
         if artist == "Unknown Artist" and song == "Unknown Track" then return "" end
@@ -168,7 +169,11 @@ return function(Shared)
         -- Clean up track names (remove (Official Video), (Lyrics), feat. x, etc.)
         local cleanSong = song:gsub("%b()", ""):gsub("%b[]", ""):gsub("feat%..*", ""):gsub("ft%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
         local cleanArtist = artist:gsub("%b()", ""):gsub("%b[]", ""):gsub("feat%..*", ""):gsub("ft%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-        local term = cleanArtist .. " " .. cleanSong
+        local term = (cleanArtist .. " " .. cleanSong):lower()
+
+        if artworkCache[term] then
+            return artworkCache[term]
+        end
 
         -- 1. iTunes Music Store Search
         local itunesUrl = "https://itunes.apple.com/search?term=" .. Http:UrlEncode(term) .. "&media=music&entity=song&limit=1"
@@ -176,7 +181,9 @@ return function(Shared)
         if resp and resp.Body and #resp.Body > 0 then
             local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
             if ok and data and data.results and data.results[1] and data.results[1].artworkUrl100 then
-                return data.results[1].artworkUrl100:gsub("100x100bb", "600x600bb")
+                local art = data.results[1].artworkUrl100:gsub("100x100bb", "600x600bb")
+                artworkCache[term] = art
+                return art
             end
         end
 
@@ -186,10 +193,13 @@ return function(Shared)
         if dResp and dResp.Body and #dResp.Body > 0 then
             local okD, dData = pcall(function() return Http:JSONDecode(dResp.Body) end)
             if okD and dData and dData.data and dData.data[1] and dData.data[1].album and dData.data[1].album.cover_big then
-                return dData.data[1].album.cover_big
+                local art = dData.data[1].album.cover_big
+                artworkCache[term] = art
+                return art
             end
         end
 
+        artworkCache[term] = ""
         return ""
     end
 
@@ -674,8 +684,11 @@ return function(Shared)
 
     -- ── UNIVERSAL LOCAL MEDIA BRIDGE & PLAYBACK CONTROLS (⏮ ⏯ ⏭) ─────
     local _bridgeDebounce = false
+    local lastHttpFailTime = 0
+    local lastBridgeHttpCheck = 0
+
     local function sendBridgeCommand(action)
-        -- 1. High-Priority File-IPC Channel (Instantaneous, 100% reliable across all executors)
+        -- 1. High-Priority File-IPC Channel (Instantaneous, 0ms, 100% reliable)
         local wroteFile = false
         pcall(function()
             if typeof(writefile) == "function" or (getgenv and typeof(getgenv().writefile) == "function") then
@@ -685,33 +698,30 @@ return function(Shared)
             end
         end)
 
-        -- 2. Parallel HTTP REST Channel
-        local urls = {
-            "http://127.0.0.1:8974/" .. action,
-            "http://localhost:8974/" .. action,
-            "http://lvh.me:8974/" .. action
-        }
+        if wroteFile then return true end
 
-        local httpOk = false
-        for _, u in ipairs(urls) do
-            local ok, resp = pcall(function()
-                return Shared.HttpRequest({
-                    Url     = u,
-                    Method  = "GET",
-                    Headers = { ["User-Agent"] = "FihUI-Client" }
-                })
-            end)
-            if ok and resp and (resp.StatusCode == 200 or resp.status_code == 200) then
-                httpOk = true
-                break
-            end
+        -- 2. Fast Single HTTP REST Channel (only if not recently failed)
+        if (os.clock() - lastHttpFailTime) < 10 then
+            return false
         end
 
-        return (wroteFile or httpOk)
+        local ok, resp = pcall(function()
+            return Shared.HttpRequest({
+                Url     = "http://127.0.0.1:8974/" .. action,
+                Method  = "GET",
+                Headers = { ["User-Agent"] = "FihUI-Client" }
+            })
+        end)
+        if ok and resp and (resp.StatusCode == 200 or resp.status_code == 200) then
+            return true
+        else
+            lastHttpFailTime = os.clock()
+            return false
+        end
     end
 
     local function getBridgeTrack()
-        -- 1. High-Priority File-IPC State Check
+        -- 1. High-Priority File-IPC State Check (Zero latency)
         local fileData = nil
         pcall(function()
             if (typeof(readfile) == "function" or (getgenv and typeof(getgenv().readfile) == "function"))
@@ -731,31 +741,21 @@ return function(Shared)
         end)
 
         local data = fileData
-        if not data then
-            local urls = {
-                "http://127.0.0.1:8974/current",
-                "http://localhost:8974/current",
-                "http://lvh.me:8974/current"
-            }
-
-            local resp = nil
-            for _, u in ipairs(urls) do
-                local ok, r = pcall(function()
-                    return Shared.HttpRequest({
-                        Url     = u,
-                        Method  = "GET",
-                        Headers = { ["User-Agent"] = "FihUI-Client" }
-                    })
-                end)
-                if ok and r and r.Body and #r.Body > 5 then
-                    resp = r
-                    break
-                end
-            end
-
-            if resp then
-                local ok3, d = pcall(function() return Http:JSONDecode(resp.Body) end)
+        -- Rate-limit HTTP probes when file is absent
+        if not data and (os.clock() - lastBridgeHttpCheck) > 10 and (os.clock() - lastHttpFailTime) > 10 then
+            lastBridgeHttpCheck = os.clock()
+            local ok, r = pcall(function()
+                return Shared.HttpRequest({
+                    Url     = "http://127.0.0.1:8974/current",
+                    Method  = "GET",
+                    Headers = { ["User-Agent"] = "FihUI-Client" }
+                })
+            end)
+            if ok and r and r.Body and #r.Body > 5 then
+                local ok3, d = pcall(function() return Http:JSONDecode(r.Body) end)
                 if ok3 and type(d) == "table" then data = d end
+            else
+                lastHttpFailTime = os.clock()
             end
         end
 
@@ -782,18 +782,18 @@ return function(Shared)
     handleSpotifyPrevious = function()
         if _bridgeDebounce then return end
         _bridgeDebounce = true
-        task.delay(0.4, function() _bridgeDebounce = false end)
+        task.delay(0.25, function() _bridgeDebounce = false end)
 
         task.spawn(function()
             if sendBridgeCommand("prev") then
                 Shared.Notify("Media Bridge", "[|<] Previous Track", true)
-                task.wait(0.5)
+                task.wait(0.3)
                 local bTrk = getBridgeTrack()
                 if bTrk then updateVisuals(bTrk) end
                 return
             end
 
-            local token = cleanToken(Shared.Config.SpotifyToken)
+            local token = cleanToken(Shared.Config and Shared.Config.SpotifyToken)
             if not token or token == "" then
                 Shared.Notify("Music", "[!] Start MediaBridge.exe for free skips", false)
                 return
@@ -802,9 +802,9 @@ return function(Shared)
             if resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
                 Shared.Notify("Spotify", "[|<] Previous track", true)
             else
-                Shared.Notify("Spotify", "[!] Previous requires Spotify Premium (Run MediaBridge.exe for free skip)", false)
+                Shared.Notify("Spotify", "[!] Previous requires Spotify Premium", false)
             end
-            task.wait(0.5)
+            task.wait(0.3)
             local trk = getSpotifyTrack()
             if trk then updateVisuals(trk) end
         end)
@@ -813,19 +813,19 @@ return function(Shared)
     handleSpotifyPlayPause = function()
         if _bridgeDebounce then return end
         _bridgeDebounce = true
-        task.delay(0.4, function() _bridgeDebounce = false end)
+        task.delay(0.25, function() _bridgeDebounce = false end)
 
         task.spawn(function()
             if sendBridgeCommand("playpause") then
                 currentTrack.isPlaying = not currentTrack.isPlaying
                 Shared.Notify("Media Bridge", currentTrack.isPlaying and "[>] Playing" or "[||] Paused", true)
-                task.wait(0.5)
+                task.wait(0.3)
                 local bTrk = getBridgeTrack()
                 if bTrk then updateVisuals(bTrk) end
                 return
             end
 
-            local token = cleanToken(Shared.Config.SpotifyToken)
+            local token = cleanToken(Shared.Config and Shared.Config.SpotifyToken)
             if not token or token == "" then
                 Shared.Notify("Music", "[!] Start MediaBridge.exe for free control", false)
                 return
@@ -849,9 +849,9 @@ return function(Shared)
                 currentTrack.isPlaying = not isCurrentlyPlaying
                 Shared.Notify("Spotify", isCurrentlyPlaying and "[||] Paused" or "[>] Playing", true)
             else
-                Shared.Notify("Spotify", "[!] Remote play/pause requires Spotify Premium (Run MediaBridge.exe for free control)", false)
+                Shared.Notify("Spotify", "[!] Remote play/pause requires Spotify Premium", false)
             end
-            task.wait(0.5)
+            task.wait(0.3)
             local trk = getSpotifyTrack()
             if trk then updateVisuals(trk) end
         end)
@@ -860,18 +860,18 @@ return function(Shared)
     handleSpotifyNext = function()
         if _bridgeDebounce then return end
         _bridgeDebounce = true
-        task.delay(0.4, function() _bridgeDebounce = false end)
+        task.delay(0.25, function() _bridgeDebounce = false end)
 
         task.spawn(function()
             if sendBridgeCommand("next") then
                 Shared.Notify("Media Bridge", "[>|] Next Track", true)
-                task.wait(0.5)
+                task.wait(0.3)
                 local bTrk = getBridgeTrack()
                 if bTrk then updateVisuals(bTrk) end
                 return
             end
 
-            local token = cleanToken(Shared.Config.SpotifyToken)
+            local token = cleanToken(Shared.Config and Shared.Config.SpotifyToken)
             if not token or token == "" then
                 Shared.Notify("Music", "[!] Start MediaBridge.exe for free skips", false)
                 return
@@ -880,9 +880,9 @@ return function(Shared)
             if resp and (resp.StatusCode == 204 or resp.StatusCode == 200) then
                 Shared.Notify("Spotify", "[>|] Next track", true)
             else
-                Shared.Notify("Spotify", "[!] Skip requires Spotify Premium (Run MediaBridge.exe for free skip)", false)
+                Shared.Notify("Spotify", "[!] Skip requires Spotify Premium", false)
             end
-            task.wait(0.5)
+            task.wait(0.3)
             local trk = getSpotifyTrack()
             if trk then updateVisuals(trk) end
         end)
@@ -1455,22 +1455,38 @@ return function(Shared)
     Shared.StartMusicPolling = startPolling
     Shared.UpdateMusicVisuals = updateVisuals
 
-    -- ── PERSISTENT AUTO-POLL ENGINE ────────────────────────────────
+    -- ── PERSISTENT AUTO-POLL ENGINE (ASYNC THREAD, ZERO FRAME DROPS) ──
+    local isPollingActive = false
     startPolling = function()
-        if pollConn then pollConn:Disconnect() end
-        local elapsed = 0
-        pollConn = RunSvc.Heartbeat:Connect(function(dt)
-            elapsed = elapsed + dt
-            if elapsed >= 2 then
-                elapsed = 0
-                local track = getBridgeTrack() or getSpotifyTrack() or getLastFMTrack()
-                if track then
-                    if track.name ~= currentTrack.name
-                    or track.isPlaying ~= currentTrack.isPlaying
-                    or track.cover ~= currentTrack.cover then
-                        updateVisuals(track)
+        if isPollingActive then return end
+        isPollingActive = true
+
+        task.spawn(function()
+            while isPollingActive do
+                task.wait(2.5)
+                pcall(function()
+                    local track = getBridgeTrack()
+                    if not track then
+                        local token = cleanToken(Shared.Config and Shared.Config.SpotifyToken)
+                        if token and token ~= "" then
+                            track = getSpotifyTrack()
+                        end
                     end
-                end
+                    if not track then
+                        local lastUser = Shared.Config and Shared.Config.LastFMUser
+                        if lastUser and lastUser ~= "" and lastUser ~= "Enter Last.fm Username" then
+                            track = getLastFMTrack()
+                        end
+                    end
+
+                    if track then
+                        if track.name ~= currentTrack.name
+                        or track.isPlaying ~= currentTrack.isPlaying
+                        or track.cover ~= currentTrack.cover then
+                            updateVisuals(track)
+                        end
+                    end
+                end)
             end
         end)
     end
