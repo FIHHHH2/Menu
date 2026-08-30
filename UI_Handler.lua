@@ -2236,11 +2236,30 @@ return function(Shared)
         end)
         if Shared.AddCleanup then Shared.AddCleanup(fakeLagConn) end
 
+        -- ── DAMAGE / FALL SCRIPT AUTO-PURGER HELPER ─────────────────
+        local function neutralizeFallDamageScripts(char)
+            if not char then return end
+            for _, obj in ipairs(char:GetChildren()) do
+                if (obj:IsA("Script") or obj:IsA("LocalScript")) and (obj.Name:find("Fall") or obj.Name:find("Damage") or obj.Name:find("Ragdoll")) then
+                    pcall(function()
+                        obj.Disabled = true
+                        obj:Destroy()
+                    end)
+                end
+            end
+        end
+
+        localPlr.CharacterAdded:Connect(function(newChar)
+            task.wait(0.1)
+            neutralizeFallDamageScripts(newChar)
+        end)
+        if localPlr.Character then neutralizeFallDamageScripts(localPlr.Character) end
+
         -- ── WALK FLING ENGINE (TOUCH / CONTACT FLING) ────────────────
         makeToggle(playerCols.Right, "Walk Fling (Touch Fling)", "WalkFling", 7, function(state) end)
         makeSlider(playerCols.Right, "Fling Force", "FlingPower", 0, 100000, 25000, 8, function(val) end)
 
-        local flingSavedVelocity = Vector3.zero
+        local flingSavedAngVel = Vector3.zero
         local flingActiveContact = false
 
         local walkFlingHeartbeat = RunService.Heartbeat:Connect(function()
@@ -2252,6 +2271,8 @@ return function(Shared)
             local hum = getLocalHum()
             local char = localPlr and localPlr.Character
             if not (root and hum and hum.Health > 0 and char) then return end
+
+            neutralizeFallDamageScripts(char)
 
             -- Detect proximity to other players
             local nearbyPlayer = false
@@ -2271,10 +2292,10 @@ return function(Shared)
 
             flingActiveContact = nearbyPlayer
             if nearbyPlayer then
-                flingSavedVelocity = root.AssemblyLinearVelocity
-                -- Inject massive angular and linear velocity on network replication step
-                root.AssemblyLinearVelocity = Vector3.new(root.CFrame.LookVector.X * power, power, root.CFrame.LookVector.Z * power)
-                root.AssemblyAngularVelocity = Vector3.new(0, 999999, 0)
+                flingSavedAngVel = root.AssemblyAngularVelocity
+                -- Pure rotational kinetic torque on network replication step (Zero vertical linear velocity = 0 self fall damage)
+                root.AssemblyAngularVelocity = Vector3.new(0, power * 25, 0)
+                root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 0, root.AssemblyLinearVelocity.Z)
             end
         end)
 
@@ -2282,9 +2303,8 @@ return function(Shared)
             if not Shared.Flags["WalkFling"] then return end
             local root = getLocalRoot()
             if root and flingActiveContact then
-                -- Instantly restore clean local velocity so player walks completely normally and takes 0 fall damage
-                root.AssemblyLinearVelocity = flingSavedVelocity
-                root.AssemblyAngularVelocity = Vector3.zero
+                -- Instantly zero out angular torque locally so your character walks completely normally
+                root.AssemblyAngularVelocity = flingSavedAngVel
             end
         end)
         if Shared.AddCleanup then
@@ -2342,11 +2362,17 @@ return function(Shared)
         fallParams.FilterType = Enum.RaycastFilterType.Exclude
 
         local fallDamageConn = RunService.Heartbeat:Connect(function()
+            local char = localPlr and localPlr.Character
+            if not char then return end
+
+            if Shared.Flags["NoFallDamage"] or Shared.Flags["FightFloat"] or Shared.Flags["WalkFling"] then
+                neutralizeFallDamageScripts(char)
+            end
+
             if not (Shared.Flags["NoFallDamage"] or Shared.Flags["FightFloat"]) then return end
             local root = getLocalRoot()
             local hum = getLocalHum()
-            local char = localPlr and localPlr.Character
-            if not (root and hum and hum.Health > 0 and char) then return end
+            if not (root and hum and hum.Health > 0) then return end
 
             local vel = root.AssemblyLinearVelocity
             -- If falling rapidly downwards
