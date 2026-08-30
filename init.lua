@@ -30,13 +30,6 @@ if not localPlayer then
     end
 end
 
-local function loadModule(name)
-    -- Local Studio / ModuleScript direct require support (Bypasses Studio loadstring block)
-    local rep = getService("ReplicatedStorage")
-    if rep then
-        local localFolder = rep:FindFirstChild("FihMenu")
-        if localFolder and localFolder:FindFirstChild(name) then
-            local targetMod = localFolder:FindFirstChild(name)
 -- Universal HTTP Request engine with multi-executor normalization
 local function httpRequest(opt)
     local env = (getgenv and getgenv()) or (getfenv and getfenv(0)) or _G
