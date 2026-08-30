@@ -1299,8 +1299,8 @@ return function(Shared)
 
     local CAPad = Instance.new("UIPadding")
     CAPad.PaddingTop    = UDim.new(0, 6)
-    CAPad.PaddingLeft   = UDim.new(0, 6)
-    CAPad.PaddingRight  = UDim.new(0, 8)
+    CAPad.PaddingLeft   = UDim.new(0, 10)
+    CAPad.PaddingRight  = UDim.new(0, 12)
     CAPad.PaddingBottom = UDim.new(0, 20)
     CAPad.Parent        = ContentArea
 
@@ -1494,7 +1494,7 @@ return function(Shared)
         tLayout.SortOrder = Enum.SortOrder.LayoutOrder; tLayout.Padding = UDim.new(0,6); tLayout.Parent = tabFrame
 
         local quadFrame = Instance.new("Frame")
-        quadFrame.Name = "QuadGrid"; quadFrame.Size = UDim2.new(1, -10, 0, 0)
+        quadFrame.Name = "QuadGrid"; quadFrame.Size = UDim2.new(1, 0, 0, 0)
         quadFrame.AutomaticSize = Enum.AutomaticSize.Y; quadFrame.BackgroundTransparency = 1
         quadFrame.LayoutOrder = 2; quadFrame.Parent = tabFrame
 
@@ -1524,7 +1524,7 @@ return function(Shared)
     -- MAIN BANNER
     local mainTab = Tabs["Main"]
     local logoBox = Instance.new("Frame")
-    logoBox.Size = UDim2.new(1, -10, 0, 76); logoBox.BackgroundColor3 = C.BannerBg
+    logoBox.Size = UDim2.new(1, 0, 0, 76); logoBox.BackgroundColor3 = C.BannerBg
     logoBox.BackgroundTransparency = 0.35
     logoBox.BorderSizePixel = 1; logoBox.BorderColor3 = C.WinBorder
     logoBox.LayoutOrder = 1; logoBox.Parent = mainTab
