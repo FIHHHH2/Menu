@@ -1332,8 +1332,8 @@ return function(Shared)
 
     local CAPad = Instance.new("UIPadding")
     CAPad.PaddingTop    = UDim.new(0, 6)
-    CAPad.PaddingLeft   = UDim.new(0, 10)
-    CAPad.PaddingRight  = UDim.new(0, 12)
+    CAPad.PaddingLeft   = UDim.new(0, 14)
+    CAPad.PaddingRight  = UDim.new(0, 16)
     CAPad.PaddingBottom = UDim.new(0, 20)
     CAPad.Parent        = ContentArea
 
@@ -1482,7 +1482,7 @@ return function(Shared)
 
         local tabFrame = Instance.new("Frame")
         tabFrame.Name = "Tab_"..def.name
-        tabFrame.Size = UDim2.new(1, -6, 0, 0)
+        tabFrame.Size = UDim2.new(1, -30, 0, 0)
         tabFrame.AutomaticSize = Enum.AutomaticSize.Y
         tabFrame.BackgroundTransparency = 1
         tabFrame.Visible = false
