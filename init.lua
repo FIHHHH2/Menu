@@ -12,7 +12,20 @@ pcall(function()
     end
 end)
 
-local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu-Clean/main"
+local BASE_REPO = "FIHHHH2/Menu-Clean"
+local BASE_URL = "https://raw.githubusercontent.com/" .. BASE_REPO .. "/main"
+
+-- Dynamically resolve latest commit SHA to bypass GitHub raw CDN caching
+pcall(function()
+    local HttpService = game:GetService("HttpService")
+    local apiResp = game:HttpGet("https://api.github.com/repos/" .. BASE_REPO .. "/commits/main")
+    if apiResp and #apiResp > 0 then
+        local data = HttpService:JSONDecode(apiResp)
+        if data and data.sha then
+            BASE_URL = "https://raw.githubusercontent.com/" .. BASE_REPO .. "/" .. data.sha
+        end
+    end
+end)
 
 -- Safe Service Initializer
 local function getService(name)
