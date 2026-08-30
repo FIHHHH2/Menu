@@ -1,1 +1,1 @@
-loadstring(game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu/main/init.lua?t=" .. tick()))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu-Clean/main/init.lua?t=" .. tick()))()

@@ -1,6 +1,6 @@
 -- init.lua
 -- Modular Loadstring Entry Point with Cache Busting
--- Usage: loadstring(game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu/main/init.lua?t=" .. tick()))()
+-- Usage: loadstring(game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu-Clean/main/init.lua?t=" .. tick()))()
 
 -- Terminate and disconnect all connections and objects from previous executions
 pcall(function()
@@ -12,10 +12,7 @@ pcall(function()
     end
 end)
 
-local BASE_URLS = {
-    "https://raw.githubusercontent.com/FIHHHH2/Menu-Clean/main/Menu",
-    "https://raw.githubusercontent.com/FIHHHH2/Menu/main"
-}
+local BASE_URL = "https://raw.githubusercontent.com/FIHHHH2/Menu-Clean/main"
 
 -- Safe Service Initializer
 local function getService(name)
@@ -50,18 +47,11 @@ local function loadModule(name)
     end
 
     -- Cache busting prevents GitHub CDN from serving stale code
-    local src = nil
-    for _, baseUrl in ipairs(BASE_URLS) do
-        local url = baseUrl .. "/" .. name .. ".lua?t=" .. tostring(os.time()) .. tostring(math.random(1000, 9999))
-        local ok, res = pcall(function() return game:HttpGet(url) end)
-        if ok and type(res) == "string" and #res > 0 then
-            src = res
-            break
-        end
-    end
+    local url = BASE_URL .. "/" .. name .. ".lua?t=" .. tostring(os.time()) .. tostring(math.random(1000, 9999))
+    local ok, src = pcall(function() return game:HttpGet(url) end)
 
-    if not src then
-        warn("[Menu] HttpGet failed for module: " .. name)
+    if not ok or type(src) ~= "string" or #src == 0 then
+        warn("[Menu-Clean] HttpGet failed for module: " .. name .. " (URL: " .. url .. ")")
         return function() end
     end
 
