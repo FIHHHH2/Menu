@@ -74,6 +74,7 @@ return function(Shared)
         VoidSafetyPlat    = nil,
 
         -- Weapon Mechanisms
+        SilentGunAudio    = true,
         QuickReload       = false,
         AutoChamber       = false,
         CompleteAuto      = false,
@@ -183,6 +184,30 @@ return function(Shared)
                 config.Recoil = original.Recoil
             end
         end
+
+        -- Mute or restore sound assets in ReplicatedStorage.Assets.Sounds.Firearms
+        pcall(function()
+            local soundFolder = ReplicatedStorage:FindFirstChild("Assets") and ReplicatedStorage.Assets:FindFirstChild("Sounds") and ReplicatedStorage.Assets.Sounds:FindFirstChild("Firearms")
+            if soundFolder then
+                for _, gunFolder in ipairs(soundFolder:GetChildren()) do
+                    for _, s in ipairs(gunFolder:GetDescendants()) do
+                        if s:IsA("Sound") then
+                            if state.SilentGunAudio then
+                                if s:GetAttribute("OrigVol") == nil then
+                                    s:SetAttribute("OrigVol", s.Volume)
+                                end
+                                s.Volume = 0
+                            else
+                                local orig = s:GetAttribute("OrigVol")
+                                if orig ~= nil then
+                                    s.Volume = orig
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
 
         if not skipRefresh then
             task.spawn(refreshEquippedGun)
@@ -386,7 +411,11 @@ return function(Shared)
 
         if Muzzle then
             pcall(function()
-                Muzzle.Play(tool.Name, localPlayer.Character)
+                if not state.SilentGunAudio then
+                    Muzzle.Play(tool.Name, localPlayer.Character)
+                else
+                    Muzzle.PlayFlash(tool.Name, localPlayer.Character)
+                end
             end)
         end
 
@@ -711,14 +740,18 @@ return function(Shared)
             Shared.MakeSection(leftCol, "Weapon Mechanisms", 10)
         end
 
-        if Shared.MakeToggle then
-            Shared.MakeToggle(leftCol, "Quick Reload & Instant Rack", "CombatQuickReload", 11, function(val)
+            Shared.MakeToggle(leftCol, "Silent Gun Audio (Mute Firing)", "CombatSilentAudio", 11, function(val)
+                state.SilentGunAudio = val
+                updateWeaponConfigs(true)
+            end)
+
+            Shared.MakeToggle(leftCol, "Quick Reload & Instant Rack", "CombatQuickReload", 12, function(val)
                 state.QuickReload = val
                 state.AutoChamber = val
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(leftCol, "Complete Auto (All Guns)", "CombatCompleteAuto", 12, function(val)
+            Shared.MakeToggle(leftCol, "Complete Auto (All Guns)", "CombatCompleteAuto", 13, function(val)
                 state.CompleteAuto = val
                 if val then
                     state.SemiAutoForce = false
@@ -729,7 +762,7 @@ return function(Shared)
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(leftCol, "The Semi-Auto Force", "CombatSemiAuto", 13, function(val)
+            Shared.MakeToggle(leftCol, "The Semi-Auto Force", "CombatSemiAuto", 14, function(val)
                 state.SemiAutoForce = val
                 if val then
                     state.CompleteAuto = false
@@ -740,7 +773,7 @@ return function(Shared)
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(leftCol, "The Burst Rounds", "CombatBurstMode", 14, function(val)
+            Shared.MakeToggle(leftCol, "The Burst Rounds", "CombatBurstMode", 15, function(val)
                 state.BurstMode = val
                 if val then
                     state.CompleteAuto = false
@@ -751,12 +784,12 @@ return function(Shared)
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(leftCol, "Zero Recoil", "CombatNoRecoil", 15, function(val)
+            Shared.MakeToggle(leftCol, "Zero Recoil", "CombatNoRecoil", 16, function(val)
                 state.NoRecoil = val
                 updateWeaponConfigs()
             end)
 
-            Shared.MakeToggle(leftCol, "Rapid Fire Rate Overclock", "CombatFastFire", 16, function(val)
+            Shared.MakeToggle(leftCol, "Rapid Fire Rate Overclock", "CombatFastFire", 17, function(val)
                 state.FastFireRate = val
                 updateWeaponConfigs()
             end)
