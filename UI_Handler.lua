@@ -2372,7 +2372,26 @@ return function(Shared)
         -- Right Column: Physics & Exploits
         makeSection(playerCols.Right, "Physics & Exploits", 1)
 
-        makeToggle(playerCols.Right, "Noclip Mode", "Noclip", 2, function(state) end)
+        local function restoreCharacterCollision(char)
+            local targetChar = char or (localPlr and localPlr.Character)
+            if not targetChar then return end
+            for _, part in ipairs(targetChar:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    if part.Name == "Head" or part.Name == "Torso" or part.Name == "UpperTorso" or part.Name == "LowerTorso" then
+                        part.CanCollide = true
+                    elseif part.Name == "HumanoidRootPart" or part:FindFirstAncestorWhichIsA("Accessory") or part:FindFirstAncestorWhichIsA("Tool") or part.Name == "Handle" then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end
+        Shared.RestoreCharacterCollision = restoreCharacterCollision
+
+        makeToggle(playerCols.Right, "Noclip Mode", "Noclip", 2, function(state)
+            if not state then
+                restoreCharacterCollision()
+            end
+        end)
 
         local noclipConn = RunService.Stepped:Connect(function()
             if not Shared.Flags["Noclip"] then return end
