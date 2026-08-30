@@ -2249,11 +2249,24 @@ return function(Shared)
             end
         end
 
-        localPlr.CharacterAdded:Connect(function(newChar)
-            task.wait(0.1)
-            neutralizeFallDamageScripts(newChar)
+        local function bindCharProtection(char)
+            if not char then return end
+            neutralizeFallDamageScripts(char)
+            char.ChildAdded:Connect(function(child)
+                task.wait()
+                neutralizeFallDamageScripts(char)
+            end)
+        end
+
+        localPlr.CharacterAdded:Connect(bindCharProtection)
+        if localPlr.Character then bindCharProtection(localPlr.Character) end
+
+        local autoPurgeConn = RunService.Stepped:Connect(function()
+            if localPlr and localPlr.Character then
+                neutralizeFallDamageScripts(localPlr.Character)
+            end
         end)
-        if localPlr.Character then neutralizeFallDamageScripts(localPlr.Character) end
+        if Shared.AddCleanup then Shared.AddCleanup(autoPurgeConn) end
 
         -- ── WALK FLING ENGINE (TOUCH / CONTACT FLING) ────────────────
         makeToggle(playerCols.Right, "Walk Fling (Touch Fling)", "WalkFling", 7, function(state) end)
