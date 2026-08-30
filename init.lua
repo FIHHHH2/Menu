@@ -37,51 +37,6 @@ local function loadModule(name)
         local localFolder = rep:FindFirstChild("FihMenu")
         if localFolder and localFolder:FindFirstChild(name) then
             local targetMod = localFolder:FindFirstChild(name)
-            if targetMod and targetMod:IsA("ModuleScript") then
-                local okReq, mod = pcall(require, targetMod)
-                if okReq and type(mod) == "function" then
-                    return mod
-                end
-            end
-        end
-    end
-
-    -- Cache busting prevents GitHub CDN from serving stale code
-    local url = BASE_URL .. "/" .. name .. ".lua?t=" .. tostring(os.time()) .. tostring(math.random(1000, 9999))
-    local ok, src = pcall(function() return game:HttpGet(url) end)
-
-    if not ok or type(src) ~= "string" or #src == 0 then
-        warn("[Menu-Clean] HttpGet failed for module: " .. name .. " (URL: " .. url .. ")")
-        return function() end
-    end
-
-    local ls = rawget(getfenv and getfenv(0) or _G, "loadstring") or loadstring
-    if type(ls) ~= "function" then
-        ls = _G["loadstring"]
-    end
-    if type(ls) ~= "function" then
-        warn("[Menu] No valid loadstring function available for: " .. name)
-        return function() end
-    end
-
-    local chunk, cerr = ls(src)
-    if type(chunk) ~= "function" then
-        warn("[Menu] Compile error: " .. name .. " -> " .. tostring(cerr))
-        return function() end
-    end
-
-    local ok2, mod = pcall(chunk)
-    if not ok2 then
-        warn("[Menu] Exec error: " .. name .. " -> " .. tostring(mod))
-        return function() end
-    end
-    if type(mod) ~= "function" then
-        warn("[Menu] Module did not return function: " .. name .. " (got " .. type(mod) .. ")")
-        return function() end
-    end
-    return mod
-end
-
 -- Universal HTTP Request engine with multi-executor normalization
 local function httpRequest(opt)
     local env = (getgenv and getgenv()) or (getfenv and getfenv(0)) or _G
@@ -142,6 +97,71 @@ local function httpRequest(opt)
     end
 
     return nil
+end
+
+local function loadModule(name)
+    -- Local Studio / ModuleScript direct require support (Bypasses Studio loadstring block)
+    local rep = getService("ReplicatedStorage")
+    if rep then
+        local localFolder = rep:FindFirstChild("FihMenu")
+        if localFolder and localFolder:FindFirstChild(name) then
+            local targetMod = localFolder:FindFirstChild(name)
+            if targetMod and targetMod:IsA("ModuleScript") then
+                local okReq, mod = pcall(require, targetMod)
+                if okReq and type(mod) == "function" then
+                    return mod
+                end
+            end
+        end
+    end
+
+    -- Dynamic Cache Busting Request
+    local url = BASE_URL .. "/" .. name .. ".lua?_t=" .. tostring(os.time()) .. "_" .. tostring(math.random(100000, 999999))
+    local resp = httpRequest({
+        Url = url,
+        Method = "GET",
+        Headers = {
+            ["Cache-Control"] = "no-cache, no-store, must-revalidate",
+            ["Pragma"] = "no-cache"
+        }
+    })
+
+    local src = (resp and resp.Body) or ""
+    if #src == 0 then
+        local ok, fallbackSrc = pcall(function() return game:HttpGet(url) end)
+        if ok and type(fallbackSrc) == "string" then src = fallbackSrc end
+    end
+
+    if #src == 0 then
+        warn("[Menu-Clean] Failed to fetch module: " .. name .. " (URL: " .. url .. ")")
+        return function() end
+    end
+
+    local ls = rawget(getfenv and getfenv(0) or _G, "loadstring") or loadstring
+    if type(ls) ~= "function" then
+        ls = _G["loadstring"]
+    end
+    if type(ls) ~= "function" then
+        warn("[Menu] No valid loadstring function available for: " .. name)
+        return function() end
+    end
+
+    local chunk, cerr = ls(src)
+    if type(chunk) ~= "function" then
+        warn("[Menu] Compile error: " .. name .. " -> " .. tostring(cerr))
+        return function() end
+    end
+
+    local ok2, mod = pcall(chunk)
+    if not ok2 then
+        warn("[Menu] Exec error: " .. name .. " -> " .. tostring(mod))
+        return function() end
+    end
+    if type(mod) ~= "function" then
+        warn("[Menu] Module did not return function: " .. name .. " (got " .. type(mod) .. ")")
+        return function() end
+    end
+    return mod
 end
 
 -- Comprehensive Cleanup & Residual Purge Engine
