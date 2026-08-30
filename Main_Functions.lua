@@ -1,13 +1,15 @@
--- Main_Functions.lua
--- Movement, Stat Multipliers, World Modifiers, and Performance & FPS Boost Suite
+﻿-- Main_Functions.lua
+-- Fih UI Framework: Interface Customization, Visual Engine, Performance & Server Suite
 
 return function(Shared)
-    local Services     = Shared.Services or {}
-    local Players      = Services.Players or game:GetService("Players")
-    local RunService   = Services.RunService or game:GetService("RunService")
-    local UserInput    = Services.UserInput or game:GetService("UserInputService")
-    local TweenService = Services.TweenService or game:GetService("TweenService")
-    local Lighting     = game:GetService("Lighting")
+    local Services        = Shared.Services or {}
+    local Players         = Services.Players or game:GetService("Players")
+    local RunService      = Services.RunService or game:GetService("RunService")
+    local UserInput       = Services.UserInput or game:GetService("UserInputService")
+    local TweenService    = Services.TweenService or game:GetService("TweenService")
+    local Lighting        = game:GetService("Lighting")
+    local TeleportService = game:GetService("TeleportService")
+    local HttpService     = Services.Http or game:GetService("HttpService")
 
     local Player    = Shared.Player or Players.LocalPlayer
     local Tabs      = Shared.Tabs or {}
@@ -24,874 +26,158 @@ return function(Shared)
     local leftCol  = cols.Left
     local rightCol = cols.Right
 
-    local setupFragileCharacter = nil
-    local function getChar()  return Shared.Character or (Player and Player.Character) or (Players.LocalPlayer and Players.LocalPlayer.Character) end
-    local function getHRP()   return Shared.HumanoidRP or (getChar() and getChar():FindFirstChild("HumanoidRootPart")) end
-    local function getHuman() return getChar() and getChar():FindFirstChildOfClass("Humanoid") end
+    -- ── LEFT COLUMN: FIH UI & INTERFACE ──────────────────────────
+    MkSection(leftCol, "Fih UI & Interface", 1)
 
-    local function restoreDefaultCollisions(char)
-        if Shared.Flags["FragilePlayer"] and setupFragileCharacter then setupFragileCharacter(char) end
-        if not char then return end
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                if part.Name == "HumanoidRootPart" or part.Name == "UpperTorso" or part.Name == "LowerTorso" or part.Name == "Torso" or part.Name == "Head" then
-                    part.CanCollide = true
-                else
-                    -- Limbs (arms, legs, hands, feet) and accessory handles MUST be CanCollide = false
-                    part.CanCollide = false
-                end
+    MkToggle(leftCol, "Smooth Window Animations", "SmoothAnimations", 2, function(state)
+        Shared.Flags["SmoothAnimations"] = state
+    end)
+
+    MkToggle(leftCol, "Interface Click Sounds", "InterfaceSounds", 3, function(state)
+        Shared.Flags["InterfaceSounds"] = state
+    end)
+
+    MkToggle(leftCol, "Retro Glass Aero Borders", "AeroGlassBorder", 4, function(state)
+        Shared.Flags["AeroGlassBorder"] = state
+        if Shared.GUI and Shared.GUI:FindFirstChild("IE7_Menu") then
+            local mainFrame = Shared.GUI.IE7_Menu:FindFirstChild("MainFrame")
+            if mainFrame then
+                mainFrame.BorderSizePixel = state and 2 or 1
             end
-        end
-    end
-
-    -- ΓöÇΓöÇ LEFT COLUMN: MOVEMENT & PHYSICS ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-    MkSection(leftCol, "Movement & Physics", 1)
-
-    local infJumpConn
-    MkToggle(leftCol, "Infinite Jump", "InfiniteJump", 2, function(state)
-        if infJumpConn then infJumpConn:Disconnect(); infJumpConn = nil end
-        if state then
-            infJumpConn = UserInput.JumpRequest:Connect(function()
-                local hum = getHuman(); if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-            end)
         end
     end)
 
-    local flightBV, flightConn
-    local function startFlight()
-        if flightConn then flightConn:Disconnect(); flightConn = nil end
-        if flightBV then flightBV:Destroy(); flightBV = nil end
-        local hrp = getHRP()
-        if hrp then
-            hrp.Velocity = Vector3.zero
-            flightBV = Instance.new("BodyVelocity")
-            flightBV.MaxForce = Vector3.new(1e5,1e5,1e5); flightBV.Velocity = Vector3.zero; flightBV.Parent = hrp
-        end
-        local cam = workspace.CurrentCamera
-        flightConn = RunService.Heartbeat:Connect(function()
-            if not Shared.Flags["Flight"] then return end
-            local currentHRP = getHRP()
-            if currentHRP and (not flightBV or flightBV.Parent ~= currentHRP) then
-                if flightBV then flightBV:Destroy() end
-                flightBV = Instance.new("BodyVelocity")
-                flightBV.MaxForce = Vector3.new(1e5,1e5,1e5); flightBV.Velocity = Vector3.zero; flightBV.Parent = currentHRP
-            end
-            local speed = Shared.Flags["FlightSpeed"] or 65; local dir = Vector3.zero
-            if UserInput:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.CFrame.LookVector end
-            if UserInput:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.CFrame.LookVector end
-            if UserInput:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.CFrame.RightVector end
-            if UserInput:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.CFrame.RightVector end
-            if UserInput:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0,1,0) end
-            if UserInput:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3.new(0,1,0) end
-            if flightBV and flightBV.Parent then
-                flightBV.Velocity = dir.Magnitude > 0 and (dir.Unit * speed) or Vector3.zero
-            end
-        end)
-    end
-    local function stopFlight()
-        if flightConn then flightConn:Disconnect(); flightConn = nil end
-        if flightBV then flightBV:Destroy(); flightBV = nil end
-    end
-
-    MkToggle(leftCol, "Flight", "Flight", 3, function(state)
-        if state then startFlight() else stopFlight() end
+    MkSlider(leftCol, "Interface Scale (%)", "InterfaceScale", 75, 125, 100, 5, function(val)
+        Shared.Flags["InterfaceScale"] = val
     end)
 
-    MkSlider(leftCol, "Flight Speed", "FlightSpeed", 20, 300, 65, 4, function(val) Shared.Flags["FlightSpeed"] = val end)
+    MkButton(leftCol, "[ 🔄 Reset Window Positions ]", 6, function()
+        if Shared.GUI and Shared.GUI:FindFirstChild("IE7_Menu") then
+            local mainFrame = Shared.GUI.IE7_Menu:FindFirstChild("MainFrame")
+            if mainFrame then
+                mainFrame.Position = UDim2.new(0.5, -290, 0.5, -200)
+            end
+        end
+        local lb = Shared.GUI and Shared.GUI:FindFirstChild("Fih_CustomLeaderboard")
+        if lb then
+            lb.Position = UDim2.new(1, -242, 0, 48)
+        end
+        local chat = Shared.GUI and Shared.GUI:FindFirstChild("Fih_CustomChat")
+        if chat then
+            chat.Position = UDim2.new(0, 16, 0, 48)
+        end
+        local hud = Shared.GUI and Shared.GUI:FindFirstChild("Fih_BottomHUD")
+        if hud then
+            hud.Position = UDim2.new(0.5, -165, 1, -115)
+        end
+        Shared.Notify("UI Engine", "All window positions reset to defaults", true)
+    end)
 
-    local noclipConn
-    MkToggle(leftCol, "Noclip", "Noclip", 5, function(state)
-        if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
+    -- ── LEFT COLUMN: CAMERA & VISUAL ENVIRONMENT ─────────────────
+    MkSection(leftCol, "Camera & Visual Environment", 10)
+
+    local originalBrightness = Lighting.Brightness
+    local originalClockTime   = Lighting.ClockTime
+    local originalGlobalShadows = Lighting.GlobalShadows
+
+    MkToggle(leftCol, "Fullbright Lighting", "Fullbright", 11, function(state)
         if state then
-            noclipConn = RunService.Stepped:Connect(function()
-                local char = getChar(); if not char then return end
-                for _, p in ipairs(char:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end
-            end)
+            Lighting.Brightness = 2
+            Lighting.ClockTime = 14
+            Lighting.FogEnd = 1e6
+            Lighting.GlobalShadows = false
         else
-            local char = getChar()
-            if char then restoreDefaultCollisions(char)
-        if Shared.Flags["FragilePlayer"] then setupFragileCharacter(char) end end
+            Lighting.Brightness = originalBrightness
+            Lighting.ClockTime = originalClockTime
+            Lighting.GlobalShadows = originalGlobalShadows
         end
     end)
 
-    local clickTPConn
-    MkToggle(leftCol, "Click TP (Ctrl + Click)", "ClickTP", 6, function(state)
-        if clickTPConn then clickTPConn:Disconnect(); clickTPConn = nil end
+    MkSlider(leftCol, "Field of View (FOV)", "FieldOfView", 60, 120, 70, 12, function(val)
+        if workspace.CurrentCamera then
+            workspace.CurrentCamera.FieldOfView = val
+        end
+    end)
+
+    MkSlider(leftCol, "Max Camera Zoom Distance", "MaxCameraZoom", 10, 500, 128, 13, function(val)
+        if Player then
+            Player.CameraMaxZoomDistance = val
+        end
+    end)
+
+    MkSlider(leftCol, "Time of Day (Hours)", "TimeOfDay", 0, 24, 14, 14, function(val)
+        Lighting.ClockTime = val
+    end)
+
+    MkSlider(leftCol, "Master Audio Volume", "MasterVolume", 0, 100, 50, 15, function(val)
+        for _, s in ipairs(workspace:GetDescendants()) do
+            if s:IsA("Sound") then
+                s.Volume = val / 100
+            end
+        end
+    end)
+
+    -- ── RIGHT COLUMN: GRAPHICS & PERFORMANCE ENGINE ──────────────
+    MkSection(rightCol, "Graphics & Performance Engine", 1)
+
+    MkToggle(rightCol, "Disable Global Shadows", "NoShadows", 2, function(state)
+        Lighting.GlobalShadows = not state
+    end)
+
+    local disabledEffects = {}
+    MkToggle(rightCol, "Disable Post-Processing (Blur/Bloom)", "NoPostProcessing", 3, function(state)
         if state then
-            clickTPConn = UserInput.InputBegan:Connect(function(input, gpe)
-                if gpe then return end
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    local isCtrlHeld = UserInput:IsKeyDown(Enum.KeyCode.LeftControl) or UserInput:IsKeyDown(Enum.KeyCode.RightControl)
-                    if isCtrlHeld then
-                        local hrp = getHRP(); if not hrp then return end
-                        local mouse = Player:GetMouse()
-                        if mouse and mouse.Hit then
-                            hrp.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0, 3.2, 0))
-                        else
-                            local mouseLoc = UserInput:GetMouseLocation()
-                            local cam = workspace.CurrentCamera
-                            local ray = cam:ViewportPointToRay(mouseLoc.X, mouseLoc.Y)
-                            local params = RaycastParams.new()
-                            params.FilterDescendantsInstances = {getChar()}
-                            params.FilterType = Enum.RaycastFilterType.Exclude
-                            local res = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
-                            if res then
-                                hrp.CFrame = CFrame.new(res.Position + Vector3.new(0, 3.2, 0))
-                            end
-                        end
+            for _, obj in ipairs(Lighting:GetChildren()) do
+                if obj:IsA("PostProcessEffect") or obj:IsA("BloomEffect") or obj:IsA("BlurEffect") or obj:IsA("ColorCorrectionEffect") or obj:IsA("SunRaysEffect") or obj:IsA("DepthOfFieldEffect") then
+                    if obj.Enabled then
+                        disabledEffects[obj] = true
+                        obj.Enabled = false
                     end
                 end
-            end)
-        end
-    end)
-
-    MkToggle(leftCol, "Anti-Ragdoll", "AntiRagdoll", 7, function(state)
-        local char = getChar(); if not char then return end
-        for _, obj in ipairs(char:GetDescendants()) do
-            if obj:IsA("BallSocketConstraint") or obj:IsA("HingeConstraint") then
-                obj.Enabled = not state
             end
-        end
-    end)
-
-    -- ΓöÇΓöÇ Fragile Player (Glass Character / Shatter on Impact) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-    local fragileConns = {}
-    local fragileCooldown = false
-
-    setupFragileCharacter = function(char)
-        for _, conn in ipairs(fragileConns) do pcall(function() conn:Disconnect() end) end
-        fragileConns = {}
-
-        if not char then return end
-        local hum = char:WaitForChild("Humanoid", 3)
-        local hrp = char:WaitForChild("HumanoidRootPart", 3)
-        if not hum or not hrp then return end
-
-        for _, part in ipairs(char:GetChildren()) do
-            if part:IsA("BasePart") then
-                local conn = part.Touched:Connect(function(hit)
-                    if not Shared.Flags["FragilePlayer"] or fragileCooldown then return end
-                    if not hit or not hit.Parent or hit:IsDescendantOf(char) then return end
-
-                    -- Check if touched by another player or moving object/floor with momentum
-                    local hitHum = hit.Parent:FindFirstChildOfClass("Humanoid") or (hit.Parent.Parent and hit.Parent.Parent:FindFirstChildOfClass("Humanoid"))
-                    local isFast = hrp.AssemblyLinearVelocity.Magnitude > 12 or hit.AssemblyLinearVelocity.Magnitude > 8
-
-                    if hitHum or isFast then
-                        fragileCooldown = true
-                        local force = Shared.Flags["FragileForce"] or 85
-                        local hitDir = (hrp.Position - hit.Position).Magnitude > 0.1 and (hrp.Position - hit.Position).Unit or Vector3.new(0, 1, 0)
-
-                        -- Ragdoll collapse
-                        hum.PlatformStand = true
-                        hum:ChangeState(Enum.HumanoidStateType.FallingDown)
-                        hrp.AssemblyLinearVelocity = hitDir * force + Vector3.new(0, force * 0.6, 0)
-                        hrp.AssemblyAngularVelocity = Vector3.new(math.random(-30, 30), math.random(-30, 30), math.random(-30, 30))
-
-                        -- Auto recover after short comedic delay
-                        task.delay(1.6, function()
-                            if hum and hum.Parent then
-                                hum.PlatformStand = false
-                                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-                            end
-                            task.wait(0.3)
-                            fragileCooldown = false
-                        end)
-                    end
-                end)
-                table.insert(fragileConns, conn)
-            end
-        end
-    end
-
-    MkToggle(leftCol, "Fragile Player (Glass Mode)", "FragilePlayer", 8, function(state)
-        if state then
-            setupFragileCharacter(getChar())
-            Shared.Notify("Fragile Player", "Glass Physics Enabled -- Ragdoll on Contact", true)
         else
-            for _, conn in ipairs(fragileConns) do pcall(function() conn:Disconnect() end) end
-            fragileConns = {}
-            local hum = getHuman()
-            if hum then
-                hum.PlatformStand = false
-                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            for obj in pairs(disabledEffects) do
+                if obj and obj.Parent then pcall(function() obj.Enabled = true end) end
             end
-            Shared.Notify("Fragile Player", "Glass Mode Disabled", false)
+            disabledEffects = {}
         end
     end)
 
-    MkSlider(leftCol, "Fragile Knockback Force", "FragileForce", 20, 250, 85, 9, function(val)
-        Shared.Flags["FragileForce"] = val
-    end)
-
-    MkButton(leftCol, "[ Force Respawn ]", 10, function()
-        Player:LoadCharacter()
-    end)
-
-
-
-    -- ΓöÇΓöÇ RIGHT COLUMN: STAT MULTIPLIERS & WORLD ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-    MkSection(rightCol, "Stat Multipliers", 10)
-
-    local defaultWalkSpeed = 16
-    local defaultJumpHeight = 7.2
-    local defaultJumpPower = 50
-
-    local function cacheDefaultStats(char)
-        if not char then return end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            if hum.WalkSpeed > 0 and not Shared.Flags["EnableWalkSpeed"] then
-                defaultWalkSpeed = hum.WalkSpeed
-            end
-            if hum.JumpHeight > 0 and not Shared.Flags["EnableJump"] then
-                defaultJumpHeight = hum.JumpHeight
-            end
-            if hum.JumpPower > 0 and not Shared.Flags["EnableJump"] then
-                defaultJumpPower = hum.JumpPower
-            end
-        end
-    end
-    cacheDefaultStats(getChar())
-
-    local function applyJumpStats(hum, val)
-        if not hum then return end
-        pcall(function()
-            hum.UseJumpPower = false
-            hum.JumpHeight   = val
-            hum.JumpPower    = math.clamp(val * 7, 50, 1000)
+    local setfpscap = setfpscap or (getgenv and getgenv().setfpscap)
+    if setfpscap then
+        MkSlider(rightCol, "FPS Limiter / Cap", "FPSCap", 30, 360, 144, 4, function(val)
+            pcall(function() setfpscap(val) end)
         end)
     end
 
-    local function restoreJumpStats(hum)
-        if not hum then return end
-        pcall(function()
-            hum.JumpHeight = defaultJumpHeight
-            hum.JumpPower  = defaultJumpPower
-        end)
-    end
+    -- ── RIGHT COLUMN: SERVER & SESSION UTILITIES ─────────────────
+    MkSection(rightCol, "Server & Session Utilities", 10)
 
-    MkToggle(rightCol, "Enable Custom Walk Speed", "EnableWalkSpeed", 11, function(state)
-        local hum = getHuman()
-        if hum then
-            if state then
-                hum.WalkSpeed = Shared.Flags["WalkSpeed"] or defaultWalkSpeed
+    -- 1. Rejoin Server
+    MkButton(rightCol, "[ 🔄 Reconnect / Rejoin Server ]", 11, function()
+        Shared.Notify("Server", "Reconnecting to current server...", true)
+        task.defer(function()
+            if #Players:GetPlayers() <= 1 then
+                Player:Kick("\n[FihUI] Reconnecting to server...")
+                task.wait(0.2)
+                TeleportService:Teleport(game.PlaceId, Player)
             else
-                hum.WalkSpeed = defaultWalkSpeed
-            end
-        end
-    end)
-
-    MkSlider(rightCol, "Walk Speed", "WalkSpeed", 16, 250, 16, 12, function(val)
-        Shared.Flags["WalkSpeed"] = val
-        if Shared.Flags["EnableWalkSpeed"] then
-            local hum = getHuman()
-            if hum then hum.WalkSpeed = val end
-        end
-    end)
-
-    MkToggle(rightCol, "Enable Custom Jump", "EnableJump", 13, function(state)
-        local hum = getHuman()
-        if hum then
-            if state then
-                applyJumpStats(hum, Shared.Flags["JumpHeight"] or defaultJumpHeight)
-            else
-                restoreJumpStats(hum)
-            end
-        end
-    end)
-
-    MkSlider(rightCol, "Jump Height / Power", "JumpHeight", 7, 250, 7, 14, function(val)
-        Shared.Flags["JumpHeight"] = val
-        if Shared.Flags["EnableJump"] then
-            local hum = getHuman()
-            if hum then applyJumpStats(hum, val) end
-        end
-    end)
-
-    -- Continuous jump & speed enforcement loop
-    local statsConn = RunService.Heartbeat:Connect(function()
-        local hum = getHuman()
-        if hum then
-            if Shared.Flags["EnableWalkSpeed"] and Shared.Flags["WalkSpeed"] then
-                hum.WalkSpeed = Shared.Flags["WalkSpeed"]
-            end
-            if Shared.Flags["EnableJump"] and Shared.Flags["JumpHeight"] then
-                applyJumpStats(hum, Shared.Flags["JumpHeight"])
-            end
-        end
-    end)
-    if Shared.AddCleanup then Shared.AddCleanup(statsConn) end
-
-    local charAddedConn = Player.CharacterAdded:Connect(function(char)
-        local hum = char:WaitForChild("Humanoid", 5)
-        task.wait(0.1)
-        cacheDefaultStats(char)
-        if hum then
-            if Shared.Flags["EnableWalkSpeed"] and Shared.Flags["WalkSpeed"] then
-                hum.WalkSpeed = Shared.Flags["WalkSpeed"]
-            else
-                hum.WalkSpeed = defaultWalkSpeed
-            end
-
-            if Shared.Flags["EnableJump"] and Shared.Flags["JumpHeight"] then
-                applyJumpStats(hum, Shared.Flags["JumpHeight"])
-            else
-                restoreJumpStats(hum)
-            end
-        end
-        restoreDefaultCollisions(char)
-        if Shared.Flags["FragilePlayer"] then setupFragileCharacter(char) end
-        if Shared.Flags["Flight"] then startFlight() end
-        if Shared.Flags["Reach"] and Shared.Flags["Reach"] > 2 then
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.Size = Vector3.new(Shared.Flags["Reach"], 2, Shared.Flags["Reach"])
-                hrp.CanCollide = false
-            end
-        end
-        if Shared.Flags["AntiRagdoll"] then
-            for _, obj in ipairs(char:GetDescendants()) do
-                if obj:IsA("BallSocketConstraint") or obj:IsA("HingeConstraint") then
-                    obj.Enabled = false
-                end
-            end
-        end
-        if Shared.Flags["Gravity"] then
-            workspace.Gravity = Shared.Flags["Gravity"]
-        end
-    end)
-
-    MkSection(rightCol, "World Modifiers", 20)
-
-    MkSlider(rightCol, "Gravity", "Gravity", 10, 200, 196, 21, function(val)
-        workspace.Gravity = val
-    end)
-
-    MkSlider(rightCol, "Reach Extender", "Reach", 2, 40, 2, 22, function(val)
-        local hrp = getHRP()
-        if hrp then
-            if val <= 2 then
-                hrp.Size = Vector3.new(2, 2, 1)
-                hrp.CanCollide = true
-            else
-                hrp.Size = Vector3.new(val, 2, val)
-                -- Keep enlarged root part non-collidable so player can fit through tight spaces and doors
-                hrp.CanCollide = false
-            end
-        end
-    end)
-
-    local antiAimConn
-    MkToggle(rightCol, "Anti-Aim (Spin HRP)", "AntiAim", 23, function(state)
-        if antiAimConn then antiAimConn:Disconnect(); antiAimConn = nil end
-        if state then
-            local t = 0
-            antiAimConn = RunService.RenderStepped:Connect(function(dt)
-                t = t + dt * 10
-                local hrp = getHRP(); if not hrp then return end
-                hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(t*15), 0)
-            end)
-        end
-    end)
-
-    -- ΓöÇΓöÇ LEFT COLUMN: CAMERA & VIEW ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-    MkSection(leftCol, "Camera & View", 15)
-
-    MkSlider(leftCol, "FOV", "FOV", 70, 120, 70, 16, function(val)
-        if workspace.CurrentCamera then workspace.CurrentCamera.FieldOfView = val end
-    end)
-
-    MkToggle(leftCol, "Full Bright", "FullBright", 17, function(state)
-        if state then
-            Lighting.Brightness = 2; Lighting.ClockTime = 14
-            Lighting.FogEnd = 1e6; Lighting.GlobalShadows = false
-        else
-            Lighting.Brightness = 1; Lighting.ClockTime = 14
-            Lighting.FogEnd = 1e6; Lighting.GlobalShadows = true
-        end
-    end)
-
-    -- ΓöÇΓöÇ LEFT COLUMN: UNIVERSAL ESP & CROSS-PLAYER DETECTION ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-    MkSection(leftCol, "Universal ESP & Peer Radar", 20)
-
-    local peerUsers = {}          -- [UserId] = { isPeer = true, song = "", artist = "", cover = "", billboard = nil, visBars = {}, lastSeen = 0 }
-    local universalESPList = {}   -- [Player] = { gui = BillboardGui, hl = Highlight, lbl = TextLabel, bg = Frame }
-    local universalESPConn = nil
-
-    local TAG_NAME = "Fih_PeerTag"
-    local curJobIdClean = (game.JobId ~= "" and game.JobId:gsub("-", "")) or "local_server"
-
-    local ronaldAsset = nil
-    local function getRonaldAsset()
-        if ronaldAsset then return ronaldAsset end
-        local gca = getcustomasset or getsynasset or (getgenv and (getgenv().getcustomasset or getgenv().getsynasset))
-        local wf  = writefile or (getgenv and getgenv().writefile)
-        local isf = isfile or (getgenv and getgenv().isfile)
-        local fname = "fih_ronald.png"
-        if gca and wf then
-            pcall(function()
-                if not (isf and isf(fname)) then
-                    local bytes = game:HttpGet("https://raw.githubusercontent.com/FIHHHH2/Menu/main/ronald_cat.png")
-                    if bytes and #bytes > 1000 then wf(fname, bytes) end
-                end
-            end)
-            local ok, a = pcall(function() return gca(fname) end)
-            if ok and a and a ~= "" then
-                ronaldAsset = a
-                return a
-            end
-        end
-        return "https://raw.githubusercontent.com/FIHHHH2/Menu/main/ronald_cat.png"
-    end
-
-    -- Create or update an AlwaysOnTop 3D Overhead Music Billboard on a Peer Player
-    local function updatePeerBillboard(plr, songName, artistName, coverUrl)
-        if not plr or not plr.Character then return end
-        local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-
-        local info = peerUsers[plr.UserId]
-        if not info then return end
-
-        local isPlaying = (songName and songName ~= "" and songName ~= "Not Playing")
-
-        if not info.billboard or not info.billboard.Parent or info.billboard.Adornee ~= hrp then
-            if info.billboard then pcall(function() info.billboard:Destroy() end) end
-
-            local head = plr.Character:FindFirstChild("Head") or hrp
-
-            local bb = Instance.new("BillboardGui")
-            bb.Name                   = "PeerMusicBillboard_" .. tostring(plr.UserId)
-            bb.Size                   = UDim2.new(0, 280, 0, 68)
-            bb.StudsOffsetWorldSpace  = Vector3.new(0, 4.2, 0)
-            bb.AlwaysOnTop            = (Shared.Flags and Shared.Flags["UniversalESP"]) or false
-            bb.Active                 = true
-            bb.MaxDistance            = 75
-            bb.ClipsDescendants       = false
-            bb.Adornee                = head
-            bb.Parent                 = Shared.GUI
-
-            local bg = Instance.new("Frame")
-            bg.Size                   = UDim2.new(1, 0, 1, 0)
-            bg.BackgroundColor3       = Color3.fromRGB(15, 18, 24)
-            bg.BackgroundTransparency = 0.15
-            bg.BorderSizePixel        = 1
-            bg.BorderColor3           = Color3.fromRGB(255, 205, 30)
-            bg.ClipsDescendants       = false
-            bg.Parent                 = bb
-
-            -- Ronald Cat Overlay INSIDE BG on far right side
-            local ronaldImg = Instance.new("ImageLabel")
-            ronaldImg.Name                   = "RonaldCatOverlay"
-            ronaldImg.Size                   = UDim2.new(0, 38, 0, 52)
-            ronaldImg.AnchorPoint            = Vector2.new(1, 0.5)
-            ronaldImg.Position               = UDim2.new(1, -6, 0.5, 0)
-            ronaldImg.BackgroundTransparency = 1
-            ronaldImg.BorderSizePixel        = 0
-            ronaldImg.ScaleType              = Enum.ScaleType.Fit
-            ronaldImg.ZIndex                 = 25
-            ronaldImg.Image                  = getRonaldAsset()
-            ronaldImg.Parent                 = bg
-
-            -- Album Cover Container
-            local coverFrame = Instance.new("Frame")
-            coverFrame.Name             = "CoverContainer"
-            coverFrame.Size             = UDim2.new(0, 52, 0, 52)
-            coverFrame.Position         = UDim2.new(0, 6, 0, 8)
-            coverFrame.BackgroundColor3 = Color3.fromRGB(22, 26, 36)
-            coverFrame.BorderSizePixel  = 1
-            coverFrame.BorderColor3     = Color3.fromRGB(255, 205, 30)
-            coverFrame.ClipsDescendants = true
-            coverFrame.Parent           = bg
-
-            local note = Instance.new("TextLabel")
-            note.Name                   = "NoteFallback"
-            note.Size                   = UDim2.new(1, 0, 1, 0)
-            note.BackgroundTransparency = 1
-            note.Text                   = "[ΓÖ¬]"
-            note.Font                   = Enum.Font.Code
-            note.TextSize               = 14
-            note.TextColor3             = Color3.fromRGB(255, 215, 50)
-            note.ZIndex                 = 1
-            note.Parent                 = coverFrame
-
-            local coverImg = Instance.new("ImageLabel")
-            coverImg.Name                   = "CoverArtwork"
-            coverImg.Size                   = UDim2.new(1, 0, 1, 0)
-            coverImg.BackgroundTransparency = 1
-            coverImg.BorderSizePixel        = 0
-            coverImg.ScaleType              = Enum.ScaleType.Crop
-            coverImg.ZIndex                 = 2
-            coverImg.Parent                 = coverFrame
-
-            if Shared.ApplyArtworkImage then
-                Shared.ApplyArtworkImage(coverImg, { cover = coverUrl or "", name = songName or "", artist = artistName or "" })
-            elseif coverUrl and coverUrl ~= "" then
-                coverImg.Image = coverUrl
-            end
-
-            local songLbl = Instance.new("TextLabel")
-            songLbl.Name                  = "SongTitle"
-            songLbl.Size                  = UDim2.new(1, -95, 0, 16)
-            songLbl.Position              = UDim2.new(0, 64, 0, 6)
-            songLbl.BackgroundTransparency = 1
-            songLbl.Text                  = (isPlaying and songName) or "No Active Playback"
-            songLbl.TextColor3            = Color3.fromRGB(255, 255, 255)
-            songLbl.Font                  = Enum.Font.ArimoBold
-            songLbl.TextSize              = 11
-            songLbl.TextXAlignment        = Enum.TextXAlignment.Left
-            songLbl.TextTruncate          = Enum.TextTruncate.AtEnd
-            songLbl.Parent                = bg
-
-            local artistLbl = Instance.new("TextLabel")
-            artistLbl.Name                  = "ArtistTitle"
-            artistLbl.Size                  = UDim2.new(1, -95, 0, 14)
-            artistLbl.Position              = UDim2.new(0, 64, 0, 22)
-            artistLbl.BackgroundTransparency = 1
-            artistLbl.Text                  = (isPlaying and artistName and artistName ~= "") and artistName or "[≡ƒææ FIH USER]"
-            artistLbl.TextColor3            = Color3.fromRGB(0, 230, 150)
-            artistLbl.Font                  = Enum.Font.Code
-            artistLbl.TextSize              = 10
-            artistLbl.TextXAlignment        = Enum.TextXAlignment.Left
-            artistLbl.TextTruncate          = Enum.TextTruncate.AtEnd
-            artistLbl.Parent                = bg
-
-            -- 6-Bar Peer Overhead Equalizer
-            local visBox = Instance.new("Frame")
-            visBox.Name                   = "PeerEqualizer"
-            visBox.Size                   = UDim2.new(0, 52, 0, 16)
-            visBox.Position               = UDim2.new(0, 64, 0, 42)
-            visBox.BackgroundTransparency = 1
-            visBox.BorderSizePixel        = 0
-            visBox.Parent                 = bg
-
-            local vBars = {}
-            for i = 1, 6 do
-                local bar = Instance.new("Frame")
-                bar.Size = UDim2.new(0, 5, 0, 3)
-                bar.Position = UDim2.new(0, (i - 1) * 8, 1, 0)
-                bar.AnchorPoint = Vector2.new(0, 1)
-                bar.BackgroundColor3 = Color3.fromRGB(255, 205, 30)
-                bar.BorderSizePixel = 0
-                bar.Parent = visBox
-                vBars[i] = bar
-            end
-            info.visBars = vBars
-
-            local badgeLbl = Instance.new("TextLabel")
-            badgeLbl.Size                  = UDim2.new(1, -125, 0, 14)
-            badgeLbl.Position              = UDim2.new(0, 120, 0, 44)
-            badgeLbl.BackgroundTransparency = 1
-            badgeLbl.Text                  = "≡ƒææ " .. plr.DisplayName
-            badgeLbl.TextColor3            = Color3.fromRGB(255, 205, 30)
-            badgeLbl.Font                  = Enum.Font.Code
-            badgeLbl.TextSize              = 9
-            badgeLbl.TextXAlignment        = Enum.TextXAlignment.Left
-            badgeLbl.TextTruncate          = Enum.TextTruncate.AtEnd
-            badgeLbl.Parent                = bg
-
-            info.billboard = bb
-        else
-            local bg = info.billboard:FindFirstChildOfClass("Frame")
-            if bg then
-                local sLbl = bg:FindFirstChild("SongTitle")
-                if sLbl then sLbl.Text = (isPlaying and songName) or "No Active Playback" end
-                local aLbl = bg:FindFirstChild("ArtistTitle")
-                if aLbl then aLbl.Text = (isPlaying and artistName and artistName ~= "") and artistName or "[≡ƒææ FIH USER]" end
-                local cFrame = bg:FindFirstChild("CoverContainer")
-                if cFrame then
-                    local cImg = cFrame:FindFirstChild("CoverArtwork")
-                    if cImg and Shared.ApplyArtworkImage then
-                        Shared.ApplyArtworkImage(cImg, { cover = coverUrl or "", name = songName or "", artist = artistName or "" })
-                    end
-                end
-            end
-        end
-    end
-
-    local function registerPeerData(userId, name, dispName, song, artist, cover)
-        local uid = tonumber(userId)
-        if not uid or uid == Player.UserId then return end
-        local p = Players:GetPlayerByUserId(uid)
-        if not p then return end
-
-        local isNew = not peerUsers[uid]
-        local prevBB = peerUsers[uid] and peerUsers[uid].billboard or nil
-        local prevBars = peerUsers[uid] and peerUsers[uid].visBars or {}
-
-        peerUsers[uid] = {
-            isPeer    = true,
-            song      = song or "",
-            artist    = artist or "",
-            cover     = cover or "",
-            billboard = prevBB,
-            visBars   = prevBars,
-            lastSeen  = os.time()
-        }
-
-        updatePeerBillboard(p, song or "", artist or "", cover or "")
-
-        if isNew then
-            local songMsg = (song and song ~= "" and song ~= "Not Playing") and (" ([ΓÖ¬] " .. song .. ")") or ""
-            Shared.Notify("Peer Detected", p.DisplayName .. " is running FIH UI!" .. songMsg, true)
-        end
-    end
-
-    local function broadcastBeacon()
-        pcall(function()
-            local curTrack = Shared.GetCurrentTrack and Shared.GetCurrentTrack() or { name = "", artist = "", cover = "" }
-            local s = (curTrack.name and curTrack.name ~= "Not Playing") and curTrack.name or ""
-            local a = (curTrack.artist and curTrack.artist ~= "No Artist") and curTrack.artist or ""
-            local c = curTrack.cover or ""
-
-            -- 1. Local File Relay (Multi-Client / Same Machine)
-            if writefile then
-                local fname1 = "fih_peer_" .. curJobIdClean .. "_" .. tostring(Player.UserId) .. ".json"
-                local fname2 = "fih_peer_" .. tostring(Player.UserId) .. ".json"
-                local payload = game:GetService("HttpService"):JSONEncode({
-                    u = Player.UserId,
-                    n = Player.Name,
-                    d = Player.DisplayName,
-                    s = s,
-                    a = a,
-                    c = c,
-                    t = os.time()
-                })
-                pcall(function() writefile(fname1, payload) end)
-                pcall(function() writefile(fname2, payload) end)
-            end
-        end)
-    end
-    Shared.BroadcastBeacon = broadcastBeacon
-
-    -- Scan local file relay for active peers
-    local function scanFileRelay()
-        if not (listfiles and readfile) then return end
-        local ok, files = pcall(function() return listfiles("") end)
-        if not ok or not files then return end
-
-        local now = os.time()
-        for _, file in ipairs(files) do
-            local basename = file:match("([^\\/]+)$") or file
-            if basename:find("^fih_peer_") and basename:find("%.json$") then
-                local okR, content = pcall(function() return readfile(file) end)
-                if okR and content and #content > 10 then
-                    local okJ, data = pcall(function() return game:GetService("HttpService"):JSONDecode(content) end)
-                    if okJ and data and data.u and (now - (data.t or 0)) < 30 then
-                        registerPeerData(data.u, data.n, data.d, data.s, data.a, data.c)
-                    end
-                end
-            end
-        end
-    end
-
-    -- Animate Peer Billboard Equalizers
-    local peerVisConn = RunService.RenderStepped:Connect(function()
-        local t = os.clock()
-        for uid, pInfo in pairs(peerUsers) do
-            if pInfo.visBars and #pInfo.visBars > 0 then
-                local isPlaying = (pInfo.song and pInfo.song ~= "" and pInfo.song ~= "Not Playing")
-                for i, bar in ipairs(pInfo.visBars) do
-                    if bar and bar.Parent then
-                        local h = 2
-                        if isPlaying then
-                            local n = (math.noise(i * 0.6, t * 3.8, uid % 200) + 1) * 0.5
-                            h = math.clamp(math.floor((n ^ 1.6) * 16) + 2, 2, 16)
-                            bar.BackgroundColor3 = Color3.fromHSV((0.12 + i * 0.04) % 1, 0.9, 1)
-                        else
-                            bar.BackgroundColor3 = Color3.fromRGB(70, 85, 110)
-                        end
-                        bar.Size = UDim2.new(0, 5, 0, h)
-                    end
-                end
-            end
-        end
-    end)
-    if Shared.AddCleanup then Shared.AddCleanup(peerVisConn) end
-
-    -- Background loop: periodic broadcast and scan every 2 seconds
-    task.spawn(function()
-        while true do
-            task.wait(2)
-            broadcastBeacon()
-            scanFileRelay()
-        end
-    end)
-
-    local function cleanupUniversalESP(plr)
-        local item = universalESPList[plr]
-        if item then
-            pcall(function() if item.gui then item.gui:Destroy() end end)
-            pcall(function() if item.hl then item.hl:Destroy() end end)
-            universalESPList[plr] = nil
-        end
-        local pInfo = peerUsers[plr.UserId]
-        if pInfo and pInfo.billboard then
-            pcall(function() pInfo.billboard:Destroy() end)
-            pInfo.billboard = nil
-        end
-    end
-
-    local function clearAllUniversalESP()
-        for plr in pairs(universalESPList) do cleanupUniversalESP(plr) end
-        universalESPList = {}
-    end
-
-    -- Universal ESP & Comprehensive Player Info
-    MkToggle(rightCol, "Universal Player ESP & Chams", "UniversalESP", 36, function(state)
-        clearAllUniversalESP()
-        if universalESPConn then universalESPConn:Disconnect(); universalESPConn = nil end
-
-        -- Update AlwaysOnTop on all peer billboards
-        for _, pInfo in pairs(peerUsers) do
-            if pInfo.billboard then
-                pcall(function() pInfo.billboard.AlwaysOnTop = state end)
-            end
-        end
-        local selfBB = Shared.GUI and Shared.GUI:FindFirstChild("MusicBillboard")
-        if selfBB then pcall(function() selfBB.AlwaysOnTop = state end) end
-
-        if not state then return end
-
-        broadcastBeacon()
-        universalESPConn = RunService.RenderStepped:Connect(function()
-            local myHRP = getHRP()
-
-            -- Clean dead players
-            for plr, item in pairs(universalESPList) do
-                if not plr.Parent or not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then
-                    cleanupUniversalESP(plr)
-                end
-            end
-
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= Player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                    local char = plr.Character
-                    local hrp  = char.HumanoidRootPart
-                    local hum  = char:FindFirstChildOfClass("Humanoid")
-                    local peerInfo = peerUsers[plr.UserId]
-                    local isPeer = (peerInfo ~= nil and peerInfo.isPeer == true)
-
-                    if hum and hum.Health > 0 then
-                        local entry = universalESPList[plr]
-
-                        if not entry or not (entry.hl and entry.hl.Parent) or not (entry.gui and entry.gui.Parent) or entry.gui.Adornee ~= hrp then
-                            cleanupUniversalESP(plr)
-
-                            -- Strip any residual/duplicate highlights on this character to prevent VHS scanline buffer bug
-                            for _, oldHl in ipairs(char:GetChildren()) do
-                                if oldHl:IsA("Highlight") and oldHl.Name:find("Fih_") then
-                                    pcall(function() oldHl:Destroy() end)
-                                end
-                            end
-
-                            local hl = Instance.new("Highlight")
-                            hl.Name                = "Fih_UnivChams"
-                            hl.Adornee             = char
-                            hl.FillTransparency    = 0.5
-                            hl.OutlineTransparency = 0
-                            hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
-                            hl.Parent              = char
-
-                            local bb = Instance.new("BillboardGui")
-                            bb.Name         = "Fih_UnivTag"
-                            bb.Size         = UDim2.new(0, 160, 0, 44)
-                            bb.StudsOffset  = Vector3.new(0, 3.8, 0)
-                            bb.AlwaysOnTop  = true
-                            bb.MaxDistance  = 1200
-                            bb.Adornee      = hrp
-                            bb.Parent       = Shared.GUI
-
-                            local bg = Instance.new("Frame")
-                            bg.Size                   = UDim2.new(1, 0, 1, 0)
-                            bg.BackgroundColor3       = Color3.fromRGB(15, 18, 24)
-                            bg.BackgroundTransparency = 0.2
-                            bg.BorderSizePixel        = 1
-                            bg.BorderColor3           = isPeer and Color3.fromRGB(255, 205, 30) or Color3.fromRGB(0, 170, 255)
-                            bg.Parent                 = bb
-
-                            local lbl = Instance.new("TextLabel")
-                            lbl.Size                   = UDim2.new(1, -6, 1, -4)
-                            lbl.Position               = UDim2.new(0, 3, 0, 2)
-                            lbl.BackgroundTransparency = 1
-                            lbl.Font                   = Enum.Font.ArimoBold
-                            lbl.TextSize               = 10
-                            lbl.TextStrokeTransparency = 0
-                            lbl.Parent                 = bg
-
-                            entry = { gui = bb, hl = hl, lbl = lbl, bg = bg }
-                            universalESPList[plr] = entry
-                        end
-
-                        -- Get equipped tool info
-                        local heldTool = char:FindFirstChildOfClass("Tool")
-                        local heldName = heldTool and (" [Holding: " .. heldTool.Name .. "]") or ""
-
-                        local dist = myHRP and math.floor((hrp.Position - myHRP.Position).Magnitude) or 0
-                        local hp = math.floor(hum.Health)
-                        local maxHp = math.floor(hum.MaxHealth)
-
-                        -- Update 3D Overhead Billboard if peer
-                        if isPeer then
-                            updatePeerBillboard(plr, peerInfo.song or "", peerInfo.artist or "")
-                        end
-
-                        local themeCol = isPeer and Color3.fromRGB(255, 205, 30) or Color3.fromRGB(0, 190, 255)
-                        entry.gui.Size = UDim2.new(0, 140, 0, 32)
-
-                        if entry.hl and entry.hl.Parent then
-                            entry.hl.FillColor    = themeCol
-                            entry.hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                        end
-                        if entry.bg and entry.lbl then
-                            entry.bg.BorderColor3 = themeCol
-                            entry.lbl.TextColor3  = themeCol
-                            entry.lbl.Text        = plr.DisplayName .. " (@" .. plr.Name .. ")" .. heldName .. "\n" .. hp .. "/" .. maxHp .. " HP | " .. dist .. "m"
-                        end
-                    end
-                end
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
             end
         end)
     end)
 
-    MkToggle(leftCol, "Cross-Player Detection (Peer Radar)", "PeerDetect", 22, function(state)
-        if state then
-            broadcastBeacon()
-            Shared.Notify("Peer Radar", "Broadcasting & scanning for script peers...", true)
-        end
-    end)
-
-
-
-    -- ΓöÇΓöÇ RIGHT COLUMN: SERVER & TELEPORTS ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-    local TeleportService = game:GetService("TeleportService")
-    local HttpService     = game:GetService("HttpService")
-
-    MkSection(rightCol, "Server & Teleports", 40)
-
-    -- 1. Rejoin Current Server
-    MkButton(rightCol, "[ ≡ƒöä Rejoin Current Server ]", 41, function()
-        Shared.Notify("Teleport", "Rejoining current server...", true)
-        local ok, err = pcall(function()
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
-        end)
-        if not ok then
-            TeleportService:Teleport(game.PlaceId, Player)
-        end
-    end)
-
-    -- 2. Server Hop (Find different active public server)
-    MkButton(rightCol, "[ ΓÜí Server Hop (New Server) ]", 42, function()
-        Shared.Notify("Server Hop", "Searching for available server...", true)
+    -- 2. Server Hop
+    MkButton(rightCol, "[ 🌐 Server Hop (Next Active Server) ]", 12, function()
+        Shared.Notify("Server Hop", "Searching for available public server...", true)
         task.spawn(function()
             local success, res = pcall(function()
-                return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Desc&limit=100")
+                return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100")
             end)
 
             if not success or not res or #res == 0 then
                 local reqRes = Shared.HttpRequest({
-                    Url = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Desc&limit=100",
+                    Url = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100",
                     Method = "GET"
                 })
                 if reqRes and reqRes.Body and #reqRes.Body > 0 then
@@ -924,103 +210,24 @@ return function(Shared)
         end)
     end)
 
-    -- 3. Join Random Roblox Game
-    local POPULAR_PLACES = {
-        142823291,   -- Murder Mystery 2
-        2753915549,  -- Blox Fruits
-        920587237,   -- Adopt Me!
-        4924922222,  -- Brookhaven RP
-        286090429,   -- Arsenal
-        189707,      -- Natural Disaster Survival
-        1962086868,  -- Tower of Hell
-        6872265039,  -- BedWars
-        6516141723,  -- Doors
-        13772394625, -- Blade Ball
-        606849621,   -- Jailbreak
-        16732694052, -- Fisch
-        1730877806,  -- The Strongest Battlegrounds
-        9872472334,  -- Evade
-        292439477,   -- Phantom Forces
-        17625359962, -- Rivals
-        155615604,   -- Prison Life
-        3956818381,  -- Ninja Legends
-        4442272183,  -- Flee the Facility
-        185655149,   -- Welcome to Bloxburg
-        8737602449,  -- Pls Donate
-        1240123653,  -- Zombie Stories
-        11131159953, -- Combat Initiation
-        12552538292, -- Pressure
-        18115804639, -- Dress To Impress
-    }
-
-    MkButton(rightCol, "[ ≡ƒÄ▓ Join Random Game ]", 43, function()
-        Shared.Notify("Random Game", "Finding a random experience...", true)
-        task.spawn(function()
-            -- 1. Try dynamic discovery from Roblox Recommendations API
-            local livePlaces = {}
-            local success, res = pcall(function()
-                return game:HttpGet("https://games.roblox.com/v1/games/recommendations/game/" .. tostring(game.PlaceId) .. "?maxRows=50")
-            end)
-
-            if not success or not res or #res == 0 then
-                local reqRes = Shared.HttpRequest({
-                    Url = "https://games.roblox.com/v1/games/recommendations/game/" .. tostring(game.PlaceId) .. "?maxRows=50",
-                    Method = "GET"
-                })
-                if reqRes and reqRes.Body and #reqRes.Body > 0 then
-                    res = reqRes.Body
-                    success = true
-                end
-            end
-
-            if success and res then
-                local okD, data = pcall(function() return HttpService:JSONDecode(res) end)
-                if okD and data and data.games then
-                    for _, g in ipairs(data.games) do
-                        if g.placeId and g.placeId ~= game.PlaceId then
-                            table.insert(livePlaces, g.placeId)
-                        end
-                    end
-                end
-            end
-
-            -- 2. Select from dynamic list or verified popular pool
-            local chosenPlaceId = nil
-            if #livePlaces > 0 then
-                chosenPlaceId = livePlaces[math.random(1, #livePlaces)]
-            else
-                local pool = {}
-                for _, id in ipairs(POPULAR_PLACES) do
-                    if id ~= game.PlaceId then table.insert(pool, id) end
-                end
-                chosenPlaceId = pool[math.random(1, #pool)]
-            end
-
-            Shared.Notify("Random Game", "Teleporting to Place ID: " .. tostring(chosenPlaceId) .. "...", true)
-            TeleportService:Teleport(chosenPlaceId, Player)
-        end)
-    end)
-
-    -- 4. Join Game by Place ID
+    -- 3. Teleport to Specific Place ID
     local targetPlaceId = ""
     local targetJobId   = ""
 
     local placeBox = Instance.new("TextBox")
     placeBox.Name                  = "PlaceIdInput"
     placeBox.Size                  = UDim2.new(1, 0, 0, 24)
-    placeBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
+    placeBox.BackgroundColor3      = Color3.fromRGB(245, 248, 255)
     placeBox.BorderSizePixel       = 1
     placeBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
-    placeBox.Text                  = "Enter Place ID (e.g. 142823291)"
+    placeBox.Text                  = ""
+    placeBox.PlaceholderText       = "Enter Place ID (e.g. 189707)"
     placeBox.TextColor3            = Color3.fromRGB(20, 20, 60)
     placeBox.Font                  = Enum.Font.Code
     placeBox.TextSize              = 11
-    placeBox.LayoutOrder           = 44
+    placeBox.LayoutOrder           = 13
     placeBox.Parent                = rightCol
 
-    placeBox.Focused:Connect(function()
-        if placeBox.Text:find("Enter Place ID") then placeBox.Text = "" end
-    end)
     placeBox.FocusLost:Connect(function()
         targetPlaceId = placeBox.Text:gsub("%D+", "")
     end)
@@ -1028,24 +235,22 @@ return function(Shared)
     local jobBox = Instance.new("TextBox")
     jobBox.Name                  = "JobIdInput"
     jobBox.Size                  = UDim2.new(1, 0, 0, 24)
-    jobBox.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
+    jobBox.BackgroundColor3      = Color3.fromRGB(245, 248, 255)
     jobBox.BorderSizePixel       = 1
     jobBox.BorderColor3          = Color3.fromRGB(150, 160, 180)
-    jobBox.Text                  = "Enter Job/Server ID (Optional)"
+    jobBox.Text                  = ""
+    jobBox.PlaceholderText       = "Enter Server Job ID (Optional)"
     jobBox.TextColor3            = Color3.fromRGB(20, 20, 60)
     jobBox.Font                  = Enum.Font.Code
     jobBox.TextSize              = 11
-    jobBox.LayoutOrder           = 44
+    jobBox.LayoutOrder           = 14
     jobBox.Parent                = rightCol
 
-    jobBox.Focused:Connect(function()
-        if jobBox.Text:find("Enter Job") then jobBox.Text = "" end
-    end)
     jobBox.FocusLost:Connect(function()
         targetJobId = jobBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
     end)
 
-    MkButton(rightCol, "[ ≡ƒÜÇ Teleport to Place ID ]", 46, function()
+    MkButton(rightCol, "[ 🚀 Teleport to Custom Place ]", 15, function()
         local pId = tonumber(targetPlaceId) or tonumber(placeBox.Text:gsub("%D+", ""))
         if not pId or pId <= 0 then
             Shared.Notify("Teleport", "Invalid Place ID entered", false)
@@ -1065,11 +270,12 @@ return function(Shared)
 
     -- 4. Auto-Rejoin on Disconnect / Kick
     local autoRejoinConn = nil
-    MkToggle(rightCol, "Auto-Rejoin on Disconnect", "AutoRejoin", 47, function(state)
+    MkToggle(rightCol, "Auto-Rejoin on Disconnect", "AutoRejoin", 16, function(state)
         if autoRejoinConn then autoRejoinConn:Disconnect(); autoRejoinConn = nil end
         if state then
-            local CoreGui = game:GetService("CoreGui")
-            local promptOverlay = CoreGui:FindFirstChild("RobloxPromptGui") and CoreGui.RobloxPromptGui:FindFirstChild("promptOverlay")
+            local CoreGui = Services.CoreGui
+            if not CoreGui then pcall(function() CoreGui = game:GetService("CoreGui") end) end
+            local promptOverlay = CoreGui and CoreGui:FindFirstChild("RobloxPromptGui") and CoreGui.RobloxPromptGui:FindFirstChild("promptOverlay")
             if promptOverlay then
                 autoRejoinConn = promptOverlay.ChildAdded:Connect(function(child)
                     if not Shared.Flags["AutoRejoin"] then return end
@@ -1082,5 +288,15 @@ return function(Shared)
         end
     end)
 
-    print("[Main_Functions] Loaded -- Performance, Teleports & Server Hop Active")
+    -- ── RIGHT COLUMN: CONFIGURATION MANAGER ──────────────────────
+    MkSection(rightCol, "Configuration Manager", 20)
+
+    MkButton(rightCol, "[ 💾 Save Config (FihUi_Config.json) ]", 21, function()
+        if Shared.SaveConfig then
+            Shared.SaveConfig()
+            Shared.Notify("Config Manager", "Configuration saved successfully", true)
+        end
+    end)
+
+    print("[Main_Functions] Loaded -- Fih UI Area & Session Utilities Active")
 end
