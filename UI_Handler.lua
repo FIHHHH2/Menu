@@ -1071,34 +1071,55 @@ return function(Shared)
         end)
     end
 
+    local isMaximized = false
+    local savedNormalSize = UDim2.new(0, WIN_W, 0, WIN_H)
+    local savedNormalPos  = Window.Position
+
     local minimized = false
-    winBtns["close"].MouseButton1Click:Connect(function()
-        minimized = true
-        local curW = Window.AbsoluteSize.X
-        savedWindowHeight = math.max(Window.AbsoluteSize.Y, WIN_H)
-        pcall(function()
-            TweenService:Create(Window, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                Size = UDim2.new(0, curW, 0, TITLE_H)
-            }):Play()
-        end)
-    end)
+    -- 1. MINIMIZE BUTTON [-]: Collapses window body down to title bar
     winBtns["min"].MouseButton1Click:Connect(function()
         minimized = not minimized
         local curW = Window.AbsoluteSize.X
         pcall(function()
             if minimized then
                 savedWindowHeight = math.max(Window.AbsoluteSize.Y, WIN_H)
-                TweenService:Create(Window, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                TweenService:Create(Window, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, curW, 0, TITLE_H)
                 }):Play()
             else
-                TweenService:Create(Window, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                TweenService:Create(Window, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, curW, 0, savedWindowHeight)
                 }):Play()
             end
         end)
     end)
-    winBtns["max"].MouseButton1Click:Connect(function() if isOpen then animClose() else animOpen() end end)
+
+    -- 2. MAXIMIZE BUTTON [ ]: Toggles maximized scale across viewport vs normal window size
+    winBtns["max"].MouseButton1Click:Connect(function()
+        isMaximized = not isMaximized
+        minimized = false
+        pcall(function()
+            if isMaximized then
+                savedNormalSize = Window.Size
+                savedNormalPos  = Window.Position
+                TweenService:Create(Window, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Position = UDim2.new(0.5, -420, 0.5, -280),
+                    Size     = UDim2.new(0, 840, 0, 560)
+                }):Play()
+            else
+                TweenService:Create(Window, TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Position = savedNormalPos,
+                    Size     = savedNormalSize
+                }):Play()
+            end
+        end)
+    end)
+
+    -- 3. CLOSE BUTTON [X]: Smoothly animates and closes/hides the menu
+    winBtns["close"].MouseButton1Click:Connect(function()
+        animClose()
+    end)
+
     UserInput.InputBegan:Connect(function(i, gpe)
         if gpe then return end
         if i.KeyCode == Enum.KeyCode.RightBracket then if isOpen then animClose() else animOpen() end end
@@ -1364,34 +1385,26 @@ return function(Shared)
     local QuadCols = {}
     local activeTab = nil
 
-    local isMM2 = (game.PlaceId == 142823291 or game.GameId == 66654135 or game.PlaceId == 335132309 or game.PlaceId == 63518381)
-    if Shared.IsMM2 == true then
-        isMM2 = true
+    local isMM2 = false
+    if Shared.IsMM2 ~= nil then
+        isMM2 = (Shared.IsMM2 == true)
+    else
+        isMM2 = (game.PlaceId == 142823291 or game.GameId == 66654135 or game.PlaceId == 335132309 or game.PlaceId == 63518381)
+        if not isMM2 then
+            pcall(function()
+                local rep = game:GetService("ReplicatedStorage")
+                if rep:FindFirstChild("Remotes") and rep.Remotes:FindFirstChild("Gameplay") and rep.Remotes.Gameplay:FindFirstChild("ShootGun") then
+                    isMM2 = true
+                end
+            end)
+        end
     end
-    if not isMM2 then
-        pcall(function()
-            local rep = game:GetService("ReplicatedStorage")
-            if rep:FindFirstChild("Remotes") and rep.Remotes:FindFirstChild("Gameplay") then
-                isMM2 = true
-            elseif rep:FindFirstChild("WeaponEvents") and rep.WeaponEvents:FindFirstChild("GunBeam") then
-                isMM2 = true
-            end
-            local lp = game:GetService("Players").LocalPlayer
-            if lp and lp:FindFirstChild("PlayerGui") and (lp.PlayerGui:FindFirstChild("MainGUI") or lp.PlayerGui:FindFirstChild("MainGui")) then
-                isMM2 = true
-            end
-        end)
-    end
-    -- Always show MM2 tab as a fallback if we couldn't detect it (user can just not use it)
-    -- Uncomment the line below if you want MM2 tab visible in all games for debugging:
-    -- isMM2 = true
-
 
     local isNDS = (game.PlaceId == 189707 or game.GameId == 65241)
-    if Shared.IsNDS ~= nil then isNDS = Shared.IsNDS end
+    if Shared.IsNDS ~= nil then isNDS = (Shared.IsNDS == true) end
 
     local isBladeBall = (game.PlaceId == 13772394625 or game.PlaceId == 14732610803 or game.PlaceId == 15131065025 or game.PlaceId == 15264892126 or game.PlaceId == 17135832729 or game.PlaceId == 15552588147 or game.GameId == 4777817887)
-    if Shared.IsBladeBall ~= nil then isBladeBall = Shared.IsBladeBall end
+    if Shared.IsBladeBall ~= nil then isBladeBall = (Shared.IsBladeBall == true) end
 
     local tabDefs = {
         {name="Main",     order=1},
@@ -1480,20 +1493,20 @@ return function(Shared)
         tLayout.SortOrder = Enum.SortOrder.LayoutOrder; tLayout.Padding = UDim.new(0,6); tLayout.Parent = tabFrame
 
         local quadFrame = Instance.new("Frame")
-        quadFrame.Name = "QuadGrid"; quadFrame.Size = UDim2.new(1,-8,0,0)
+        quadFrame.Name = "QuadGrid"; quadFrame.Size = UDim2.new(1,0,0,0)
         quadFrame.AutomaticSize = Enum.AutomaticSize.Y; quadFrame.BackgroundTransparency = 1
         quadFrame.LayoutOrder = 2; quadFrame.Parent = tabFrame
 
         local leftCol = Instance.new("Frame")
-        leftCol.Name = "LeftCol"; leftCol.Size = UDim2.new(0.5,-4,0,0)
+        leftCol.Name = "LeftCol"; leftCol.Size = UDim2.new(0.5,-3,0,0)
         leftCol.Position = UDim2.new(0,0,0,0); leftCol.AutomaticSize = Enum.AutomaticSize.Y
         leftCol.BackgroundTransparency = 1; leftCol.Parent = quadFrame
         local lLayout = Instance.new("UIListLayout")
         lLayout.SortOrder = Enum.SortOrder.LayoutOrder; lLayout.Padding = UDim.new(0,6); lLayout.Parent = leftCol
 
         local rightCol = Instance.new("Frame")
-        rightCol.Name = "RightCol"; rightCol.Size = UDim2.new(0.5,-4,0,0)
-        rightCol.Position = UDim2.new(0.5,4,0,0); rightCol.AutomaticSize = Enum.AutomaticSize.Y
+        rightCol.Name = "RightCol"; rightCol.Size = UDim2.new(0.5,-3,0,0)
+        rightCol.Position = UDim2.new(0.5,3,0,0); rightCol.AutomaticSize = Enum.AutomaticSize.Y
         rightCol.BackgroundTransparency = 1; rightCol.Parent = quadFrame
         local rLayout = Instance.new("UIListLayout")
         rLayout.SortOrder = Enum.SortOrder.LayoutOrder; rLayout.Padding = UDim.new(0,6); rLayout.Parent = rightCol

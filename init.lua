@@ -311,37 +311,18 @@ Shared.Player.CharacterAdded:Connect(function(char)
     Shared.HumanoidRP = char:WaitForChild("HumanoidRootPart")
 end)
 
--- Game Environment Detection (Multi-tier identification)
--- Detection happens here but MM2_Functions always loads regardless — it self-guards via Tabs["MM2"] check
+-- Game Environment Detection (Strict verification)
 local isMM2 = (game.PlaceId == 142823291 or game.GameId == 66654135 or game.PlaceId == 335132309 or game.PlaceId == 63518381)
 if not isMM2 then
     pcall(function()
         local rep = game:GetService("ReplicatedStorage")
-        -- Check common MM2 remote structures
-        if rep:FindFirstChild("Remotes") and rep.Remotes:FindFirstChild("Gameplay") then
+        -- Only flag as MM2 if the exact Remotes.Gameplay folder exists with ShootGun
+        if rep:FindFirstChild("Remotes") and rep.Remotes:FindFirstChild("Gameplay") and rep.Remotes.Gameplay:FindFirstChild("ShootGun") then
             isMM2 = true
-        elseif rep:FindFirstChild("WeaponEvents") and rep.WeaponEvents:FindFirstChild("GunBeam") then
-            isMM2 = true
-        end
-        -- Check PlayerGui for MM2 specific GUIs
-        local lp = game:GetService("Players").LocalPlayer
-        if lp and lp:FindFirstChild("PlayerGui") then
-            local pg = lp.PlayerGui
-            if pg:FindFirstChild("MainGUI") or pg:FindFirstChild("MainGui") or pg:FindFirstChild("MM2") then
-                isMM2 = true
-            end
-        end
-        -- Check Workspace for MM2 specific map objects
-        if game.Workspace:FindFirstChild("Lobby") or game.Workspace:FindFirstChild("Map") then
-            -- Could be MM2, check for coin spawners or lobby markers
-            if game.Workspace:FindFirstChild("Coins") or game.Workspace:FindFirstChild("CoinSpawner") then
-                isMM2 = true
-            end
         end
     end)
 end
 Shared.IsMM2 = isMM2
-
 
 local isNDS = (game.PlaceId == 189707 or game.GameId == 65241)
 Shared.IsNDS = isNDS

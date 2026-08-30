@@ -162,15 +162,33 @@ return function(Shared)
 
     local function fetchArtworkFallback(artist, song)
         if not artist or artist == "" or not song or song == "" then return "" end
-        local term = artist .. " " .. song
-        local url = "https://itunes.apple.com/search?term=" .. Http:UrlEncode(term) .. "&media=music&limit=1"
-        local resp = Shared.HttpRequest({ Url = url, Method = "GET" })
+        if artist == "Unknown Artist" and song == "Unknown Track" then return "" end
+
+        -- Clean up track names (remove (Official Video), (Lyrics), feat. x, etc.)
+        local cleanSong = song:gsub("%b()", ""):gsub("%b[]", ""):gsub("feat%..*", ""):gsub("ft%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+        local cleanArtist = artist:gsub("%b()", ""):gsub("%b[]", ""):gsub("feat%..*", ""):gsub("ft%..*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+        local term = cleanArtist .. " " .. cleanSong
+
+        -- 1. iTunes Music Store Search
+        local itunesUrl = "https://itunes.apple.com/search?term=" .. Http:UrlEncode(term) .. "&media=music&entity=song&limit=1"
+        local resp = Shared.HttpRequest({ Url = itunesUrl, Method = "GET" })
         if resp and resp.Body and #resp.Body > 0 then
             local ok, data = pcall(function() return Http:JSONDecode(resp.Body) end)
             if ok and data and data.results and data.results[1] and data.results[1].artworkUrl100 then
                 return data.results[1].artworkUrl100:gsub("100x100bb", "600x600bb")
             end
         end
+
+        -- 2. Deezer Music Search API Fallback
+        local deezerUrl = "https://api.deezer.com/search?q=" .. Http:UrlEncode(term) .. "&limit=1"
+        local dResp = Shared.HttpRequest({ Url = deezerUrl, Method = "GET" })
+        if dResp and dResp.Body and #dResp.Body > 0 then
+            local okD, dData = pcall(function() return Http:JSONDecode(dResp.Body) end)
+            if okD and dData and dData.data and dData.data[1] and dData.data[1].album and dData.data[1].album.cover_big then
+                return dData.data[1].album.cover_big
+            end
+        end
+
         return ""
     end
 
