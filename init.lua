@@ -385,5 +385,7 @@ task.wait(0.01)
 loadModule("Core_Functions")(Shared)
 task.wait(0.01)
 loadModule("Music_Handler")(Shared)
+task.wait(0.01)
+loadModule("Combat_Handler")(Shared)
 
 return Shared
