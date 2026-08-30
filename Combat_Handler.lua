@@ -64,6 +64,10 @@ return function(Shared)
         FastRegen         = false,
         SpeedBoost        = false,
         SpeedMultiplier   = 1.0,
+        MoveInRagdoll     = true,
+        RagdollSpeed      = 32,
+        RagdollJumpBoost  = true,
+        AutoStandup       = false,
 
         -- Boundary & Barrier Breaker
         DisableBarriers   = false,
@@ -272,6 +276,53 @@ return function(Shared)
             end
         end
     end)
+
+    -- ── RAGDOLL MOVEMENT & RECOVERY ENGINE ────────────────────────
+    local ragdollMovementConn = RunService.Heartbeat:Connect(function()
+        local char = localPlayer.Character
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+        if not (hum and root and hum.Health > 0) then return end
+
+        local isRagdolled = char:GetAttribute("Ragdoll") == true or hum.PlatformStand == true or hum:GetState() == Enum.HumanoidStateType.Ragdoll or hum:GetState() == Enum.HumanoidStateType.Physics
+
+        if isRagdolled and state.MoveInRagdoll then
+            local cam = workspace.CurrentCamera
+            if cam then
+                local moveVec = Vector3.zero
+                if UserInput:IsKeyDown(Enum.KeyCode.W) then moveVec = moveVec + cam.CFrame.LookVector end
+                if UserInput:IsKeyDown(Enum.KeyCode.S) then moveVec = moveVec - cam.CFrame.LookVector end
+                if UserInput:IsKeyDown(Enum.KeyCode.A) then moveVec = moveVec - cam.CFrame.RightVector end
+                if UserInput:IsKeyDown(Enum.KeyCode.D) then moveVec = moveVec + cam.CFrame.RightVector end
+
+                local flatMove = Vector3.new(moveVec.X, 0, moveVec.Z)
+                if flatMove.Magnitude > 0.05 then
+                    flatMove = flatMove.Unit
+                    local speed = state.RagdollSpeed or 32
+                    root.AssemblyLinearVelocity = Vector3.new(flatMove.X * speed, root.AssemblyLinearVelocity.Y, flatMove.Z * speed)
+                end
+
+                if state.RagdollJumpBoost and UserInput:IsKeyDown(Enum.KeyCode.Space) then
+                    if math.abs(root.AssemblyLinearVelocity.Y) < 6 then
+                        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 38, root.AssemblyLinearVelocity.Z)
+                    end
+                end
+            end
+        end
+
+        if isRagdolled and state.AutoStandup then
+            pcall(function()
+                hum.PlatformStand = false
+                hum.AutoRotate = true
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                if Packets and Packets.RagdollToggle then
+                    Packets.RagdollToggle:Fire({ Mode = false })
+                end
+            end)
+        end
+    end)
+    if Shared.AddCleanup then Shared.AddCleanup(ragdollMovementConn) end
 
     -- ── BOUNDARY & BARRIER BREAKER ENGINE ─────────────────────────
     local function neutralizeSinglePart(part)
@@ -878,35 +929,69 @@ return function(Shared)
         end
 
         if Shared.MakeSection then
-            Shared.MakeSection(rightCol, "Stamina & Mobility", 20)
+            Shared.MakeSection(rightCol, "Stamina & Ragdoll Mobility", 20)
         end
 
         if Shared.MakeToggle then
-            Shared.MakeToggle(rightCol, "Infinite Stamina (Zero Drain)", "InfiniteStamina", 21, function(val)
+            Shared.MakeToggle(rightCol, "Move In Ragdoll (WASD Steer)", "MoveInRagdoll", 21, function(val)
+                state.MoveInRagdoll = val
+            end)
+
+            Shared.MakeToggle(rightCol, "Ragdoll Jump Boost (Spacebar)", "RagdollJumpBoost", 22, function(val)
+                state.RagdollJumpBoost = val
+            end)
+
+            Shared.MakeToggle(rightCol, "Auto Instant Standup", "AutoStandup", 23, function(val)
+                state.AutoStandup = val
+            end)
+
+            Shared.MakeToggle(rightCol, "Infinite Stamina (Zero Drain)", "InfiniteStamina", 24, function(val)
                 state.InfiniteStamina = val
                 applyStaminaState()
             end)
 
-            Shared.MakeToggle(rightCol, "Fast Stamina Recovery", "FastStaminaRegen", 22, function(val)
+            Shared.MakeToggle(rightCol, "Fast Stamina Recovery", "FastStaminaRegen", 25, function(val)
                 state.FastRegen = val
                 applyStaminaState()
             end)
 
-            Shared.MakeToggle(rightCol, "Sprint Speed Multiplier", "SpeedBoostToggle", 23, function(val)
+            Shared.MakeToggle(rightCol, "Sprint Speed Multiplier", "SpeedBoostToggle", 26, function(val)
                 state.SpeedBoost = val
                 applyStaminaState()
             end)
         end
 
         if Shared.MakeSlider then
-            Shared.MakeSlider(rightCol, "Stamina Drain Reduction %", "StaminaReductionPct", 0, 100, 50, 24, function(val)
+            Shared.MakeSlider(rightCol, "Ragdoll Move Speed", "RagdollMoveSpeed", 16, 120, 32, 27, function(val)
+                state.RagdollSpeed = val
+            end)
+
+            Shared.MakeSlider(rightCol, "Stamina Drain Reduction %", "StaminaReductionPct", 0, 100, 50, 28, function(val)
                 state.StaminaReduction = val
                 applyStaminaState()
             end)
 
-            Shared.MakeSlider(rightCol, "Sprint Speed Factor", "SprintSpeedMult", 1, 3, 1, 25, function(val)
+            Shared.MakeSlider(rightCol, "Sprint Speed Factor", "SprintSpeedMult", 1, 3, 1, 29, function(val)
                 state.SpeedMultiplier = val
                 applyStaminaState()
+            end)
+        end
+
+        if Shared.MakeButton then
+            Shared.MakeButton(rightCol, "Force Instant Standup / Recover", 30, function()
+                local char = localPlayer.Character
+                if char then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        hum.PlatformStand = false
+                        hum.AutoRotate = true
+                        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                    end
+                    if Packets and Packets.RagdollToggle then
+                        Packets.RagdollToggle:Fire({ Mode = false })
+                    end
+                    sendNotification("Ragdoll", "Recovered from ragdoll state", true)
+                end
             end)
         end
 
