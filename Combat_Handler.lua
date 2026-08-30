@@ -1,5 +1,5 @@
 -- Combat_Handler.lua
--- Demise Gun Engine, Aim Assist, Role Tracker, Stamina Reduction & Combat Module
+-- Demise Gun Engine, Aim Assist, Role Tracker, Boundary Breaker & Stamina Module
 -- Compatible with Menu-Clean (Shared) and Standalone Execution
 
 return function(Shared)
@@ -56,7 +56,7 @@ return function(Shared)
         }
     end
 
-    -- Internal Combat, Aim Assist, and Role Tracking State
+    -- Internal Combat, Aim Assist, Role Tracking, and Boundary Breaker State
     local state = {
         -- Stamina & Movement
         InfiniteStamina   = false,
@@ -64,6 +64,14 @@ return function(Shared)
         FastRegen         = false,
         SpeedBoost        = false,
         SpeedMultiplier   = 1.0,
+
+        -- Boundary & Barrier Breaker
+        DisableBarriers   = false,
+        DisableKillbricks = false,
+        DoorPhase         = false,
+        AntiVoidFloor     = false,
+        DisabledParts     = {},
+        VoidSafetyPlat    = nil,
 
         -- Weapon Mechanisms
         QuickReload       = false,
@@ -240,6 +248,101 @@ return function(Shared)
         end
     end)
 
+    -- ── BOUNDARY & BARRIER BREAKER ENGINE ─────────────────────────
+    local function neutralizeSinglePart(part)
+        if not part:IsA("BasePart") then return end
+        if part:IsDescendantOf(Players) then return end
+
+        local name = part.Name:lower()
+        local parentName = (part.Parent and part.Parent.Name or ""):lower()
+
+        -- Killbricks / Death parts
+        local isKill = name:find("kill") or parentName:find("kill") or name:find("death") or parentName:find("death") or name:find("lava") or name:find("hazard")
+        if state.DisableKillbricks and isKill then
+            part.CanTouch = false
+            part.CanCollide = false
+            pcall(function()
+                for _, child in ipairs(part:GetDescendants()) do
+                    if child:IsA("TouchTransmitter") or child:IsA("Script") or child:IsA("LocalScript") then
+                        child:Destroy()
+                    end
+                end
+            end)
+            state.DisabledParts[part] = "Killbrick"
+        end
+
+        -- Invisible walls, bounds, clips, barriers
+        local isBarrier = name:find("barrier") or name:find("bound") or name:find("border") or name:find("clip") or name:find("limit") or name:find("blocker") or name:find("invis")
+        local isInvisWall = (part.Transparency >= 0.75 and part.CanCollide and not name:find("glass") and not name:find("window"))
+
+        if state.DisableBarriers and (isBarrier or isInvisWall) and not isKill then
+            part.CanCollide = false
+            part.CanTouch = false
+            part.CanQuery = false
+            state.DisabledParts[part] = "Barrier"
+        end
+
+        -- Door Hitboxes & Phase
+        if state.DoorPhase and (name:find("doorhitbox") or (name:find("door") and part.Transparency >= 0.7)) then
+            part.CanCollide = false
+            state.DisabledParts[part] = "DoorHitbox"
+        end
+    end
+
+    local function scanAndDisableBoundaries()
+        local count = 0
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                neutralizeSinglePart(obj)
+                count = count + 1
+            end
+        end
+        return count
+    end
+
+    -- Void Platform Safety
+    local function updateVoidSafetyFloor()
+        if state.AntiVoidFloor then
+            if not state.VoidSafetyPlat or not state.VoidSafetyPlat.Parent then
+                local plat = Instance.new("Part")
+                plat.Name = "Fih_AntiVoidSafetyFloor"
+                plat.Size = Vector3.new(4000, 10, 4000)
+                plat.Position = Vector3.new(0, -60, 0)
+                plat.Anchored = true
+                plat.CanCollide = true
+                plat.Transparency = 0.7
+                plat.Material = Enum.Material.ForceField
+                plat.Color = Color3.fromRGB(0, 180, 255)
+                plat.Parent = workspace
+                state.VoidSafetyPlat = plat
+            end
+        else
+            if state.VoidSafetyPlat then
+                pcall(function() state.VoidSafetyPlat:Destroy() end)
+                state.VoidSafetyPlat = nil
+            end
+        end
+    end
+
+    -- Watch for newly spawned map parts or round changes
+    local boundaryWatcherConn = workspace.DescendantAdded:Connect(function(child)
+        if state.DisableBarriers or state.DisableKillbricks or state.DoorPhase then
+            task.wait(0.05)
+            neutralizeSinglePart(child)
+        end
+    end)
+
+    local boundaryHeartbeat = RunService.Heartbeat:Connect(function()
+        if state.DisableBarriers or state.DisableKillbricks or state.DoorPhase then
+            for part, _ in pairs(state.DisabledParts) do
+                if part and part.Parent then
+                    if part.CanCollide then part.CanCollide = false end
+                    if part.CanTouch then part.CanTouch = false end
+                end
+            end
+        end
+    end)
+
     -- Fast Reload and Auto-Chamber triggers
     local function executeQuickReload(tool)
         if not tool or not tool.Parent then return end
@@ -342,7 +445,6 @@ return function(Shared)
         elseif roleStr:find("sheriff") or roleStr:find("armed") or roleStr:find("hero") then
             return "Sheriff", Color3.fromRGB(45, 140, 255)
         end
-        -- Check backpack / character for weapons
         local char = p.Character
         if char then
             for _, item in ipairs(char:GetChildren()) do
@@ -555,6 +657,9 @@ return function(Shared)
         Shared.AddCleanup(staminaHeartbeatConn)
         Shared.AddCleanup(aimRenderConn)
         Shared.AddCleanup(roleWatcherConn)
+        Shared.AddCleanup(boundaryWatcherConn)
+        Shared.AddCleanup(boundaryHeartbeat)
+        if state.VoidSafetyPlat then Shared.AddCleanup(function() pcall(function() state.VoidSafetyPlat:Destroy() end) end) end
         if aimFovCircle then Shared.AddCleanup(function() pcall(function() aimFovCircle:Remove() end) end) end
     end
 
@@ -657,24 +762,69 @@ return function(Shared)
             end)
         end
 
-        -- ── RIGHT COLUMN: ROLE TRACKER, STAMINA & CONTROLS ─────────
+        -- ── RIGHT COLUMN: BOUNDS, ROLES, STAMINA & CONTROLS ────────
         if Shared.MakeSection then
-            Shared.MakeSection(rightCol, "Role Tracker & Alerts", 1)
+            Shared.MakeSection(rightCol, "Map Bounds & Barrier Breaker", 1)
         end
 
         if Shared.MakeToggle then
-            Shared.MakeToggle(rightCol, "Role Tracker Watcher", "CombatRoleTracker", 2, function(val)
+            Shared.MakeToggle(rightCol, "Disable Map Bounds & Barriers", "DisableBarriers", 2, function(val)
+                state.DisableBarriers = val
+                if val then
+                    local count = scanAndDisableBoundaries()
+                    sendNotification("Bounds", string.format("Barriers & clips disabled (%d checked)", count), true)
+                end
+            end)
+
+            Shared.MakeToggle(rightCol, "Disable Kill Bricks & Death Zones", "DisableKillbricks", 3, function(val)
+                state.DisableKillbricks = val
+                if val then
+                    scanAndDisableBoundaries()
+                    sendNotification("Bounds", "Killbricks & death zones neutralized", true)
+                end
+            end)
+
+            Shared.MakeToggle(rightCol, "Door Phase (Pass Through Closed)", "DoorPhase", 4, function(val)
+                state.DoorPhase = val
+                if val then scanAndDisableBoundaries() end
+            end)
+
+            Shared.MakeToggle(rightCol, "Anti-Void Safety Floor", "AntiVoidFloor", 5, function(val)
+                state.AntiVoidFloor = val
+                updateVoidSafetyFloor()
+            end)
+        end
+
+        if Shared.MakeButton then
+            Shared.MakeButton(rightCol, "Audit & Disable All Bounds Now", 6, function()
+                state.DisableBarriers = true
+                state.DisableKillbricks = true
+                state.DoorPhase = true
+                if Shared.Toggles["DisableBarriers"] then Shared.Toggles["DisableBarriers"].SetToggle(true, true) end
+                if Shared.Toggles["DisableKillbricks"] then Shared.Toggles["DisableKillbricks"].SetToggle(true, true) end
+                if Shared.Toggles["DoorPhase"] then Shared.Toggles["DoorPhase"].SetToggle(true, true) end
+                local count = scanAndDisableBoundaries()
+                sendNotification("Boundary Audit", string.format("All invisible walls & killbricks purged (%d checked)", count), true)
+            end)
+        end
+
+        if Shared.MakeSection then
+            Shared.MakeSection(rightCol, "Role Tracker & Alerts", 10)
+        end
+
+        if Shared.MakeToggle then
+            Shared.MakeToggle(rightCol, "Role Tracker Watcher", "CombatRoleTracker", 11, function(val)
                 state.RoleTracker = val
                 checkPlayerRoles()
             end)
 
-            Shared.MakeToggle(rightCol, "Shooter / Killer Reveal Alert", "CombatRoleAlert", 3, function(val)
+            Shared.MakeToggle(rightCol, "Shooter / Killer Reveal Alert", "CombatRoleAlert", 12, function(val)
                 state.RoleNotifier = val
             end)
         end
 
         if Shared.MakeButton then
-            Shared.MakeButton(rightCol, "Scan All Player Roles Now", 4, function()
+            Shared.MakeButton(rightCol, "Scan All Player Roles Now", 13, function()
                 checkPlayerRoles()
                 local threats = {}
                 local sheriffs = {}
@@ -694,63 +844,63 @@ return function(Shared)
         end
 
         if Shared.MakeSection then
-            Shared.MakeSection(rightCol, "Stamina & Mobility", 10)
+            Shared.MakeSection(rightCol, "Stamina & Mobility", 20)
         end
 
         if Shared.MakeToggle then
-            Shared.MakeToggle(rightCol, "Infinite Stamina (Zero Drain)", "InfiniteStamina", 11, function(val)
+            Shared.MakeToggle(rightCol, "Infinite Stamina (Zero Drain)", "InfiniteStamina", 21, function(val)
                 state.InfiniteStamina = val
                 applyStaminaState()
             end)
 
-            Shared.MakeToggle(rightCol, "Fast Stamina Recovery", "FastStaminaRegen", 12, function(val)
+            Shared.MakeToggle(rightCol, "Fast Stamina Recovery", "FastStaminaRegen", 22, function(val)
                 state.FastRegen = val
                 applyStaminaState()
             end)
 
-            Shared.MakeToggle(rightCol, "Sprint Speed Multiplier", "SpeedBoostToggle", 13, function(val)
+            Shared.MakeToggle(rightCol, "Sprint Speed Multiplier", "SpeedBoostToggle", 23, function(val)
                 state.SpeedBoost = val
                 applyStaminaState()
             end)
         end
 
         if Shared.MakeSlider then
-            Shared.MakeSlider(rightCol, "Stamina Drain Reduction %", "StaminaReductionPct", 0, 100, 50, 14, function(val)
+            Shared.MakeSlider(rightCol, "Stamina Drain Reduction %", "StaminaReductionPct", 0, 100, 50, 24, function(val)
                 state.StaminaReduction = val
                 applyStaminaState()
             end)
 
-            Shared.MakeSlider(rightCol, "Sprint Speed Factor", "SprintSpeedMult", 1, 3, 1, 15, function(val)
+            Shared.MakeSlider(rightCol, "Sprint Speed Factor", "SprintSpeedMult", 1, 3, 1, 25, function(val)
                 state.SpeedMultiplier = val
                 applyStaminaState()
             end)
         end
 
         if Shared.MakeSection then
-            Shared.MakeSection(rightCol, "Firing Controls & Tuning", 20)
+            Shared.MakeSection(rightCol, "Firing Controls & Tuning", 30)
         end
 
         if Shared.MakeSlider then
-            Shared.MakeSlider(rightCol, "Burst Shot Count", "CombatBurstCount", 2, 10, 3, 21, function(val)
+            Shared.MakeSlider(rightCol, "Burst Shot Count", "CombatBurstCount", 2, 10, 3, 31, function(val)
                 state.BurstCount = val
             end)
 
-            Shared.MakeSlider(rightCol, "Burst Round Delay (ms)", "CombatBurstDelay", 20, 150, 60, 22, function(val)
+            Shared.MakeSlider(rightCol, "Burst Round Delay (ms)", "CombatBurstDelay", 20, 150, 60, 32, function(val)
                 state.BurstDelay = val / 1000
             end)
 
-            Shared.MakeSlider(rightCol, "Overclock Delay (ms)", "CombatFireDelay", 10, 250, 50, 23, function(val)
+            Shared.MakeSlider(rightCol, "Overclock Delay (ms)", "CombatFireDelay", 10, 250, 50, 33, function(val)
                 state.CustomFireRate = val / 1000
                 updateWeaponConfigs(true)
             end)
         end
 
         if Shared.MakeSection then
-            Shared.MakeSection(rightCol, "Quick Actions", 30)
+            Shared.MakeSection(rightCol, "Quick Actions", 40)
         end
 
         if Shared.MakeButton then
-            Shared.MakeButton(rightCol, "Force Instant Reload", 31, function()
+            Shared.MakeButton(rightCol, "Force Instant Reload", 41, function()
                 local tool = getEquippedGun()
                 if tool then
                     executeQuickReload(tool)
@@ -760,7 +910,7 @@ return function(Shared)
                 end
             end)
 
-            Shared.MakeButton(rightCol, "Chamber Equipped Weapon", 32, function()
+            Shared.MakeButton(rightCol, "Chamber Equipped Weapon", 42, function()
                 local tool = getEquippedGun()
                 if tool then
                     executeAutoChamber(tool)
