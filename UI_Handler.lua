@@ -2448,10 +2448,11 @@ return function(Shared)
                 silentSavedAngVel = root.AssemblyAngularVelocity
                 silentActive = true
 
-                -- Desync teleport directly beneath target under the floor/feet on physics replication step
-                root.CFrame = targetRoot.CFrame * CFrame.new(0, -3.2, 0)
+                -- Desync teleport right at the base of their feet (-1.5 studs) for guaranteed collision contact
+                local yOffset = -1.5 + (math.sin(tick() * 20) * 0.3)
+                root.CFrame = targetRoot.CFrame * CFrame.new(0, yOffset, 0)
                 root.AssemblyAngularVelocity = Vector3.new(0, power * 35, 0)
-                root.AssemblyLinearVelocity = Vector3.new(0, 80, 0)
+                root.AssemblyLinearVelocity = Vector3.new(0, 100, 0)
             end
         end)
 
