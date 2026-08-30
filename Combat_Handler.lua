@@ -1003,14 +1003,14 @@ return function(Shared)
                 end
             end)
 
-            Shared.MakeButton(rightCol, "Return to Map / Origin", 44, function()
-                local char = localPlayer.Character
-                local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
-                if root and state.SavedMapPos then
-                    root.CFrame = state.SavedMapPos
-                    sendNotification("Arena", "Returned to previous position", true)
+            Shared.MakeButton(rightCol, "Join VC Server Only", 45, function()
+                if Shared.JoinVCServer then
+                    Shared.JoinVCServer()
                 else
-                    sendNotification("Arena", "No saved origin position", false)
+                    sendNotification("Server Hop", "Initiating voice server hop...", true)
+                    pcall(function()
+                        game:GetService("TeleportService"):Teleport(game.PlaceId, localPlayer)
+                    end)
                 end
             end)
         end

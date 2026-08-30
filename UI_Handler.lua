@@ -2035,7 +2035,72 @@ return function(Shared)
         -- Left Column: Movement, Flight & Teleport
         makeSection(playerCols.Left, "Movement & Teleport", 1)
 
-        makeButton(playerCols.Left, "Dump / Reset Character", 2, function()
+        local function joinVCServer()
+            sendNotification("Server Hop", "Searching for active VC servers...", true)
+            task.spawn(function()
+                local placeId = game.PlaceId
+                local currentJobId = game.JobId
+                local TeleportService = game:GetService("TeleportService")
+                local HttpService = game:GetService("HttpService")
+
+                local req = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+                local servers = nil
+
+                if type(req) == "function" then
+                    local url = string.format("https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Desc&limit=100", tostring(placeId))
+                    local res = req({ Url = url, Method = "GET" })
+                    if res and res.Body then
+                        local decoded = pcall(function() return HttpService:JSONDecode(res.Body) end) and HttpService:JSONDecode(res.Body) or nil
+                        if decoded and decoded.data then
+                            servers = decoded.data
+                        end
+                    end
+                elseif game.HttpGet then
+                    local url = string.format("https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Desc&limit=100", tostring(placeId))
+                    local body = pcall(function() return game:HttpGet(url) end) and game:HttpGet(url) or nil
+                    if body then
+                        local decoded = pcall(function() return HttpService:JSONDecode(body) end) and HttpService:JSONDecode(body) or nil
+                        if decoded and decoded.data then
+                            servers = decoded.data
+                        end
+                    end
+                end
+
+                if servers and #servers > 0 then
+                    local candidates = {}
+                    for _, s in ipairs(servers) do
+                        if s.id ~= currentJobId and s.playing and s.maxPlayers and s.playing < s.maxPlayers and s.playing >= 1 then
+                            table.insert(candidates, s)
+                        end
+                    end
+
+                    if #candidates > 0 then
+                        table.sort(candidates, function(a, b) return (a.playing or 0) > (b.playing or 0) end)
+                        local target = candidates[1]
+                        sendNotification("Server Hop", string.format("Joining VC server (%d/%d players)...", target.playing, target.maxPlayers), true)
+                        
+                        pcall(function()
+                            local tpOptions = Instance.new("TeleportOptions")
+                            tpOptions:SetTeleportData({ isVoiceChat = true, preferVoice = true })
+                            TeleportService:TeleportToPlaceInstance(placeId, target.id, localPlr, nil, tpOptions)
+                        end)
+                        return
+                    end
+                end
+
+                sendNotification("Server Hop", "Finding voice server via TeleportService...", true)
+                pcall(function()
+                    TeleportService:Teleport(placeId, localPlr)
+                end)
+            end)
+        end
+        Shared.JoinVCServer = joinVCServer
+
+        makeButton(playerCols.Left, "Join VC Server Only", 2, function()
+            joinVCServer()
+        end)
+
+        makeButton(playerCols.Left, "Dump / Reset Character", 3, function()
             local char = localPlr and localPlr.Character
             if char then
                 local hum = getLocalHum()
@@ -2047,7 +2112,7 @@ return function(Shared)
             end
         end)
 
-        makeToggle(playerCols.Left, "Ctrl + Click Teleport", "CtrlClickTP", 3, function(state) end)
+        makeToggle(playerCols.Left, "Ctrl + Click Teleport", "CtrlClickTP", 4, function(state) end)
 
         local tpConn = UserInput.InputBegan:Connect(function(input, processed)
             if processed then return end
