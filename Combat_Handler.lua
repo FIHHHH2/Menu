@@ -740,6 +740,7 @@ return function(Shared)
             Shared.MakeSection(leftCol, "Weapon Mechanisms", 10)
         end
 
+        if Shared.MakeToggle then
             Shared.MakeToggle(leftCol, "Silent Gun Audio (Mute Firing)", "CombatSilentAudio", 11, function(val)
                 state.SilentGunAudio = val
                 updateWeaponConfigs(true)
