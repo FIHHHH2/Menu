@@ -301,10 +301,10 @@ return function(Shared)
                 rem = rep.Remotes.Gameplay:FindFirstChild("ShootGun")
             end
             if not rem and rep:FindFirstChild("WeaponEvents") then
-                rem = rep.WeaponEvents:FindFirstChild("GunBeam")
+                rem = rep.WeaponEvents:FindFirstChild("GunBeam") or rep.WeaponEvents:FindFirstChild("ShootGun")
             end
             if not rem then
-                rem = rep:FindFirstChild("ShootGun", true)
+                rem = rep:FindFirstChild("ShootGun", true) or rep:FindFirstChild("GunBeam", true)
             end
         end)
         return rem
@@ -322,12 +322,20 @@ return function(Shared)
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 if hum then hum:EquipTool(gun) end
             end)
-            task.wait(0.05)
+            task.wait(0.08)
         end
 
         local myHRP = getHRP()
         if not myHRP then return end
 
+        -- 1. Direct Tool Activation
+        pcall(function()
+            if gun:IsA("Tool") then
+                gun:Activate()
+            end
+        end)
+
+        -- 2. Remote Fire with all standard MM2 protocol variations
         local rem = getShootRemote()
         if rem then
             pcall(function()
@@ -336,9 +344,22 @@ return function(Shared)
                 elseif rem:IsA("RemoteEvent") then
                     rem:FireServer(1, targetPos, Vector3.new(0, 0, 0))
                     rem:FireServer(CFrame.new(myHRP.Position, targetPos), targetPos)
+                    rem:FireServer(targetPos)
                 end
             end)
         end
+
+        -- 3. Check for gun child remotes/events
+        pcall(function()
+            for _, child in ipairs(gun:GetDescendants()) do
+                if child:IsA("RemoteEvent") then
+                    child:FireServer(targetPos)
+                    child:FireServer(1, targetPos, Vector3.new(0, 0, 0))
+                elseif child:IsA("RemoteFunction") then
+                    child:InvokeServer(1, targetPos, Vector3.new(0, 0, 0))
+                end
+            end
+        end)
     end
 
     -- Hook Metamethod for silent redirect
