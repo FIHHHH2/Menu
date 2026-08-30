@@ -1392,7 +1392,7 @@ return function(Shared)
     local activeTab = nil
 
     local tabDefs = {
-        {name="Display",  order=1},
+        {name="Menu",     order=1},
         {name="Music",    order=2},
         {name="Keybinds", order=3},
     }
@@ -1462,26 +1462,28 @@ return function(Shared)
         local tLayout = Instance.new("UIListLayout")
         tLayout.SortOrder = Enum.SortOrder.LayoutOrder; tLayout.Padding = UDim.new(0,6); tLayout.Parent = tabFrame
 
-        local quadFrame = Instance.new("Frame")
-        quadFrame.Name = "QuadGrid"; quadFrame.Size = UDim2.new(1, 0, 0, 0)
-        quadFrame.AutomaticSize = Enum.AutomaticSize.Y; quadFrame.BackgroundTransparency = 1
-        quadFrame.LayoutOrder = 1; quadFrame.Parent = tabFrame
+        if def.name ~= "Menu" then
+            local quadFrame = Instance.new("Frame")
+            quadFrame.Name = "QuadGrid"; quadFrame.Size = UDim2.new(1, 0, 0, 0)
+            quadFrame.AutomaticSize = Enum.AutomaticSize.Y; quadFrame.BackgroundTransparency = 1
+            quadFrame.LayoutOrder = 1; quadFrame.Parent = tabFrame
 
-        local leftCol = Instance.new("Frame")
-        leftCol.Name = "LeftCol"; leftCol.Size = UDim2.new(0.5, -4, 0, 0)
-        leftCol.Position = UDim2.new(0, 0, 0, 0); leftCol.AutomaticSize = Enum.AutomaticSize.Y
-        leftCol.BackgroundTransparency = 1; leftCol.Parent = quadFrame
-        local lLayout = Instance.new("UIListLayout")
-        lLayout.SortOrder = Enum.SortOrder.LayoutOrder; lLayout.Padding = UDim.new(0,6); lLayout.Parent = leftCol
+            local leftCol = Instance.new("Frame")
+            leftCol.Name = "LeftCol"; leftCol.Size = UDim2.new(0.5, -4, 0, 0)
+            leftCol.Position = UDim2.new(0, 0, 0, 0); leftCol.AutomaticSize = Enum.AutomaticSize.Y
+            leftCol.BackgroundTransparency = 1; leftCol.Parent = quadFrame
+            local lLayout = Instance.new("UIListLayout")
+            lLayout.SortOrder = Enum.SortOrder.LayoutOrder; lLayout.Padding = UDim.new(0,6); lLayout.Parent = leftCol
 
-        local rightCol = Instance.new("Frame")
-        rightCol.Name = "RightCol"; rightCol.Size = UDim2.new(0.5, -4, 0, 0)
-        rightCol.Position = UDim2.new(0.5, 4, 0, 0); rightCol.AutomaticSize = Enum.AutomaticSize.Y
-        rightCol.BackgroundTransparency = 1; rightCol.Parent = quadFrame
-        local rLayout = Instance.new("UIListLayout")
-        rLayout.SortOrder = Enum.SortOrder.LayoutOrder; rLayout.Padding = UDim.new(0,6); rLayout.Parent = rightCol
+            local rightCol = Instance.new("Frame")
+            rightCol.Name = "RightCol"; rightCol.Size = UDim2.new(0.5, -4, 0, 0)
+            rightCol.Position = UDim2.new(0.5, 4, 0, 0); rightCol.AutomaticSize = Enum.AutomaticSize.Y
+            rightCol.BackgroundTransparency = 1; rightCol.Parent = quadFrame
+            local rLayout = Instance.new("UIListLayout")
+            rLayout.SortOrder = Enum.SortOrder.LayoutOrder; rLayout.Padding = UDim.new(0,6); rLayout.Parent = rightCol
 
-        QuadCols[def.name] = {Left = leftCol, Right = rightCol}
+            QuadCols[def.name] = {Left = leftCol, Right = rightCol}
+        end
 
         if def.name == "Music" then
             btn.Visible = (Shared.Flags["EnableMusicTab"] == true)
@@ -1779,93 +1781,162 @@ return function(Shared)
         end)
     end
 
-    -- DISPLAY TAB (Pure UI Elements & Component Showcase)
-    local dispCols = QuadCols["Display"]
-    if dispCols then
-        -- Left Column
-        makeSection(dispCols.Left, "Toggle & Checkbox Components", 1)
-        makeToggle(dispCols.Left, "Smooth Window Transitions", "SmoothAnimations", 2, function(state)
-            Shared.Flags["SmoothAnimations"] = state
-        end)
-        makeToggle(dispCols.Left, "Aero Glass Window Borders", "AeroGlassBorder", 3, function(state)
-            Shared.Flags["AeroGlassBorder"] = state
-            if ScreenGui and ScreenGui:FindFirstChild("IE7_Menu") then
-                local mainFrame = ScreenGui.IE7_Menu:FindFirstChild("MainFrame")
-                if mainFrame then mainFrame.BorderSizePixel = state and 2 or 1 end
-            end
-        end)
-        makeToggle(dispCols.Left, "Interface Click Sounds", "InterfaceSounds", 4, function(state)
-            Shared.Flags["InterfaceSounds"] = state
-        end)
-        makeToggle(dispCols.Left, "Showcase State Switch", "DemoStateSwitch", 5, function(state)
-            Shared.Flags["DemoStateSwitch"] = state
-        end)
+    -- MENU TAB (User Profile & Fih Ui Header Card)
+    local menuTab = Tabs["Menu"]
+    if menuTab then
+        local menuContainer = Instance.new("Frame")
+        menuContainer.Name = "MenuContainer"
+        menuContainer.Size = UDim2.new(1, 0, 0, 0)
+        menuContainer.AutomaticSize = Enum.AutomaticSize.Y
+        menuContainer.BackgroundTransparency = 1
+        menuContainer.LayoutOrder = 1
+        menuContainer.Parent = menuTab
 
-        makeSection(dispCols.Left, "Value Sliders & Gauges", 10)
-        makeSlider(dispCols.Left, "Interface Scale Meter (%)", "InterfaceScale", 75, 125, 100, 11, function(val)
-            Shared.Flags["InterfaceScale"] = val
-        end)
-        makeSlider(dispCols.Left, "Animation Speed (ms)", "DemoAnimSpeed", 50, 500, 180, 12, function(val)
-            Shared.Flags["DemoAnimSpeed"] = val
-        end)
-        makeSlider(dispCols.Left, "Accent Color Saturation", "DemoSaturation", 0, 100, 75, 13, function(val)
-            Shared.Flags["DemoSaturation"] = val
-        end)
+        local mLayout = Instance.new("UIListLayout")
+        mLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        mLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        mLayout.Padding = UDim.new(0, 12)
+        mLayout.Parent = menuContainer
 
-        -- Right Column
-        makeSection(dispCols.Right, "Interactive Buttons", 1)
-        makeButton(dispCols.Right, "[ 🖱 Standard Aero Button ]", 2, function()
-            sendNotification("UI Showcase", "Aero Button Click Triggered", true)
-        end)
-        makeButton(dispCols.Right, "[ 🔔 Test Notification Toast ]", 3, function()
-            sendNotification("Notification Engine", "Windows XP Aero Toast Display", true)
-        end)
-        makeButton(dispCols.Right, "[ 🔄 Reset Window Positions ]", 4, function()
-            if ScreenGui and ScreenGui:FindFirstChild("IE7_Menu") then
-                local mainFrame = ScreenGui.IE7_Menu:FindFirstChild("MainFrame")
-                if mainFrame then mainFrame.Position = UDim2.new(0.5, -290, 0.5, -200) end
-            end
-            local lb = ScreenGui and ScreenGui:FindFirstChild("Fih_CustomLeaderboard")
-            if lb then lb.Position = UDim2.new(1, -242, 0, 48) end
-            local chat = ScreenGui and ScreenGui:FindFirstChild("Fih_CustomChat")
-            if chat then chat.Position = UDim2.new(0, 16, 0, 48) end
-            local hud = ScreenGui and ScreenGui:FindFirstChild("Fih_BottomHUD")
-            if hud then hud.Position = UDim2.new(0.5, -165, 1, -115) end
-            sendNotification("UI Engine", "All window positions reset to defaults", true)
-        end)
+        -- Header Banner Card
+        local headerCard = Instance.new("Frame")
+        headerCard.Name = "HeaderCard"
+        headerCard.Size = UDim2.new(1, -8, 0, 84)
+        headerCard.BackgroundColor3 = C.BannerBg
+        headerCard.BackgroundTransparency = 0.35
+        headerCard.BorderSizePixel = 1
+        headerCard.BorderColor3 = C.WinBorder
+        headerCard.LayoutOrder = 1
+        headerCard.Parent = menuContainer
+        registerThemed(headerCard, { BackgroundColor3 = "BannerBg", BorderColor3 = "WinBorder" })
 
-        makeSection(dispCols.Right, "Text Input Fields", 10)
-        local demoInputBox = Instance.new("TextBox")
-        demoInputBox.Name = "DemoTextInput"
-        demoInputBox.Size = UDim2.new(1, 0, 0, 24)
-        demoInputBox.BackgroundColor3 = C.BodyBg
-        demoInputBox.BorderSizePixel = 1
-        demoInputBox.BorderColor3 = C.WinBorder
-        demoInputBox.Text = ""
-        demoInputBox.PlaceholderText = "Type display text here..."
-        demoInputBox.TextColor3 = C.BtnText
-        demoInputBox.PlaceholderColor3 = Color3.fromRGB(130, 140, 155)
-        demoInputBox.Font = Enum.Font.Code
-        demoInputBox.TextSize = 11
-        demoInputBox.LayoutOrder = 11
-        demoInputBox.Parent = dispCols.Right
-        registerThemed(demoInputBox, { BackgroundColor3 = "BodyBg", TextColor3 = "BtnText", BorderColor3 = "WinBorder" })
+        local headerGrad = Instance.new("UIGradient")
+        headerGrad.Name = "HeaderGradient"
+        headerGrad.Rotation = 45
+        headerGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, C.BannerGradTop or Color3.fromRGB(26, 38, 62)),
+            ColorSequenceKeypoint.new(1, C.BannerGradBot or Color3.fromRGB(14, 18, 26))
+        })
+        headerGrad.Parent = headerCard
 
-        local demoSearchBox = Instance.new("TextBox")
-        demoSearchBox.Name = "DemoSearchInput"
-        demoSearchBox.Size = UDim2.new(1, 0, 0, 24)
-        demoSearchBox.BackgroundColor3 = C.BodyBg
-        demoSearchBox.BorderSizePixel = 1
-        demoSearchBox.BorderColor3 = C.WinBorder
-        demoSearchBox.Text = ""
-        demoSearchBox.PlaceholderText = "Search components (Display)..."
-        demoSearchBox.TextColor3 = C.BtnText
-        demoSearchBox.PlaceholderColor3 = Color3.fromRGB(130, 140, 155)
-        demoSearchBox.Font = Enum.Font.Code
-        demoSearchBox.TextSize = 11
-        demoSearchBox.LayoutOrder = 12
-        demoSearchBox.Parent = dispCols.Right
-        registerThemed(demoSearchBox, { BackgroundColor3 = "BodyBg", TextColor3 = "BtnText", BorderColor3 = "WinBorder" })
+        local titleLabel = Instance.new("TextLabel")
+        titleLabel.Name = "TitleLabel"
+        titleLabel.Size = UDim2.new(1, 0, 0, 46)
+        titleLabel.Position = UDim2.new(0, 0, 0, 8)
+        titleLabel.BackgroundTransparency = 1
+        titleLabel.Text = "Fih Ui"
+        titleLabel.TextColor3 = C.BannerTitle
+        titleLabel.Font = Enum.Font.ArimoBold
+        titleLabel.TextSize = 40
+        titleLabel.TextXAlignment = Enum.TextXAlignment.Center
+        titleLabel.Parent = headerCard
+        registerThemed(titleLabel, { TextColor3 = "BannerTitle" })
+
+        local subLabel = Instance.new("TextLabel")
+        subLabel.Name = "SubLabel"
+        subLabel.Size = UDim2.new(1, 0, 0, 20)
+        subLabel.Position = UDim2.new(0, 0, 0, 54)
+        subLabel.BackgroundTransparency = 1
+        subLabel.Text = "Keybind ] to close GUI"
+        subLabel.TextColor3 = C.BannerSub
+        subLabel.Font = Enum.Font.Code
+        subLabel.TextSize = 12
+        subLabel.TextXAlignment = Enum.TextXAlignment.Center
+        subLabel.Parent = headerCard
+        registerThemed(subLabel, { TextColor3 = "BannerSub" })
+
+        -- Profile Card
+        local profileCard = Instance.new("Frame")
+        profileCard.Name = "ProfileCard"
+        profileCard.Size = UDim2.new(1, -8, 0, 110)
+        profileCard.BackgroundColor3 = C.RowBg
+        profileCard.BackgroundTransparency = 0.35
+        profileCard.BorderSizePixel = 1
+        profileCard.BorderColor3 = C.RowBorder
+        profileCard.LayoutOrder = 2
+        profileCard.Parent = menuContainer
+        registerThemed(profileCard, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder" })
+
+        local curPlr = Shared.Player or Players.LocalPlayer
+
+        local avatarFrame = Instance.new("Frame")
+        avatarFrame.Name = "AvatarFrame"
+        avatarFrame.Size = UDim2.new(0, 80, 0, 80)
+        avatarFrame.Position = UDim2.new(0, 16, 0.5, -40)
+        avatarFrame.BackgroundColor3 = C.BodyBg
+        avatarFrame.BackgroundTransparency = 0.25
+        avatarFrame.BorderSizePixel = 1
+        avatarFrame.BorderColor3 = C.WinBorder
+        avatarFrame.Parent = profileCard
+        registerThemed(avatarFrame, { BackgroundColor3 = "BodyBg", BorderColor3 = "WinBorder" })
+
+        local avatarImg = Instance.new("ImageLabel")
+        avatarImg.Name = "AvatarImage"
+        avatarImg.Size = UDim2.new(1, -4, 1, -4)
+        avatarImg.Position = UDim2.new(0, 2, 0, 2)
+        avatarImg.BackgroundTransparency = 1
+        avatarImg.Image = (curPlr and curPlr.UserId) and ("rbxthumb://type=AvatarHeadShot&id=" .. tostring(curPlr.UserId) .. "&w=150&h=150") or ""
+        avatarImg.Parent = avatarFrame
+
+        -- Try high-res headshot fetch async
+        if curPlr and curPlr.UserId then
+            task.spawn(function()
+                pcall(function()
+                    local thumb = Players:GetUserThumbnailAsync(curPlr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+                    if thumb then avatarImg.Image = thumb end
+                end)
+            end)
+        end
+
+        local infoContainer = Instance.new("Frame")
+        infoContainer.Name = "InfoContainer"
+        infoContainer.Size = UDim2.new(1, -118, 1, -20)
+        infoContainer.Position = UDim2.new(0, 108, 0, 10)
+        infoContainer.BackgroundTransparency = 1
+        infoContainer.Parent = profileCard
+
+        local infoLayout = Instance.new("UIListLayout")
+        infoLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        infoLayout.Padding = UDim.new(0, 3)
+        infoLayout.Parent = infoContainer
+
+        local dispNameLabel = Instance.new("TextLabel")
+        dispNameLabel.Name = "DisplayNameLabel"
+        dispNameLabel.Size = UDim2.new(1, 0, 0, 24)
+        dispNameLabel.BackgroundTransparency = 1
+        dispNameLabel.Text = (curPlr and curPlr.DisplayName) or "Unknown Player"
+        dispNameLabel.TextColor3 = C.BtnText
+        dispNameLabel.Font = Enum.Font.ArimoBold
+        dispNameLabel.TextSize = 18
+        dispNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        dispNameLabel.LayoutOrder = 1
+        dispNameLabel.Parent = infoContainer
+        registerThemed(dispNameLabel, { TextColor3 = "BtnText" })
+
+        local userNameLabel = Instance.new("TextLabel")
+        userNameLabel.Name = "UserNameLabel"
+        userNameLabel.Size = UDim2.new(1, 0, 0, 18)
+        userNameLabel.BackgroundTransparency = 1
+        userNameLabel.Text = "@" .. ((curPlr and curPlr.Name) or "Unknown")
+        userNameLabel.TextColor3 = C.Accent
+        userNameLabel.Font = Enum.Font.Code
+        userNameLabel.TextSize = 13
+        userNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        userNameLabel.LayoutOrder = 2
+        userNameLabel.Parent = infoContainer
+        registerThemed(userNameLabel, { TextColor3 = "Accent" })
+
+        local userDetailsLabel = Instance.new("TextLabel")
+        userDetailsLabel.Name = "UserDetailsLabel"
+        userDetailsLabel.Size = UDim2.new(1, 0, 0, 18)
+        userDetailsLabel.BackgroundTransparency = 1
+        userDetailsLabel.Text = "User ID: " .. tostring(curPlr and curPlr.UserId or 0) .. "   |   Account Age: " .. tostring(curPlr and curPlr.AccountAge or 0) .. " days"
+        userDetailsLabel.TextColor3 = Color3.fromRGB(150, 160, 175)
+        userDetailsLabel.Font = Enum.Font.Code
+        userDetailsLabel.TextSize = 11
+        userDetailsLabel.TextXAlignment = Enum.TextXAlignment.Left
+        userDetailsLabel.LayoutOrder = 3
+        userDetailsLabel.Parent = infoContainer
     end
 
     task.delay(0.6, function() loadConfig(); buildKeybindsUI() end)
@@ -1908,7 +1979,7 @@ return function(Shared)
             musicBtn.Visible = state
         end
         if not state and activeTab == "Music" then
-            switchTab("Display")
+            switchTab("Menu")
         end
         local hud = ScreenGui:FindFirstChild("Fih_BottomHUD")
         if not state and hud then
@@ -2107,7 +2178,7 @@ return function(Shared)
     Shared.StyleRobloxCoreUI = styleRobloxCoreUI
     Shared.RestoreDefaultRobloxCoreUI = restoreDefaultRobloxCoreUI
 
-    switchTab("Display")
+    switchTab("Menu")
     print("[UI_Handler] Loaded -- Dark Mode Engine, Smooth Transitions, Hover Effects Active")
 end
 
