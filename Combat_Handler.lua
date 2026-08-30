@@ -930,11 +930,97 @@ return function(Shared)
         end
 
         if Shared.MakeSection then
-            Shared.MakeSection(rightCol, "Quick Actions", 40)
+            Shared.MakeSection(rightCol, "Weapon Spawns & Arena Grabber", 40)
+        end
+
+        local function grabAllScatteredWeapons()
+            local count = 0
+            for _, d in ipairs(workspace:GetDescendants()) do
+                if d:IsA("ProximityPrompt") then
+                    local pName = (d.Parent and d.Parent.Name or ""):lower()
+                    local gName = (d.Parent and d.Parent.Parent and d.Parent.Parent.Name or ""):lower()
+                    if pName:find("spawn") or pName:find("weapon") or pName:find("pickup") or gName:find("scattered") or gName:find("weapon") then
+                        d.MaxActivationDistance = 99999
+                        d.HoldDuration = 0
+                        d.RequiresLineOfSight = false
+                        local fireprompt = fireproximityprompt or (getgenv and getgenv().fireproximityprompt)
+                        if type(fireprompt) == "function" then
+                            fireprompt(d)
+                            count = count + 1
+                        else
+                            local char = localPlayer.Character
+                            local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
+                            local part = d.Parent:IsA("BasePart") and d.Parent or (d.Parent:FindFirstChildWhichIsA("BasePart"))
+                            if root and part then
+                                local origCF = root.CFrame
+                                root.CFrame = part.CFrame * CFrame.new(0, 1, 0)
+                                task.wait(0.05)
+                                d:InputHoldBegin()
+                                task.wait(0.02)
+                                d:InputHoldEnd()
+                                task.wait(0.05)
+                                root.CFrame = origCF
+                                count = count + 1
+                            end
+                        end
+                    end
+                end
+            end
+            return count
+        end
+
+        if Shared.MakeToggle then
+            Shared.MakeToggle(rightCol, "Auto-Grab Spawned Weapons", "AutoGrabWeapons", 41, function(val)
+                state.AutoGrabWeapons = val
+                if val then
+                    local c = grabAllScatteredWeapons()
+                    sendNotification("Weapon Grabber", string.format("Auto-grab active (%d prompts checked)", c), true)
+                end
+            end)
+        end
+
+        -- Periodic auto-grab connection
+        local weaponGrabWatcher = RunService.Heartbeat:Connect(function()
+            if state.AutoGrabWeapons then
+                grabAllScatteredWeapons()
+            end
+        end)
+        if Shared.AddCleanup then Shared.AddCleanup(weaponGrabWatcher) end
+
+        if Shared.MakeButton then
+            Shared.MakeButton(rightCol, "Grab All Map Weapons Now", 42, function()
+                local c = grabAllScatteredWeapons()
+                sendNotification("Weapon Grabber", string.format("Grabbed %d weapons from map", c), true)
+            end)
+
+            Shared.MakeButton(rightCol, "Teleport to PVP Arena", 43, function()
+                local char = localPlayer.Character
+                local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
+                if root then
+                    state.SavedMapPos = root.CFrame
+                    root.CFrame = CFrame.new(2093.5, 2743, 494.7)
+                    sendNotification("Arena", "Teleported to PVP Arena loadout zone", true)
+                end
+            end)
+
+            Shared.MakeButton(rightCol, "Return to Map / Origin", 44, function()
+                local char = localPlayer.Character
+                local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
+                if root and state.SavedMapPos then
+                    root.CFrame = state.SavedMapPos
+                    sendNotification("Arena", "Returned to previous position", true)
+                else
+                    sendNotification("Arena", "No saved origin position", false)
+                end
+            end)
+        end
+
+        if Shared.MakeSection then
+            Shared.MakeSection(rightCol, "Gun Operations", 50)
         end
 
         if Shared.MakeButton then
-            Shared.MakeButton(rightCol, "Force Instant Reload", 41, function()
+            Shared.MakeButton(rightCol, "Force Instant Reload", 51, function()
                 local tool = getEquippedGun()
                 if tool then
                     executeQuickReload(tool)
@@ -944,7 +1030,7 @@ return function(Shared)
                 end
             end)
 
-            Shared.MakeButton(rightCol, "Chamber Equipped Weapon", 42, function()
+            Shared.MakeButton(rightCol, "Chamber Equipped Weapon", 52, function()
                 local tool = getEquippedGun()
                 if tool then
                     executeAutoChamber(tool)
