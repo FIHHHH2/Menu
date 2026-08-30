@@ -1462,31 +1462,34 @@ return function(Shared)
         local tLayout = Instance.new("UIListLayout")
         tLayout.SortOrder = Enum.SortOrder.LayoutOrder; tLayout.Padding = UDim.new(0,6); tLayout.Parent = tabFrame
 
-        local quadFrame = Instance.new("Frame")
-        quadFrame.Name = "QuadGrid"; quadFrame.Size = UDim2.new(1, 0, 0, 0)
-        quadFrame.AutomaticSize = Enum.AutomaticSize.Y; quadFrame.BackgroundTransparency = 1
-        quadFrame.LayoutOrder = 2; quadFrame.Parent = tabFrame
+        if def.name ~= "Main" then
+            local quadFrame = Instance.new("Frame")
+            quadFrame.Name = "QuadGrid"; quadFrame.Size = UDim2.new(1, 0, 0, 0)
+            quadFrame.AutomaticSize = Enum.AutomaticSize.Y; quadFrame.BackgroundTransparency = 1
+            quadFrame.LayoutOrder = 2; quadFrame.Parent = tabFrame
 
-        local leftCol = Instance.new("Frame")
-        leftCol.Name = "LeftCol"; leftCol.Size = UDim2.new(0.5, -4, 0, 0)
-        leftCol.Position = UDim2.new(0, 0, 0, 0); leftCol.AutomaticSize = Enum.AutomaticSize.Y
-        leftCol.BackgroundTransparency = 1; leftCol.Parent = quadFrame
-        local lLayout = Instance.new("UIListLayout")
-        lLayout.SortOrder = Enum.SortOrder.LayoutOrder; lLayout.Padding = UDim.new(0,6); lLayout.Parent = leftCol
+            local leftCol = Instance.new("Frame")
+            leftCol.Name = "LeftCol"; leftCol.Size = UDim2.new(0.5, -4, 0, 0)
+            leftCol.Position = UDim2.new(0, 0, 0, 0); leftCol.AutomaticSize = Enum.AutomaticSize.Y
+            leftCol.BackgroundTransparency = 1; leftCol.Parent = quadFrame
+            local lLayout = Instance.new("UIListLayout")
+            lLayout.SortOrder = Enum.SortOrder.LayoutOrder; lLayout.Padding = UDim.new(0,6); lLayout.Parent = leftCol
 
-        local rightCol = Instance.new("Frame")
-        rightCol.Name = "RightCol"; rightCol.Size = UDim2.new(0.5, -4, 0, 0)
-        rightCol.Position = UDim2.new(0.5, 4, 0, 0); rightCol.AutomaticSize = Enum.AutomaticSize.Y
-        rightCol.BackgroundTransparency = 1; rightCol.Parent = quadFrame
-        local rLayout = Instance.new("UIListLayout")
-        rLayout.SortOrder = Enum.SortOrder.LayoutOrder; rLayout.Padding = UDim.new(0,6); rLayout.Parent = rightCol
+            local rightCol = Instance.new("Frame")
+            rightCol.Name = "RightCol"; rightCol.Size = UDim2.new(0.5, -4, 0, 0)
+            rightCol.Position = UDim2.new(0.5, 4, 0, 0); rightCol.AutomaticSize = Enum.AutomaticSize.Y
+            rightCol.BackgroundTransparency = 1; rightCol.Parent = quadFrame
+            local rLayout = Instance.new("UIListLayout")
+            rLayout.SortOrder = Enum.SortOrder.LayoutOrder; rLayout.Padding = UDim.new(0,6); rLayout.Parent = rightCol
+
+            QuadCols[def.name] = {Left = leftCol, Right = rightCol}
+        end
 
         if def.name == "Music" then
             btn.Visible = (Shared.Flags["EnableMusicTab"] == true)
         end
 
         Tabs[def.name] = tabFrame; TabBtns[def.name] = btn
-        QuadCols[def.name] = {Left = leftCol, Right = rightCol}
         btn.MouseButton1Click:Connect(function() switchTab(def.name) end)
     end
 
