@@ -64,8 +64,8 @@ return function(Shared)
         local viewportH = (cam and cam.ViewportSize.Y) or 800
         local posY = customPosY or 48
         local calculatedH = 26 + 6 + (c * (30 + 5)) + 6
-        local maxAllowedH = math.max(56, viewportH - posY - 16)
-        return math.clamp(calculatedH, 56, maxAllowedH)
+        local maxAllowedH = math.max(56, viewportH - posY - 60)
+        return math.clamp(calculatedH, 56, math.min(maxAllowedH, 480))
     end
 
     local initialTargetH = getLbTargetHeight(#Players:GetPlayers(), 48)
@@ -76,7 +76,7 @@ return function(Shared)
     lbWindow.BackgroundColor3 = C.BodyBg
     lbWindow.BackgroundTransparency = 1
     lbWindow.BorderSizePixel = 0
-    lbWindow.ClipsDescendants = false
+    lbWindow.ClipsDescendants = true
     lbWindow.ZIndex = 40
     lbWindow.Parent = ScreenGui
 
@@ -386,16 +386,16 @@ return function(Shared)
         end)
     end
 
-    -- Scroll Area
-    lbScroll = Instance.new("ScrollingFrame")
     -- Scroll Area (Spaced Out Player Tabs)
     lbScroll = Instance.new("ScrollingFrame")
-    lbScroll.Size = UDim2.new(1, 0, 1, -30)
-    lbScroll.Position = UDim2.new(0, 0, 0, 30)
+    lbScroll.Size = UDim2.new(1, 0, 1, -26)
+    lbScroll.Position = UDim2.new(0, 0, 0, 26)
     lbScroll.BackgroundTransparency = 1
     lbScroll.BorderSizePixel = 0
-    lbScroll.ScrollBarThickness = 0
-    lbScroll.ClipsDescendants = false
+    lbScroll.ScrollBarThickness = 3
+    lbScroll.ScrollBarImageColor3 = C.WinBorder
+    lbScroll.ScrollBarImageTransparency = 0.4
+    lbScroll.ClipsDescendants = true
     lbScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
     lbScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     lbScroll.ZIndex = 41

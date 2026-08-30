@@ -1423,8 +1423,9 @@ return function(Shared)
         {name="Menu",     order=1},
         {name="Player",   order=2},
         {name="Visuals",  order=3},
-        {name="Music",    order=4},
-        {name="Keybinds", order=5},
+        {name="Spy",      order=4},
+        {name="Music",    order=5},
+        {name="Keybinds", order=6},
     }
 
     local function switchTab(name)
@@ -3007,6 +3008,354 @@ return function(Shared)
             end
         end)
         if Shared.AddCleanup then Shared.AddCleanup(visualsRenderConn) end
+    end
+
+    -- ── SPY TAB POPULATION (SPECTATE & GAME VIEW TOOLS) ───────────
+    local spyCols = QuadCols["Spy"]
+    if spyCols then
+        local localPlr = Shared.Player or Players.LocalPlayer
+        local camera = workspace.CurrentCamera
+        local selectedSpyPlayer = nil
+        local originalCameraSubject = nil
+        local originalCameraType = camera.CameraType
+        local suppressedGuis = {}
+
+        local function getSpyTargets()
+            local targets = {}
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= localPlr then
+                    table.insert(targets, p)
+                end
+            end
+            return targets
+        end
+
+        local function getTargetHum(p)
+            if p and p.Character then
+                return p.Character:FindFirstChildOfClass("Humanoid")
+            end
+            return nil
+        end
+
+        local function getTargetHead(p)
+            if p and p.Character then
+                return p.Character:FindFirstChild("Head")
+            end
+            return nil
+        end
+
+        -- Left Column: Player Spectate & First-Person POV
+        makeSection(spyCols.Left, "Player Spectate & POV", 1)
+
+        local targetCard = Instance.new("Frame")
+        targetCard.Name = "TargetCard"
+        targetCard.Size = UDim2.new(1, 0, 0, 48)
+        targetCard.BackgroundColor3 = C.RowBg
+        targetCard.BackgroundTransparency = 0.35
+        targetCard.BorderSizePixel = 1
+        targetCard.BorderColor3 = C.RowBorder
+        targetCard.LayoutOrder = 2
+        targetCard.Parent = spyCols.Left
+        registerThemed(targetCard, { BackgroundColor3 = "RowBg", BorderColor3 = "RowBorder" })
+
+        local targetNameLbl = Instance.new("TextLabel")
+        targetNameLbl.Name = "TargetName"
+        targetNameLbl.Size = UDim2.new(1, -12, 0, 20)
+        targetNameLbl.Position = UDim2.new(0, 6, 0, 4)
+        targetNameLbl.BackgroundTransparency = 1
+        targetNameLbl.Font = Enum.Font.Code
+        targetNameLbl.TextSize = 11
+        targetNameLbl.TextColor3 = C.Accent
+        targetNameLbl.TextXAlignment = Enum.TextXAlignment.Left
+        targetNameLbl.Text = "Target: [Select a Player]"
+        targetNameLbl.Parent = targetCard
+        registerThemed(targetNameLbl, { TextColor3 = "Accent" })
+
+        local targetInfoLbl = Instance.new("TextLabel")
+        targetInfoLbl.Name = "TargetInfo"
+        targetInfoLbl.Size = UDim2.new(1, -12, 0, 18)
+        targetInfoLbl.Position = UDim2.new(0, 6, 0, 24)
+        targetInfoLbl.BackgroundTransparency = 1
+        targetInfoLbl.Font = Enum.Font.Code
+        targetInfoLbl.TextSize = 10
+        targetInfoLbl.TextColor3 = C.BtnText
+        targetInfoLbl.TextXAlignment = Enum.TextXAlignment.Left
+        targetInfoLbl.Text = "Status: Idle | Dist: -- | HP: --"
+        targetInfoLbl.Parent = targetCard
+        registerThemed(targetInfoLbl, { TextColor3 = "BtnText" })
+
+        local function updateTargetCard(p)
+            selectedSpyPlayer = p
+            if not p then
+                targetNameLbl.Text = "Target: [None]"
+                targetInfoLbl.Text = "Status: Idle"
+                return
+            end
+            local distStr = "--"
+            local hpStr = "--"
+            local char = p.Character
+            local localRoot = localPlr.Character and (localPlr.Character:FindFirstChild("HumanoidRootPart") or localPlr.Character:FindFirstChild("Torso"))
+            if char then
+                local pRoot = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+                local pHum = char:FindFirstChildOfClass("Humanoid")
+                if pRoot and localRoot then
+                    distStr = string.format("%dm", math.floor((localRoot.Position - pRoot.Position).Magnitude))
+                end
+                if pHum then
+                    hpStr = string.format("%d/%d", math.floor(pHum.Health), math.floor(pHum.MaxHealth))
+                end
+            end
+            targetNameLbl.Text = "Target: " .. p.DisplayName .. " (@" .. p.Name .. ")"
+            targetInfoLbl.Text = string.format("Dist: %s | Health: %s", distStr, hpStr)
+        end
+
+        local cycleRow = Instance.new("Frame")
+        cycleRow.Name = "CycleRow"
+        cycleRow.Size = UDim2.new(1, 0, 0, 26)
+        cycleRow.BackgroundTransparency = 1
+        cycleRow.LayoutOrder = 3
+        cycleRow.Parent = spyCols.Left
+
+        local prevBtn = Instance.new("TextButton")
+        prevBtn.Name = "PrevBtn"
+        prevBtn.Size = UDim2.new(0.5, -4, 1, 0)
+        prevBtn.Position = UDim2.new(0, 0, 0, 0)
+        prevBtn.BackgroundColor3 = C.BtnBg
+        prevBtn.BackgroundTransparency = 0.25
+        prevBtn.BorderSizePixel = 1
+        prevBtn.BorderColor3 = C.BtnBorder
+        prevBtn.Font = Enum.Font.Code
+        prevBtn.TextSize = 11
+        prevBtn.TextColor3 = C.BtnText
+        prevBtn.Text = "< Prev Player"
+        prevBtn.Parent = cycleRow
+        registerThemed(prevBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
+
+        local nextBtn = Instance.new("TextButton")
+        nextBtn.Name = "NextBtn"
+        nextBtn.Size = UDim2.new(0.5, -4, 1, 0)
+        nextBtn.Position = UDim2.new(0.5, 4, 0, 0)
+        nextBtn.BackgroundColor3 = C.BtnBg
+        nextBtn.BackgroundTransparency = 0.25
+        nextBtn.BorderSizePixel = 1
+        nextBtn.BorderColor3 = C.BtnBorder
+        nextBtn.Font = Enum.Font.Code
+        nextBtn.TextSize = 11
+        nextBtn.TextColor3 = C.BtnText
+        nextBtn.Text = "Next Player >"
+        nextBtn.Parent = cycleRow
+        registerThemed(nextBtn, { BackgroundColor3 = "BtnBg", BorderColor3 = "BtnBorder", TextColor3 = "BtnText" })
+
+        local targetIdx = 1
+        local function cyclePlayer(delta)
+            local targets = getSpyTargets()
+            if #targets == 0 then
+                updateTargetCard(nil)
+                return
+            end
+            targetIdx = targetIdx + delta
+            if targetIdx > #targets then targetIdx = 1 end
+            if targetIdx < 1 then targetIdx = #targets end
+            updateTargetCard(targets[targetIdx])
+        end
+
+        prevBtn.MouseButton1Click:Connect(function() cyclePlayer(-1) end)
+        nextBtn.MouseButton1Click:Connect(function() cyclePlayer(1) end)
+
+        -- Spectate Toggles & Actions
+        makeToggle(spyCols.Left, "Spectate Target (Orbit)", "SpySpectate", 4, function(state)
+            if not state then
+                local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
+                if myHum then camera.CameraSubject = myHum end
+                camera.CameraType = Enum.CameraType.Custom
+            end
+        end)
+
+        makeToggle(spyCols.Left, "First-Person POV View", "SpyFirstPersonPOV", 5, function(state)
+            if not state then
+                camera.CameraType = Enum.CameraType.Custom
+                local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
+                if myHum then camera.CameraSubject = myHum end
+            end
+        end)
+
+        makeButton(spyCols.Left, "Return Camera to Self", 6, function()
+            Shared.Flags["SpySpectate"] = false
+            Shared.Flags["SpyFirstPersonPOV"] = false
+            local t1 = Shared.Toggles["SpySpectate"]
+            local t2 = Shared.Toggles["SpyFirstPersonPOV"]
+            if t1 and t1.SetToggle then t1.SetToggle(false, true) end
+            if t2 and t2.SetToggle then t2.SetToggle(false, true) end
+            camera.CameraType = Enum.CameraType.Custom
+            local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
+            if myHum then camera.CameraSubject = myHum end
+            sendNotification("Camera Engine", "Camera returned to local character", true)
+        end)
+
+        makeButton(spyCols.Left, "Teleport Behind Target", 7, function()
+            if selectedSpyPlayer and selectedSpyPlayer.Character then
+                local pRoot = selectedSpyPlayer.Character:FindFirstChild("HumanoidRootPart") or selectedSpyPlayer.Character:FindFirstChild("Torso")
+                local myRoot = localPlr.Character and (localPlr.Character:FindFirstChild("HumanoidRootPart") or localPlr.Character:FindFirstChild("Torso"))
+                if pRoot and myRoot then
+                    myRoot.CFrame = pRoot.CFrame * CFrame.new(0, 0, 4)
+                    sendNotification("Teleport", "Teleported behind " .. selectedSpyPlayer.DisplayName, true)
+                end
+            else
+                sendNotification("Teleport", "No target player selected", false)
+            end
+        end)
+
+        makeButton(spyCols.Left, "Teleport Overhead (Spy Height)", 8, function()
+            if selectedSpyPlayer and selectedSpyPlayer.Character then
+                local pRoot = selectedSpyPlayer.Character:FindFirstChild("HumanoidRootPart") or selectedSpyPlayer.Character:FindFirstChild("Torso")
+                local myRoot = localPlr.Character and (localPlr.Character:FindFirstChild("HumanoidRootPart") or localPlr.Character:FindFirstChild("Torso"))
+                if pRoot and myRoot then
+                    myRoot.CFrame = pRoot.CFrame * CFrame.new(0, 20, 0)
+                    sendNotification("Teleport", "Teleported 20 studs above " .. selectedSpyPlayer.DisplayName, true)
+                end
+            else
+                sendNotification("Teleport", "No target player selected", false)
+            end
+        end)
+
+        -- Right Column: Game View & Spectate Bypass
+        makeSection(spyCols.Right, "Game View & Camera Bypass", 1)
+
+        makeToggle(spyCols.Right, "Force Spectate Bypass", "ForceSpectateBypass", 2, function(state)
+            if state then
+                sendNotification("Camera Bypass", "Forced camera spectate bypass ACTIVE", true)
+            end
+        end)
+
+        makeToggle(spyCols.Right, "Disable All Game UI", "DisableGameUI", 3, function(state)
+            local StarterGui = game:GetService("StarterGui")
+            if state then
+                -- Hide Roblox CoreGuis
+                pcall(function()
+                    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+                end)
+                -- Hide all game ScreenGuis in PlayerGui except our custom elements
+                local pg = localPlr:FindFirstChildOfClass("PlayerGui")
+                if pg then
+                    for _, g in ipairs(pg:GetChildren()) do
+                        if g:IsA("ScreenGui") and g.Name ~= "IE7_Menu" and not g.Name:find("Fih_") then
+                            if suppressedGuis[g] == nil then
+                                suppressedGuis[g] = g.Enabled
+                            end
+                            g.Enabled = false
+                        end
+                    end
+                end
+                sendNotification("Clean View", "All game UI elements hidden", true)
+            else
+                -- Restore Roblox CoreGuis
+                pcall(function()
+                    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true)
+                    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false) -- keep our custom leaderboard
+                end)
+                -- Restore game ScreenGuis
+                for g, origState in pairs(suppressedGuis) do
+                    if g and g.Parent then
+                        pcall(function() g.Enabled = origState end)
+                    end
+                end
+                suppressedGuis = {}
+                sendNotification("Clean View", "Game UI elements restored", false)
+            end
+        end)
+
+        -- Freecam Controller
+        makeToggle(spyCols.Right, "Freecam Mode (Free Roam)", "FreecamEnabled", 4, function(state)
+            if not state then
+                camera.CameraType = Enum.CameraType.Custom
+                local myHum = localPlr.Character and localPlr.Character:FindFirstChildOfClass("Humanoid")
+                if myHum then camera.CameraSubject = myHum end
+            else
+                camera.CameraType = Enum.CameraType.Scriptable
+            end
+        end)
+
+        makeSlider(spyCols.Right, "Freecam Speed", "FreecamSpeed", 5, 250, 50, 5, function(val) end)
+
+        -- ── SPY / CAMERA RENDER LOOP ─────────────────────────────────
+        local freecamPos = nil
+
+        local spyRenderConn = RunService.RenderStepped:Connect(function(dt)
+            local myChar = localPlr.Character
+            local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+
+            -- Update target card stats continuously
+            if selectedSpyPlayer and selectedSpyPlayer.Character then
+                local pRoot = selectedSpyPlayer.Character:FindFirstChild("HumanoidRootPart") or selectedSpyPlayer.Character:FindFirstChild("Torso")
+                local pHum = selectedSpyPlayer.Character:FindFirstChildOfClass("Humanoid")
+                local localRoot = myChar and (myChar:FindFirstChild("HumanoidRootPart") or myChar:FindFirstChild("Torso"))
+                local distStr = "--"
+                local hpStr = "--"
+                if pRoot and localRoot then
+                    distStr = string.format("%dm", math.floor((localRoot.Position - pRoot.Position).Magnitude))
+                end
+                if pHum then
+                    hpStr = string.format("%d/%d", math.floor(pHum.Health), math.floor(pHum.MaxHealth))
+                end
+                targetInfoLbl.Text = string.format("Dist: %s | Health: %s", distStr, hpStr)
+            end
+
+            -- 1. First-Person POV Spy Mode (See directly through target's eyes)
+            if Shared.Flags["SpyFirstPersonPOV"] and selectedSpyPlayer and selectedSpyPlayer.Character then
+                local tHead = getTargetHead(selectedSpyPlayer)
+                local tRoot = selectedSpyPlayer.Character:FindFirstChild("HumanoidRootPart") or selectedSpyPlayer.Character:FindFirstChild("Torso")
+                local targetLook = tHead or tRoot
+                if targetLook then
+                    camera.CameraType = Enum.CameraType.Scriptable
+                    camera.CFrame = targetLook.CFrame * CFrame.new(0, 0.2, 0)
+                end
+                return
+            end
+
+            -- 2. Third-Person Spectate with Force Bypass
+            if (Shared.Flags["SpySpectate"] or Shared.Flags["ForceSpectateBypass"]) and selectedSpyPlayer and selectedSpyPlayer.Character then
+                local tHum = getTargetHum(selectedSpyPlayer)
+                if tHum and tHum.Health > 0 then
+                    if camera.CameraSubject ~= tHum then
+                        camera.CameraSubject = tHum
+                    end
+                    if camera.CameraType ~= Enum.CameraType.Custom then
+                        camera.CameraType = Enum.CameraType.Custom
+                    end
+                end
+                return
+            end
+
+            -- 3. Freecam Mode
+            if Shared.Flags["FreecamEnabled"] then
+                camera.CameraType = Enum.CameraType.Scriptable
+                if not freecamPos then
+                    freecamPos = camera.CFrame.Position
+                end
+
+                local speed = (Shared.Flags["FreecamSpeed"] or 50) * dt
+                local moveDir = Vector3.zero
+                local isFocused = UserInput:GetFocusedTextBox() ~= nil
+
+                if not isFocused then
+                    if UserInput:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camera.CFrame.LookVector end
+                    if UserInput:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camera.CFrame.LookVector end
+                    if UserInput:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camera.CFrame.RightVector end
+                    if UserInput:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camera.CFrame.RightVector end
+                    if UserInput:IsKeyDown(Enum.KeyCode.Space) or UserInput:IsKeyDown(Enum.KeyCode.E) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+                    if UserInput:IsKeyDown(Enum.KeyCode.LeftControl) or UserInput:IsKeyDown(Enum.KeyCode.Q) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+                end
+
+                if moveDir.Magnitude > 0 then
+                    freecamPos = freecamPos + (moveDir.Unit * speed)
+                end
+
+                camera.CFrame = CFrame.new(freecamPos) * (camera.CFrame - camera.CFrame.Position)
+            else
+                freecamPos = nil
+            end
+        end)
+        if Shared.AddCleanup then Shared.AddCleanup(spyRenderConn) end
     end
 
     task.delay(0.6, function() loadConfig(); buildKeybindsUI() end)
