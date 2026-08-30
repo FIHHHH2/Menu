@@ -2238,13 +2238,16 @@ return function(Shared)
 
         -- ── WALK FLING ENGINE (TOUCH / CONTACT FLING) ────────────────
         makeToggle(playerCols.Right, "Walk Fling (Touch Fling)", "WalkFling", 7, function(state) end)
-        makeSlider(playerCols.Right, "Fling Force", "FlingPower", 1000, 50000, 15000, 8, function(val) end)
+        makeSlider(playerCols.Right, "Fling Force", "FlingPower", 0, 100000, 25000, 8, function(val) end)
 
         local flingSavedVelocity = Vector3.zero
         local flingActiveContact = false
 
         local walkFlingHeartbeat = RunService.Heartbeat:Connect(function()
             if not Shared.Flags["WalkFling"] then return end
+            local power = Shared.Flags["FlingPower"] or 25000
+            if power <= 0 then return end
+
             local root = getLocalRoot()
             local hum = getLocalHum()
             local char = localPlr and localPlr.Character
@@ -2252,7 +2255,6 @@ return function(Shared)
 
             -- Detect proximity to other players
             local nearbyPlayer = false
-            local power = Shared.Flags["FlingPower"] or 15000
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= localPlr and p.Character then
                     local pRoot = p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Torso")
@@ -2280,7 +2282,7 @@ return function(Shared)
             if not Shared.Flags["WalkFling"] then return end
             local root = getLocalRoot()
             if root and flingActiveContact then
-                -- Instantly restore clean local velocity so player walks completely normally
+                -- Instantly restore clean local velocity so player walks completely normally and takes 0 fall damage
                 root.AssemblyLinearVelocity = flingSavedVelocity
                 root.AssemblyAngularVelocity = Vector3.zero
             end
@@ -2324,7 +2326,7 @@ return function(Shared)
                 if linVel.Magnitude > 100 or angVel.Magnitude > 50 then
                     root.AssemblyLinearVelocity = Vector3.new(
                         math.clamp(linVel.X, -50, 50),
-                        math.clamp(linVel.Y, -80, 50),
+                        math.clamp(linVel.Y, -40, 50),
                         math.clamp(linVel.Z, -50, 50)
                     )
                     root.AssemblyAngularVelocity = Vector3.zero
@@ -2332,6 +2334,35 @@ return function(Shared)
             end
         end)
         if Shared.AddCleanup then Shared.AddCleanup(antiFlingConn) end
+
+        -- ── VELOCITY FALL DAMAGE SHIELD (NO FALL DAMAGE) ─────────────
+        makeToggle(playerCols.Right, "No Fall Damage", "NoFallDamage", 10, function(state) end)
+
+        local fallParams = RaycastParams.new()
+        fallParams.FilterType = Enum.RaycastFilterType.Exclude
+
+        local fallDamageConn = RunService.Heartbeat:Connect(function()
+            if not (Shared.Flags["NoFallDamage"] or Shared.Flags["FightFloat"]) then return end
+            local root = getLocalRoot()
+            local hum = getLocalHum()
+            local char = localPlr and localPlr.Character
+            if not (root and hum and hum.Health > 0 and char) then return end
+
+            local vel = root.AssemblyLinearVelocity
+            -- If falling rapidly downwards
+            if vel.Y < -20 then
+                fallParams.FilterDescendantsInstances = {char}
+                local ray = workspace:Raycast(root.Position, Vector3.new(0, -14, 0), fallParams)
+                if ray then
+                    -- Cushion landing: clamp downward velocity before ground impact
+                    root.AssemblyLinearVelocity = Vector3.new(vel.X, -4, vel.Z)
+                    pcall(function()
+                        hum:ChangeState(Enum.HumanoidStateType.Freefall)
+                    end)
+                end
+            end
+        end)
+        if Shared.AddCleanup then Shared.AddCleanup(fallDamageConn) end
 
         -- Speed/Jump render step enforcer
         local renderStatConn = RunService.RenderStepped:Connect(function()
