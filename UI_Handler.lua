@@ -1420,8 +1420,10 @@ return function(Shared)
 
     local tabDefs = {
         {name="Menu",     order=1},
-        {name="Music",    order=2},
-        {name="Keybinds", order=3},
+        {name="Player",   order=2},
+        {name="Visuals",  order=3},
+        {name="Music",    order=4},
+        {name="Keybinds", order=5},
     }
 
     local function switchTab(name)
@@ -1964,6 +1966,646 @@ return function(Shared)
         userDetailsLabel.TextXAlignment = Enum.TextXAlignment.Left
         userDetailsLabel.LayoutOrder = 3
         userDetailsLabel.Parent = infoContainer
+    end
+
+    -- ── PLAYER TAB POPULATION ─────────────────────────────────────
+    local playerCols = QuadCols["Player"]
+    if playerCols then
+        local localPlr = Shared.Player or Players.LocalPlayer
+        local mouse = localPlr and localPlr:GetMouse()
+        local camera = workspace.CurrentCamera
+
+        local function getLocalRoot()
+            local c = localPlr and localPlr.Character
+            return c and (c:FindFirstChild("HumanoidRootPart") or c:FindFirstChild("Torso") or c:FindFirstChild("UpperTorso"))
+        end
+
+        local function getLocalHum()
+            local c = localPlr and localPlr.Character
+            return c and c:FindFirstChildOfClass("Humanoid")
+        end
+
+        -- Base stats sync
+        local baseWalkSpeed = 16
+        local baseJumpPower = 50
+        local baseJumpHeight = 7.2
+
+        local function onCharAdded(char)
+            local hum = char:WaitForChild("Humanoid", 5)
+            if hum then
+                baseWalkSpeed = hum.WalkSpeed
+                baseJumpPower = hum.JumpPower
+                baseJumpHeight = hum.JumpHeight
+
+                local wsConn = hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+                    if not Shared.Flags["SpeedEnabled"] then
+                        baseWalkSpeed = hum.WalkSpeed
+                        if Shared.Sliders["CustomSpeed"] then
+                            Shared.Sliders["CustomSpeed"].SetValue(hum.WalkSpeed)
+                        end
+                    end
+                end)
+                if Shared.AddCleanup then Shared.AddCleanup(wsConn) end
+
+                local jpConn = hum:GetPropertyChangedSignal("JumpPower"):Connect(function()
+                    if not Shared.Flags["JumpEnabled"] then
+                        baseJumpPower = hum.JumpPower
+                        if hum.UseJumpPower and Shared.Sliders["CustomJump"] then
+                            Shared.Sliders["CustomJump"].SetValue(hum.JumpPower)
+                        end
+                    end
+                end)
+                if Shared.AddCleanup then Shared.AddCleanup(jpConn) end
+            end
+        end
+
+        if localPlr and localPlr.Character then task.spawn(onCharAdded, localPlr.Character) end
+        if localPlr then
+            local charConn = localPlr.CharacterAdded:Connect(onCharAdded)
+            if Shared.AddCleanup then Shared.AddCleanup(charConn) end
+        end
+
+        -- Left Column: Movement & Teleport
+        makeSection(playerCols.Left, "Movement & Teleport", 1)
+
+        makeButton(playerCols.Left, "Dump / Reset Character", 2, function()
+            local char = localPlr and localPlr.Character
+            if char then
+                local hum = getLocalHum()
+                if hum then
+                    hum:ChangeState(Enum.HumanoidStateType.Dead)
+                    hum.Health = 0
+                end
+                char:BreakJoints()
+            end
+        end)
+
+        makeToggle(playerCols.Left, "Ctrl + Click Teleport", "CtrlClickTP", 3, function(state) end)
+
+        local tpConn = UserInput.InputBegan:Connect(function(input, processed)
+            if processed then return end
+            if not Shared.Flags["CtrlClickTP"] then return end
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                local isCtrl = UserInput:IsKeyDown(Enum.KeyCode.LeftControl) or UserInput:IsKeyDown(Enum.KeyCode.RightControl)
+                if isCtrl and mouse and mouse.Hit then
+                    local root = getLocalRoot()
+                    if root then
+                        local targetPos = mouse.Hit.Position + Vector3.new(0, 3, 0)
+                        root.CFrame = CFrame.new(targetPos, targetPos + root.CFrame.LookVector)
+                    end
+                end
+            end
+        end)
+        if Shared.AddCleanup then Shared.AddCleanup(tpConn) end
+
+        makeToggle(playerCols.Left, "WalkSpeed Adjuster", "SpeedEnabled", 4, function(state)
+            local hum = getLocalHum()
+            if not state and hum then
+                hum.WalkSpeed = baseWalkSpeed
+            end
+        end)
+
+        makeSlider(playerCols.Left, "Speed Value", "CustomSpeed", 16, 250, 16, 5, function(val)
+            local hum = getLocalHum()
+            if Shared.Flags["SpeedEnabled"] and hum then
+                hum.WalkSpeed = val
+            end
+        end)
+
+        makeToggle(playerCols.Left, "JumpPower Adjuster", "JumpEnabled", 6, function(state)
+            local hum = getLocalHum()
+            if not state and hum then
+                if hum.UseJumpPower then
+                    hum.JumpPower = baseJumpPower
+                else
+                    hum.JumpHeight = baseJumpHeight
+                end
+            end
+        end)
+
+        makeSlider(playerCols.Left, "Jump Value", "CustomJump", 50, 300, 50, 7, function(val)
+            local hum = getLocalHum()
+            if Shared.Flags["JumpEnabled"] and hum then
+                if hum.UseJumpPower then
+                    hum.JumpPower = val
+                else
+                    hum.JumpHeight = val
+                end
+            end
+        end)
+
+        -- Right Column: Physics & Exploits
+        makeSection(playerCols.Right, "Physics & Exploits", 1)
+
+        makeToggle(playerCols.Right, "Noclip Mode", "Noclip", 2, function(state) end)
+
+        local noclipConn = RunService.Stepped:Connect(function()
+            if not Shared.Flags["Noclip"] then return end
+            local char = localPlr and localPlr.Character
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+        if Shared.AddCleanup then Shared.AddCleanup(noclipConn) end
+
+        makeToggle(playerCols.Right, "Fight Float (Anti-Fall)", "FightFloat", 3, function(state) end)
+        makeSlider(playerCols.Right, "Float Height", "FloatHeight", 1, 15, 3, 4, function(val) end)
+
+        local floatConn = RunService.Stepped:Connect(function()
+            if not Shared.Flags["FightFloat"] then return end
+            local char = localPlr and localPlr.Character
+            local root = getLocalRoot()
+            local hum = getLocalHum()
+            if root and hum and hum.Health > 0 then
+                local fh = Shared.Flags["FloatHeight"] or 3
+                local rayOrigin = root.Position
+                local rayDir = Vector3.new(0, -(fh + 4), 0)
+                local params = RaycastParams.new()
+                params.FilterDescendantsInstances = {char}
+                params.FilterType = Enum.RaycastFilterType.Exclude
+
+                local hit = workspace:Raycast(rayOrigin, rayDir, params)
+                if hit and root.AssemblyLinearVelocity.Y < -5 then
+                    root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, math.max(0, -root.AssemblyLinearVelocity.Y * 0.1), root.AssemblyLinearVelocity.Z)
+                end
+            end
+        end)
+        if Shared.AddCleanup then Shared.AddCleanup(floatConn) end
+
+        makeToggle(playerCols.Right, "Fake Lag (Desync)", "FakeLag", 5, function(state) end)
+        makeSlider(playerCols.Right, "Fake Lag Factor", "FakeLagFactor", 2, 20, 6, 6, function(val) end)
+
+        local fakeLagCounter = 0
+        local fakeLagConn = RunService.Heartbeat:Connect(function()
+            if not Shared.Flags["FakeLag"] then return end
+            local root = getLocalRoot()
+            if not root then return end
+            fakeLagCounter = fakeLagCounter + 1
+            local factor = Shared.Flags["FakeLagFactor"] or 6
+            if fakeLagCounter >= factor then
+                fakeLagCounter = 0
+                local oldArch = root.Anchored
+                root.Anchored = true
+                task.wait(0.06)
+                if root then root.Anchored = oldArch end
+            end
+        end)
+        if Shared.AddCleanup then Shared.AddCleanup(fakeLagConn) end
+
+        -- Speed/Jump render step enforcer
+        local renderStatConn = RunService.RenderStepped:Connect(function()
+            local hum = getLocalHum()
+            if not hum then return end
+            if Shared.Flags["SpeedEnabled"] then
+                local targetSpeed = Shared.Flags["CustomSpeed"] or 16
+                if hum.WalkSpeed ~= targetSpeed then hum.WalkSpeed = targetSpeed end
+            end
+            if Shared.Flags["JumpEnabled"] then
+                local targetJump = Shared.Flags["CustomJump"] or 50
+                if hum.UseJumpPower then
+                    if hum.JumpPower ~= targetJump then hum.JumpPower = targetJump end
+                else
+                    if hum.JumpHeight ~= targetJump then hum.JumpHeight = targetJump end
+                end
+            end
+        end)
+        if Shared.AddCleanup then Shared.AddCleanup(renderStatConn) end
+    end
+
+    -- ── VISUALS TAB POPULATION ────────────────────────────────────
+    local visualsCols = QuadCols["Visuals"]
+    if visualsCols then
+        local localPlr = Shared.Player or Players.LocalPlayer
+        local camera = workspace.CurrentCamera
+        local hasDrawing = (type(Drawing) == "table" and type(Drawing.new) == "function")
+
+        local espDrawings = {}
+        local playerHighlights = {}
+        local originalVisuals = {
+            Lighting = {
+                Brightness = Lighting.Brightness,
+                ClockTime = Lighting.ClockTime,
+                FogEnd = Lighting.FogEnd,
+                GlobalShadows = Lighting.GlobalShadows,
+                Ambient = Lighting.Ambient,
+                OutdoorAmbient = Lighting.OutdoorAmbient
+            },
+            PostFX = {},
+            MapParts = {},
+            CamZoom = {
+                Min = (localPlr and localPlr.CameraMinZoomDistance) or 0.5,
+                Max = (localPlr and localPlr.CameraMaxZoomDistance) or 128,
+                Mode = (localPlr and localPlr.CameraMode) or Enum.CameraMode.Classic
+            }
+        }
+
+        local function createDrawObj(dType, props)
+            if not hasDrawing then return nil end
+            local d = Drawing.new(dType)
+            for k, v in pairs(props or {}) do d[k] = v end
+            table.insert(espDrawings, d)
+            return d
+        end
+
+        local crosshairDot = createDrawObj("Circle", {
+            Radius = 2.5,
+            Filled = true,
+            Color = Color3.fromRGB(255, 255, 255),
+            Visible = false,
+            ZIndex = 100
+        })
+
+        local radarCenter = Vector2.new(130, 180)
+        local radarRadius = 60
+        local radarCircle = createDrawObj("Circle", {
+            Radius = radarRadius,
+            Filled = true,
+            Color = Color3.fromRGB(20, 24, 30),
+            Transparency = 0.7,
+            Visible = false,
+            ZIndex = 50,
+            Position = radarCenter
+        })
+        local radarBorder = createDrawObj("Circle", {
+            Radius = radarRadius,
+            Filled = false,
+            Color = Color3.fromRGB(70, 90, 130),
+            Thickness = 1.5,
+            Visible = false,
+            ZIndex = 51,
+            Position = radarCenter
+        })
+        local radarDot = createDrawObj("Circle", {
+            Radius = 3,
+            Filled = true,
+            Color = Color3.fromRGB(0, 255, 120),
+            Visible = false,
+            ZIndex = 52,
+            Position = radarCenter
+        })
+        local radarBlips = {}
+
+        local playerESPItems = {}
+        local function registerPlayerESP(p)
+            if p == localPlr then return end
+            playerESPItems[p] = {
+                BoxOutline = createDrawObj("Square", { Color = Color3.fromRGB(0, 0, 0), Thickness = 3, Filled = false, Visible = false, ZIndex = 1 }),
+                Box = createDrawObj("Square", { Color = Color3.fromRGB(255, 255, 255), Thickness = 1, Filled = false, Visible = false, ZIndex = 2 }),
+                Tracer = createDrawObj("Line", { Color = Color3.fromRGB(255, 75, 75), Thickness = 1.2, Visible = false, ZIndex = 2 }),
+                Name = createDrawObj("Text", { Color = Color3.fromRGB(255, 255, 255), Size = 13, Center = true, Outline = true, Visible = false, ZIndex = 3 }),
+                HealthBarOutline = createDrawObj("Line", { Color = Color3.fromRGB(0, 0, 0), Thickness = 4, Visible = false, ZIndex = 1 }),
+                HealthBar = createDrawObj("Line", { Color = Color3.fromRGB(50, 220, 50), Thickness = 2, Visible = false, ZIndex = 2 }),
+                Skeleton = {
+                    HeadSpine = createDrawObj("Line", { Color = Color3.fromRGB(255, 255, 255), Thickness = 1, Visible = false }),
+                    LeftArm = createDrawObj("Line", { Color = Color3.fromRGB(255, 255, 255), Thickness = 1, Visible = false }),
+                    RightArm = createDrawObj("Line", { Color = Color3.fromRGB(255, 255, 255), Thickness = 1, Visible = false }),
+                    LeftLeg = createDrawObj("Line", { Color = Color3.fromRGB(255, 255, 255), Thickness = 1, Visible = false }),
+                    RightLeg = createDrawObj("Line", { Color = Color3.fromRGB(255, 255, 255), Thickness = 1, Visible = false })
+                }
+            }
+        end
+
+        local function unregisterPlayerESP(p)
+            local esp = playerESPItems[p]
+            if esp then
+                if esp.BoxOutline then pcall(function() esp.BoxOutline:Remove() end) end
+                if esp.Box then pcall(function() esp.Box:Remove() end) end
+                if esp.Tracer then pcall(function() esp.Tracer:Remove() end) end
+                if esp.Name then pcall(function() esp.Name:Remove() end) end
+                if esp.HealthBarOutline then pcall(function() esp.HealthBarOutline:Remove() end) end
+                if esp.HealthBar then pcall(function() esp.HealthBar:Remove() end) end
+                for _, line in pairs(esp.Skeleton or {}) do pcall(function() line:Remove() end) end
+                playerESPItems[p] = nil
+            end
+            if playerHighlights[p] then
+                pcall(function() playerHighlights[p]:Destroy() end)
+                playerHighlights[p] = nil
+            end
+            if radarBlips[p] then
+                pcall(function() radarBlips[p]:Remove() end)
+                radarBlips[p] = nil
+            end
+        end
+
+        for _, p in ipairs(Players:GetPlayers()) do registerPlayerESP(p) end
+        local pAddConn = Players.PlayerAdded:Connect(registerPlayerESP)
+        local pRemConn = Players.PlayerRemoving:Connect(unregisterPlayerESP)
+        if Shared.AddCleanup then
+            Shared.AddCleanup(pAddConn)
+            Shared.AddCleanup(pRemConn)
+            Shared.AddCleanup(function()
+                for _, d in ipairs(espDrawings) do pcall(function() d:Remove() end) end
+                for _, hl in pairs(playerHighlights) do pcall(function() hl:Destroy() end) end
+            end)
+        end
+
+        -- Left Column: 2D ESP & Radar
+        makeSection(visualsCols.Left, "2D ESP & Tracers", 1)
+
+        makeToggle(visualsCols.Left, "2D Box ESP", "ESP2D", 2, function(state) end)
+        makeToggle(visualsCols.Left, "Chams (Highlight ESP)", "ESPChams", 3, function(state) end)
+        makeToggle(visualsCols.Left, "Skeleton ESP", "ESPSkeleton", 4, function(state) end)
+        makeToggle(visualsCols.Left, "Health Bar Display", "ESPHealth", 5, function(state) end)
+        makeToggle(visualsCols.Left, "Player Names & Dist", "ESPNames", 6, function(state) end)
+        makeToggle(visualsCols.Left, "2D Screen Tracers", "Tracers", 7, function(state) end)
+        makeToggle(visualsCols.Left, "Mini Radar", "Radar", 8, function(state) end)
+        makeToggle(visualsCols.Left, "White Dot Crosshair", "Crosshair", 9, function(state) end)
+
+        -- Right Column: Camera & World Effects
+        makeSection(visualsCols.Right, "Camera & World Lighting", 1)
+
+        makeToggle(visualsCols.Right, "Custom FOV Slider", "FOVEnabled", 2, function(state) end)
+        makeSlider(visualsCols.Right, "Field of View", "CustomFOV", 30, 130, 70, 3, function(val)
+            if Shared.Flags["FOVEnabled"] and camera then camera.FieldOfView = val end
+        end)
+
+        makeToggle(visualsCols.Right, "Force 3rd-Person View", "ForceThirdPerson", 4, function(state)
+            if not localPlr then return end
+            if state then
+                localPlr.CameraMode = Enum.CameraMode.Classic
+                localPlr.CameraMinZoomDistance = 12
+                localPlr.CameraMaxZoomDistance = 128
+            else
+                localPlr.CameraMode = originalVisuals.CamZoom.Mode
+                localPlr.CameraMinZoomDistance = originalVisuals.CamZoom.Min
+                localPlr.CameraMaxZoomDistance = originalVisuals.CamZoom.Max
+            end
+        end)
+
+        makeToggle(visualsCols.Right, "X-Ray Vision", "XRayVision", 5, function(state)
+            if state then
+                for _, part in ipairs(workspace:GetDescendants()) do
+                    if part:IsA("BasePart") and not (localPlr and localPlr.Character and part:IsDescendantOf(localPlr.Character)) then
+                        local isPlayerPart = false
+                        for _, p in ipairs(Players:GetPlayers()) do
+                            if p.Character and part:IsDescendantOf(p.Character) then
+                                isPlayerPart = true
+                                break
+                            end
+                        end
+                        if not isPlayerPart and part.Transparency < 0.5 then
+                            originalVisuals.MapParts[part] = part.Transparency
+                            part.Transparency = 0.6
+                        end
+                    end
+                end
+            else
+                for part, origTrans in pairs(originalVisuals.MapParts) do
+                    if part and part.Parent then part.Transparency = origTrans end
+                end
+                originalVisuals.MapParts = {}
+            end
+        end)
+
+        makeToggle(visualsCols.Right, "Fullbright Mode", "Fullbright", 6, function(state)
+            if state then
+                Lighting.Brightness = 2
+                Lighting.ClockTime = 14
+                Lighting.FogEnd = 1e6
+                Lighting.GlobalShadows = false
+                Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+                Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+            else
+                Lighting.Brightness = originalVisuals.Lighting.Brightness
+                Lighting.ClockTime = originalVisuals.Lighting.ClockTime
+                Lighting.FogEnd = originalVisuals.Lighting.FogEnd
+                Lighting.GlobalShadows = originalVisuals.Lighting.GlobalShadows
+                Lighting.Ambient = originalVisuals.Lighting.Ambient
+                Lighting.OutdoorAmbient = originalVisuals.Lighting.OutdoorAmbient
+            end
+        end)
+
+        makeToggle(visualsCols.Right, "Disable Visual Effects (Blur/DOF)", "NoVisualEffects", 7, function(state)
+            local effectClasses = {"BlurEffect", "DepthOfFieldEffect", "SunRaysEffect", "BloomEffect", "ColorCorrectionEffect", "Atmosphere"}
+            if state then
+                for _, inst in ipairs(Lighting:GetDescendants()) do
+                    for _, cls in ipairs(effectClasses) do
+                        if inst:IsA(cls) then
+                            if originalVisuals.PostFX[inst] == nil then
+                                originalVisuals.PostFX[inst] = inst.Enabled
+                            end
+                            inst.Enabled = false
+                        end
+                    end
+                end
+            else
+                for inst, originalEnabled in pairs(originalVisuals.PostFX) do
+                    if inst and inst.Parent then inst.Enabled = originalEnabled end
+                end
+                originalVisuals.PostFX = {}
+            end
+        end)
+
+        makeToggle(visualsCols.Right, "No Recoil / Anti-Shake", "NoRecoil", 8, function(state) end)
+
+        local lastCamCFrame = camera.CFrame
+        local noRecoilConn = RunService.RenderStepped:Connect(function()
+            if Shared.Flags["NoRecoil"] and camera then
+                local prevRot = lastCamCFrame - lastCamCFrame.Position
+                local deltaAngle = math.acos(math.clamp((camera.CFrame.LookVector:Dot(lastCamCFrame.LookVector)), -1, 1))
+                if deltaAngle > math.rad(15) then
+                    camera.CFrame = CFrame.new(camera.CFrame.Position) * prevRot
+                end
+            end
+            lastCamCFrame = camera.CFrame
+        end)
+        if Shared.AddCleanup then Shared.AddCleanup(noRecoilConn) end
+
+        -- Visuals Render Loop (ESP, Chams, Tracers, Radar, Crosshair, FOV)
+        local visualsRenderConn = RunService.RenderStepped:Connect(function()
+            local vpSize = camera.ViewportSize
+            local screenCenter = Vector2.new(vpSize.X / 2, vpSize.Y / 2)
+
+            if crosshairDot then
+                crosshairDot.Position = screenCenter
+                crosshairDot.Visible = (Shared.Flags["Crosshair"] == true)
+            end
+
+            if Shared.Flags["FOVEnabled"] and camera then
+                camera.FieldOfView = Shared.Flags["CustomFOV"] or 70
+            end
+
+            local showRadar = (Shared.Flags["Radar"] == true) and hasDrawing
+            if radarCircle and radarBorder and radarDot then
+                radarCircle.Visible = showRadar
+                radarBorder.Visible = showRadar
+                radarDot.Visible = showRadar
+            end
+
+            local localChar = localPlr and localPlr.Character
+            local localRoot = localChar and (localChar:FindFirstChild("HumanoidRootPart") or localChar:FindFirstChild("Torso"))
+
+            for p, esp in pairs(playerESPItems) do
+                local char = p.Character
+                local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso"))
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                local valid = char and hum and hum.Health > 0 and root ~= nil
+
+                -- Highlight / Chams
+                if Shared.Flags["ESPChams"] and valid then
+                    if not playerHighlights[p] then
+                        local hl = Instance.new("Highlight")
+                        hl.Name = "Fih_Cham_" .. p.Name
+                        hl.FillColor = Color3.fromRGB(230, 60, 60)
+                        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        hl.FillTransparency = 0.4
+                        hl.OutlineTransparency = 0
+                        hl.Parent = ScreenGui
+                        playerHighlights[p] = hl
+                    end
+                    playerHighlights[p].Adornee = char
+                    playerHighlights[p].Enabled = true
+                else
+                    if playerHighlights[p] then playerHighlights[p].Enabled = false end
+                end
+
+                if not (valid and hasDrawing) then
+                    if esp.Box then esp.Box.Visible = false end
+                    if esp.BoxOutline then esp.BoxOutline.Visible = false end
+                    if esp.Tracer then esp.Tracer.Visible = false end
+                    if esp.Name then esp.Name.Visible = false end
+                    if esp.HealthBar then esp.HealthBar.Visible = false end
+                    if esp.HealthBarOutline then esp.HealthBarOutline.Visible = false end
+                    for _, skLine in pairs(esp.Skeleton or {}) do skLine.Visible = false end
+                    if radarBlips[p] then radarBlips[p].Visible = false end
+                    continue
+                end
+
+                local rootPos, onScreen = camera:WorldToViewportPoint(root.Position)
+                local head = char:FindFirstChild("Head")
+                local headPos = head and camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or camera:WorldToViewportPoint(root.Position + Vector3.new(0, 2.5, 0))
+                local footPos = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
+
+                -- 2D Box ESP & Health
+                if onScreen and Shared.Flags["ESP2D"] then
+                    local boxHeight = math.abs(headPos.Y - footPos.Y)
+                    local boxWidth = boxHeight * 0.65
+                    local boxPos = Vector2.new(rootPos.X - (boxWidth / 2), headPos.Y)
+
+                    esp.Box.Size = Vector2.new(boxWidth, boxHeight)
+                    esp.Box.Position = boxPos
+                    esp.Box.Visible = true
+
+                    esp.BoxOutline.Size = esp.Box.Size
+                    esp.BoxOutline.Position = esp.Box.Position
+                    esp.BoxOutline.Visible = true
+
+                    if Shared.Flags["ESPHealth"] and hum then
+                        local healthPct = math.clamp(hum.Health / math.max(1, hum.MaxHealth), 0, 1)
+                        local barStart = Vector2.new(boxPos.X - 5, boxPos.Y + boxHeight)
+                        local barEnd = Vector2.new(boxPos.X - 5, boxPos.Y + (boxHeight * (1 - healthPct)))
+
+                        esp.HealthBarOutline.From = Vector2.new(boxPos.X - 5, boxPos.Y + boxHeight + 1)
+                        esp.HealthBarOutline.To = Vector2.new(boxPos.X - 5, boxPos.Y - 1)
+                        esp.HealthBarOutline.Visible = true
+
+                        esp.HealthBar.From = barStart
+                        esp.HealthBar.To = barEnd
+                        esp.HealthBar.Color = Color3.fromHSV(healthPct * 0.33, 0.9, 1)
+                        esp.HealthBar.Visible = true
+                    else
+                        esp.HealthBar.Visible = false
+                        esp.HealthBarOutline.Visible = false
+                    end
+                else
+                    esp.Box.Visible = false
+                    esp.BoxOutline.Visible = false
+                    esp.HealthBar.Visible = false
+                    esp.HealthBarOutline.Visible = false
+                end
+
+                -- Names & Distance
+                if onScreen and Shared.Flags["ESPNames"] then
+                    local dist = math.floor((camera.CFrame.Position - root.Position).Magnitude)
+                    esp.Name.Text = string.format("%s [%dm]", p.DisplayName, dist)
+                    esp.Name.Position = Vector2.new(rootPos.X, headPos.Y - 16)
+                    esp.Name.Visible = true
+                else
+                    esp.Name.Visible = false
+                end
+
+                -- Tracers
+                if onScreen and Shared.Flags["Tracers"] then
+                    esp.Tracer.From = Vector2.new(vpSize.X / 2, vpSize.Y)
+                    esp.Tracer.To = Vector2.new(rootPos.X, footPos.Y)
+                    esp.Tracer.Visible = true
+                else
+                    esp.Tracer.Visible = false
+                end
+
+                -- Skeleton ESP
+                if onScreen and Shared.Flags["ESPSkeleton"] then
+                    local isR15 = hum.RigType == Enum.HumanoidRigType.R15
+                    local pHead = char:FindFirstChild("Head")
+                    local pTorso = isR15 and (char:FindFirstChild("UpperTorso") or char:FindFirstChild("LowerTorso")) or char:FindFirstChild("Torso")
+                    local pLeftArm = isR15 and char:FindFirstChild("LeftHand") or char:FindFirstChild("Left Arm")
+                    local pRightArm = isR15 and char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm")
+                    local pLeftLeg = isR15 and char:FindFirstChild("LeftFoot") or char:FindFirstChild("Left Leg")
+                    local pRightLeg = isR15 and char:FindFirstChild("RightFoot") or char:FindFirstChild("Right Leg")
+
+                    local function drawBone(line, partA, partB)
+                        if partA and partB then
+                            local aPos, aVis = camera:WorldToViewportPoint(partA.Position)
+                            local bPos, bVis = camera:WorldToViewportPoint(partB.Position)
+                            if aVis and bVis then
+                                line.From = Vector2.new(aPos.X, aPos.Y)
+                                line.To = Vector2.new(bPos.X, bPos.Y)
+                                line.Visible = true
+                                return
+                            end
+                        end
+                        line.Visible = false
+                    end
+
+                    drawBone(esp.Skeleton.HeadSpine, pHead, pTorso)
+                    drawBone(esp.Skeleton.LeftArm, pTorso, pLeftArm)
+                    drawBone(esp.Skeleton.RightArm, pTorso, pRightArm)
+                    drawBone(esp.Skeleton.LeftLeg, pTorso, pLeftLeg)
+                    drawBone(esp.Skeleton.RightLeg, pTorso, pRightLeg)
+                else
+                    for _, skLine in pairs(esp.Skeleton or {}) do skLine.Visible = false end
+                end
+
+                -- Radar Blip Mapping
+                if showRadar and localRoot then
+                    if not radarBlips[p] then
+                        radarBlips[p] = createDrawObj("Circle", {
+                            Radius = 2.5,
+                            Filled = true,
+                            Color = Color3.fromRGB(255, 80, 80),
+                            Visible = false,
+                            ZIndex = 53
+                        })
+                    end
+                    local blip = radarBlips[p]
+                    local relPos = root.Position - localRoot.Position
+                    local flatRel = Vector3.new(relPos.X, 0, relPos.Z)
+
+                    local camCFrame = camera.CFrame
+                    local forward = Vector3.new(camCFrame.LookVector.X, 0, camCFrame.LookVector.Z).Unit
+                    local right = Vector3.new(camCFrame.RightVector.X, 0, camCFrame.RightVector.Z).Unit
+
+                    local localX = flatRel:Dot(right)
+                    local localY = -flatRel:Dot(forward)
+
+                    local scale = 0.45
+                    local blipOffset = Vector2.new(localX * scale, localY * scale)
+                    if blipOffset.Magnitude > radarRadius - 4 then
+                        blipOffset = blipOffset.Unit * (radarRadius - 4)
+                    end
+
+                    blip.Position = radarCenter + blipOffset
+                    blip.Visible = true
+                else
+                    if radarBlips[p] then radarBlips[p].Visible = false end
+                end
+            end
+        end)
+        if Shared.AddCleanup then Shared.AddCleanup(visualsRenderConn) end
     end
 
     task.delay(0.6, function() loadConfig(); buildKeybindsUI() end)
